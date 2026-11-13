@@ -1,4 +1,4 @@
-"""Measure Blitz against Chromium on the ogre geometry corpus.
+"""Measure Blitz against Chromium on the geometry corpus.
 
 For every fixture both engines render the same document at the same viewport,
 and both PNGs are measured with the same instrument (`tools/measure.py`). A row
@@ -23,8 +23,8 @@ import measure  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "out")
 
-# The document wrapper is byte-identical to `test/chromium/browser.go` in the
-# ogre repo, so both engines see the same reset and the same body.
+# The document wrapper is byte-identical to the one the original parity harness
+# used, so both engines see the same reset and the same body.
 WRAPPER = (
     "<html><head><style>html,body{{margin:0;padding:0;background:#ffffff;}}"
     "</style></head><body>{}</body></html>"
@@ -124,10 +124,6 @@ def main():
     ap.add_argument("--blitz", default=os.path.join(ROOT, "target", "release", "render"))
     ap.add_argument("--chrome", default=None)
     ap.add_argument("--bench-repeats", type=int, default=5)
-    # A third engine for the KPI table only. Parity rows stay Blitz-vs-Chromium;
-    # this exists so ogre's cost can be quoted from the SAME machine as Blitz's,
-    # because a number measured on a different host is not a comparison.
-    ap.add_argument("--ogre", default=None, help="ogre binary, for the KPI table")
     args = ap.parse_args()
 
     chrome = find_chrome(args.chrome)
@@ -205,8 +201,8 @@ def main():
 
     # Two buckets, because only one of them can be judged. A text fixture's
     # probes are sized by glyph metrics, and neither engine is given the same
-    # font here (the ogre harness embeds a data-URI @font-face; this spike does
-    # not), so a text row measures font availability as much as layout. The
+    # font here (an embedded data-URI @font-face would be needed; this harness
+    # has none), so a text row measures font availability as much as layout. The
     # text-free bucket is the verdict.
     clean = [r for r in rows if not r["text"]]
     texty = [r for r in rows if r["text"]]
@@ -269,20 +265,14 @@ def benchmark(args, chrome, fixtures):
     page = os.path.join(tmp, "page.html")
     open(page, "w").write(WRAPPER.format(open(src).read()))
 
-    engines = {}
-    if args.ogre:
-        engines["ogre"] = [
-            args.ogre, "--render", page, "--format", "png",
-            "--output", os.path.join(tmp, "o.png"), "--width", str(w), "--height", str(h),
-        ]
-    engines.update({
+    engines = {
         "blitz": [
             args.blitz, src, os.path.join(tmp, "b.png"), str(w), str(h)
         ],
         "chromium": [chrome]
         + CHROME_FLAGS
         + [f"--window-size={w},{h}", f"--screenshot={os.path.join(tmp, 'c.png')}", f"file://{page}"],
-    })
+    }
 
     print()
     print(f"KPI ({fixture['name']} at {w}x{h}, {args.bench_repeats} runs, median)")
