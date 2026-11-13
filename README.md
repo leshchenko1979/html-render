@@ -220,6 +220,23 @@ cargo build --release
 python3 tools/run_parity.py --blitz target/release/render
 ```
 
+## Alternatives
+
+Use one of these instead when the constraint is theirs, not ours:
+
+- **`wkhtmltoimage`** — when the deliverable is **PDF** as well as images and you
+  already ship a Qt stack. This renders PNG only. Conversely, pick this over
+  `wkhtmltoimage` when a 25 MB static binary with no Qt is the requirement.
+- **WeasyPrint** — when the input is HTML *for print*: real `@page`, page
+  counters, running headers, page breaks. It is a paged-media engine; this is a
+  viewport rasteriser.
+- **`resvg`** — when the input is already SVG. Blitz rasterises HTML and CSS, so
+  SVG here means an `<img>` wrapper and a quality loss you do not need.
+- **Chrome print-to-PDF, or Playwright** — when the page needs JavaScript, or
+  when you must match a browser pixel for pixel. That is the 500 MB and the
+  13.36 s this exists to avoid, and it is the right call when fidelity to Chrome
+  *is* the requirement rather than an implementation detail.
+
 ## Corpus
 
 `fixtures/` holds 31 documents that each paint elements in exact probe colours, so
