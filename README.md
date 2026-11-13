@@ -31,7 +31,11 @@ browser for server-side rendering? On a real 12-slide, 4 MB deck, yes:
 | **html-render** | **5.37 s** | **93.4 MiB** |
 
 **2.49× faster, 9.19× lighter** — and byte-for-byte deterministic, which a browser
-is not: ten renders of the same input produce one md5, so output can be diffed in CI.
+is not: ten renders of the same input produce one checksum, so output can be
+diffed in CI. That holds for a document whose resources are local or `data:`
+URIs. A remote image is fetched at render time and painted as **absent** if it
+misses `BLITZ_DEADLINE_SECS` (default 120 s), so a slow origin changes the
+picture without changing the input.
 
 The deck is not part of this repo (4.16 MB, embedded JPEGs, four `@font-face`
 faces). Every figure here and in [GATES.md](GATES.md) is reproduced from your own
@@ -145,11 +149,12 @@ glyph AA is slightly softer than Skia's, so **you cannot diff html-render
 against Chromium at 99 %** — and you don't need to, because against *itself* it
 is exact.
 
-Determinism is a first-class property, not a side effect:
+Determinism is a first-class property, not a side effect. Both rows are a
+document with local resources only — the scope above:
 
 | | |
 |---|---|
-| 10 renders, scale 2, one md5 | `1dffe1ae…` |
+| 10 renders, scale 2, one checksum | `1dffe1ae…` |
 | two separate builds of one commit | different binary md5s, **identical pixels** (12/12 slides) |
 
 ## What it does
