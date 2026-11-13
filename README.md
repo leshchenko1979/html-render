@@ -154,8 +154,8 @@ apt-get install -y fonts-dejavu-core
 
 ### Or skip the host entirely
 
-Everything above — the 13 libraries, the glibc floor, the font — is discharged
-once by an image:
+Everything above — the shared libraries, the glibc floor, the font — is
+discharged once by an image:
 
 ```bash
 docker run --rm -v "$PWD:/work" ghcr.io/leshchenko1979/html-render:latest \
@@ -163,9 +163,13 @@ docker run --rm -v "$PWD:/work" ghcr.io/leshchenko1979/html-render:latest \
 ```
 
 The image is built from the same commit as the release tarball, on the same tag
-push, and its own CI proves it renders: `ldd` resolves 13 of 13 with none
-`not found`, `fc-match "DejaVu Sans"` returns DejaVu, and a shipped asset
-renders inside it at the right dimensions with glyphs painted. `latest` is
+push, and its own CI proves it renders: `ldd` resolves the full closure with
+none `not found`, `fc-match "DejaVu Sans"` returns DejaVu, and a shipped asset
+renders inside it at the right dimensions with glyphs painted. The closure is
+asserted as *no library missing* plus a floor on the count, not as an exact
+number: the same source links 12 libraries on bookworm and 13 on jammy, because
+those freetype builds differ, and a gate pinned to one distro's transitive graph
+reports a defect every time the base image is rebuilt. `latest` is
 published on tag pushes only — an image that silently changes under a fixed name
 is not pinnable.
 

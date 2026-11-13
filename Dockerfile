@@ -52,12 +52,23 @@ RUN cargo build --release --locked \
 # ---- runtime -------------------------------------------------------------
 FROM debian:bookworm-slim
 
-# The 13 libraries, by Debian package name, plus the font the shipped assets
+# The shared libraries by Debian package name, plus the font the shipped assets
 # name. `--no-install-recommends` keeps the image from pulling a desktop stack.
+#
+# `fontconfig` is a package of its own, not part of `libfontconfig1`: the library
+# can match a font, but only the package ships `fc-match`/`fc-cache`. Without it
+# the image renders fine and the font gate cannot ask a single question — it died
+# with rc=127, command not found.
+#
+# `fc-cache -f` is not tidiness either: fontconfig builds its cache lazily on
+# first use, so without this the first render pays a directory scan and two
+# images built from the same source can differ in timing. Baking the cache makes
+# the font discoverable at build time, where a failure is cheap.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       libssl3 \
       libfontconfig1 \
+      fontconfig \
       libfreetype6 \
       libexpat1 \
       libpng16-16 \
@@ -66,6 +77,7 @@ RUN apt-get update \
       zlib1g \
       fonts-dejavu-core \
       ca-certificates \
+ && fc-cache -f \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /src/target/release/render /usr/local/bin/html-render
@@ -77,4 +89,7 @@ USER render
 WORKDIR /work
 
 ENTRYPOINT ["html-render"]
-CMD ["--help"]
+# No CMD: this binary has no --help and no --version, so `docker run image` with
+# no arguments prints usage and exits 2, which is the honest answer for a CLI
+# that needs a file, an output path and a size. A CMD naming a flag that does not
+# exist turns a bare run into a confusing "unknown flag" instead.
