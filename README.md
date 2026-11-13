@@ -201,9 +201,9 @@ local Rust compilation. Three workflows:
 
 | Workflow | Trigger | Output |
 |---|---|---|
-| `parity.yml` | push to any branch | builds, measures the corpus, uploads results |
-| `drain-probe.yml` | push to any branch | builds, measures the image drain loop under each `BLITZ_DRAIN` mode, uploads the report |
-| `release.yml` | push a `v*` tag | builds, packages, publishes, **then verifies the published asset** |
+| `parity.yml` | push touching `src/`, `Cargo.*`, `build.rs`, `fixtures/`, `tools/` or the workflow itself; or manual | builds, runs the clip and exit-code tests, measures the corpus, uploads results |
+| `drain-probe.yml` | manual dispatch only | builds, measures the image drain loop under each `BLITZ_DRAIN` mode, uploads the report |
+| `release.yml` | push a `v*` tag, or manual | builds, packages, publishes, **then verifies the published asset** |
 
 Two hard requirements, both learned the hard way:
 
