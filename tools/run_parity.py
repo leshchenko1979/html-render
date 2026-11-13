@@ -279,7 +279,7 @@ def main():
             f"{len(current['divergent'])} divergent, "
             f"{len(current['absence'])} absence"
         )
-        return result
+        return 0
 
     if baseline is None:
         # Deleting the file must not disarm the gate.
@@ -302,7 +302,7 @@ def main():
         f"{len(current['divergent'])} known divergence(s) within baseline, "
         f"{len(current['absence'])} absence"
     )
-    return result
+    return 0
 
 
 def box_key(row):

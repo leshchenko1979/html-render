@@ -135,6 +135,13 @@ jobs:
         # defect makes it exit nonzero. A gate nobody can fail is decoration.
         run: python3 tools/test_parity_gate.py
 
+      - name: Check for names that resolve to nothing
+        # The corpus gate above printed PASS and then the job died on
+        # `NameError: name 'result' is not defined` — a refactor removed the
+        # variable and left the return. `py_compile` accepts that, so nothing in
+        # the repo could have caught it. This walks every scope with symtable.
+        run: python3 tools/test_undefined_names.py --self-test
+
       - name: Locate Chromium
         run: |
           if command -v google-chrome >/dev/null; then
