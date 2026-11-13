@@ -10,6 +10,19 @@ name: container
 on:
   push:
     tags: ["v*"]
+    # `latest` is documented as tracking the default branch, so the workflow has
+    # to RUN on the default branch — an `enable=` expression on a trigger that
+    # never fires there is dead config. The paths filter keeps it to commits that
+    # can actually move the image: a README edit must not pay a 326-crate Docker
+    # build.
+    branches: [main]
+    paths:
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Dockerfile"
+      - "assets/**"
+      - ".github/workflows/container.yml"
   workflow_dispatch:
 
 permissions:
