@@ -115,12 +115,20 @@ jobs:
         # that is not a defect. What this leg DOES catch is the two failures that
         # matter: a library missing at load time (no PNG at all) and a canvas
         # with no glyphs on it (a substituted face that renders nothing).
+        # `--user` is not a CI convenience, it is the documented recipe. The
+        # image runs as uid 10001, so writing into a bind mount owned by the
+        # caller fails with EACCES (exit 101, "create png: Permission denied") —
+        # measured here, on the exact command the README tells users to run.
+        # Passing the caller's uid:gid makes the output file belong to them,
+        # which is what anyone mounting a directory expects.
         run: |
           set -euo pipefail
           mkdir -p out
-          docker run --rm -v "$PWD/assets:/work:ro" -v "$PWD/out:/out" \
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$PWD/assets:/work:ro" -v "$PWD/out:/out" \
             html-render:test /work/og.html /out/og.png 1280 640 2
           test -s out/og.png || { echo "::error::no PNG written"; exit 1; }
+          echo "output owned by: $(stat -c '%u:%g' out/og.png)"
           python3 - <<'PY'
           import sys
           sys.path.insert(0, "tools")

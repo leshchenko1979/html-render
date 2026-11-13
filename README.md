@@ -158,9 +158,16 @@ Everything above — the shared libraries, the glibc floor, the font — is
 discharged once by an image:
 
 ```bash
-docker run --rm -v "$PWD:/work" ghcr.io/leshchenko1979/html-render:latest \
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" \
+    ghcr.io/leshchenko1979/html-render:latest \
     /work/card.html /work/card.png 1280 720 2
 ```
+
+`--user` is required, not optional. The image runs as uid 10001 so it cannot
+touch anything outside the file it was told to write, which also means it cannot
+write into a bind mount owned by you: without `--user` the render exits 101 with
+`create png: Permission denied`. Passing your own uid:gid makes the PNG belong to
+you, which is what mounting a directory implies.
 
 The image is built from the same commit as the release tarball, on the same tag
 push, and its own CI proves it renders: `ldd` resolves the full closure with
