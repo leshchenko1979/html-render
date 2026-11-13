@@ -13,9 +13,17 @@ name: drain-probe
 # Each mode is run repeatedly: a timing bug is a distribution, not one sample.
 
 on:
-  push:
-    branches: ["**"]
+  # Dispatch-only. This job asks ONE question ("which part of the drain loop makes
+  # sub-resource images arrive?") and pays a 60-minute-timeout build per run to
+  # answer it. Fired on every push to every branch it cost a full build for every
+  # docs commit — first seen 11-05 08:02 and never narrowed since. `parity` builds
+  # the same tree and covers the shipped loop; re-run this by hand when the drain
+  # question reopens.
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
