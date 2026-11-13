@@ -112,8 +112,9 @@ its own run.
 
 ### What it needs on the host
 
-`ldd` on the shipped binary lists **15** entries, and a `scratch` or distroless
-image satisfies none of them — the binary will not start:
+`ldd` on the shipped binary lists **15** entries — **13** shared libraries plus
+the loader and the vDSO — and a `scratch` or distroless image satisfies none of
+them — the binary will not start:
 
 | | |
 |---|---|
