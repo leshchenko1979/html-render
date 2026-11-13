@@ -37,8 +37,16 @@ RUN find src -name '*.rs' -exec touch {} +
 # --locked, for the same reason parity and release use it: the committed
 # Cargo.lock is the resolved graph the published numbers were measured on, so a
 # build that would re-resolve must fail here rather than drift silently.
+# The liveness check RENDERS, it does not ask for --help: this binary has no
+# --help flag (unknown flags print usage and exit 2), so `--help` made the guard
+# itself the build failure — it proved nothing about the renderer while failing
+# every build. A 4x4 fragment exercises the whole path (parse, lay out, rasterise,
+# encode) and the PNG magic number proves a real image came out, which is what
+# distinguishes this binary from the stub.
 RUN cargo build --release --locked \
- && ./target/release/render --help > /dev/null \
+ && printf '<div style="width:4px;height:4px;background:#000"></div>' > /tmp/smoke.html \
+ && ./target/release/render /tmp/smoke.html /tmp/smoke.png 4 4 1 \
+ && test "$(od -An -tx1 -N4 /tmp/smoke.png | tr -d ' ')" = "89504e47" \
  && test "$(ldd target/release/render | grep -c '=>')" -gt 5
 
 # ---- runtime -------------------------------------------------------------
