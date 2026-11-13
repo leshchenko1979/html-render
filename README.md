@@ -23,7 +23,8 @@ four corpus boxes, consecutive `<br>` runs in a `font-size:0` inline-block
 context (see [Corpus](#corpus)).
 
 It exists to answer a concrete question: can a 25 MB binary replace a 500 MB
-browser for server-side rendering? On a real 12-slide, 4 MB deck, yes:
+browser for server-side rendering? On a real 12-slide, 4 MB deck, yes
+(what changed between releases: [CHANGELOG.md](CHANGELOG.md)):
 
 | 12-slide deck, 2560×1440 | wall | peak RSS |
 |---|---|---|
