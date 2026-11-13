@@ -92,6 +92,9 @@ jobs:
           cat dist/checksums.txt
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          # Read from the artefact rather than typed into the body: a hardcoded
+          # size goes stale on the first dependency bump and nobody notices.
+          echo "size=$(du -h dist/html-render | cut -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Publish
         env:
@@ -100,13 +103,15 @@ jobs:
           set -euo pipefail
           VERSION='${{ steps.pkg.outputs.version }}'
           NAME='${{ steps.pkg.outputs.name }}'
+          SIZE='${{ steps.pkg.outputs.size }}'
           NOTES=$(cat <<EOF
           Static Blitz renderer CLI, built from \`${{ github.sha }}\`.
 
           | | |
           |---|---|
           | Asset | \`${NAME}.tar.gz\` |
-          | Binary | \`html-render\` (single file, no runtime deps) |
+          | Binary | \`html-render\`, ${SIZE}, single file |
+          | Runtime deps | 13 system libraries: glibc, libssl/libcrypto, freetype, fontconfig, expat, png, zlib, bz2, brotli |
           | glibc floor | 2.35 (asserted at build time) |
           | Built on | ubuntu-22.04 |
           | Blitz pin | see \`Cargo.toml\` at this tag |
@@ -123,11 +128,15 @@ jobs:
 
           Not a browser: renders JS-free HTML/CSS to PNG.
 
-          Measured on a 12-slide, 4 MB deck at 2560x1440: **5.37 s / 93.4 MiB**
-          against headless Chromium's 13.36 s / 858 MiB — 2.49x faster and
-          9.19x lighter. 4.13% of pixels differ by more than 16 levels (glyph
-          antialiasing, not layout), and ten renders of the same input are
-          byte-identical. Source of these figures: \`GATES.md\`.
+          Measured on a 12-slide, 4 MB deck at 2560x1440: **5.37 s** against
+          headless Chromium's 13.36 s (2.49x faster). The RSS figures published
+          for that deck — 93.4 MiB against 858 MiB — are **largest single
+          process**, not the process tree; measured on a deck in the repo,
+          Chromium's tree peaks 5.7-6.2x above its largest process while
+          html-render is one process, so the real memory gap is wider than the
+          9.19x those two numbers give. 4.13% of pixels differ by more than 16
+          levels (glyph antialiasing, not layout), and ten renders of the same
+          input are byte-identical. Source of these figures: \`GATES.md\`.
           EOF
           )
           # Idempotent on purpose: a re-dispatch on a published tag must REPLACE
@@ -161,6 +170,7 @@ jobs:
           set -euo pipefail
           VERSION='${{ steps.pkg.outputs.version }}'
           NAME='${{ steps.pkg.outputs.name }}'
+          SIZE='${{ steps.pkg.outputs.size }}'
           BASE="https://github.com/$GITHUB_REPOSITORY/releases/download/$VERSION"
           rm -rf verify && mkdir verify && cd verify
           curl -fsSL -O "$BASE/${NAME}.tar.gz"
