@@ -97,6 +97,14 @@ jobs:
         # wrong picture with nothing on stderr.
         run: python3 tools/test_exit_codes.py --bin target/release/render
 
+      - name: Test document-root detection
+        # A file that declares its own document root must be rendered verbatim.
+        # Wrapping it hands the canvas to the wrapper's `html{background:#fff}`
+        # reset, so a `body`-coloured page comes out white — identical geometry,
+        # nothing on stderr. The legs that pin that fail against the r2 release
+        # binary, which is why this runs against the freshly built one.
+        run: python3 tools/test_document_detect.py --bin target/release/render
+
       - name: Locate Chromium
         run: |
           if command -v google-chrome >/dev/null; then
