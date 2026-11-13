@@ -1,0 +1,17 @@
+# Third-party packages the tools in this directory need.
+#
+# Nothing here is required to *use* the renderer: html-render is a single binary
+# and the PNG decoder in measure.py is stdlib-only. These are for the harness
+# that measures it.
+#
+#   python3 -m pip install -r tools/requirements.txt
+#
+# Pillow is a hard requirement for gates.py (it compares PNGs pixel by pixel)
+# and an optional accelerator for css_audit.py: with it a 2560x1440 decode takes
+# 0.13-0.21 s, without it the stdlib reader takes 3.0-3.7 s, and the shipped
+# 76-declaration audit goes from 11.43 s to 100.49 s. Same verdicts either way.
+#
+# Chromium is NOT a Python package: gates.py and run_parity.py locate a browser
+# with --chromium or $CHROME and drive it as a subprocess. The container image
+# ships neither the harness nor Chromium.
+Pillow>=10.0

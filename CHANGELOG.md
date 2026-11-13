@@ -70,7 +70,9 @@ are closed ranges and do not drift.
 
 **Renamed.** `blitz-render` → `html-render`, binary `render` → `html-render`.
 The r1 asset and install snippet name the old repo, which is why `-r2` exists.
-Relicensed **Apache-2.0** (was unlicensed), carrying Blitz's patent grant.
+**Apache-2.0**, which the repository has carried in every commit since it was
+created: the rename did not change the licence, and neither the old nor the new
+name was ever published without one.
 
 **Added**
 

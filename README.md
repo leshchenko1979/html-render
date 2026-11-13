@@ -4,7 +4,9 @@
 
 **HTML + CSS → PNG, with no browser.**
 
-**Linux x86_64, glibc ≥ 2.35.** No macOS, no Windows, no Docker image.
+**Linux x86_64, glibc ≥ 2.35.** No macOS, no Windows. A container image carries
+the 13 shared libraries and the font for you — [skip the host
+entirely](#or-skip-the-host-entirely).
 
 ```bash
 # the image above is this command's output, byte for byte: 3200×1800
@@ -30,9 +32,13 @@ browser for server-side rendering? On a real 12-slide, 4 MB deck, yes
 |---|---|---|
 | headless Chromium (Playwright) | 13.36 s | 858 MiB |
 | **html-render `--scroll`** | **5.37 s** | **93.4 MiB** |
-| html-render `--clip` (the default) | 5.72 s | 275.2 MiB |
+| html-render `--clip` | 5.72 s | 275.2 MiB |
 
-**2.34× faster and 3.12× lighter on the default `--clip` recipe; 2.49× and 9.19×
+`--scroll` and `--clip` are the *clip* mode's two painting strategies; the
+default mode is a single image (`html-render page.html out.png 1280 720`), which
+is not in this table.
+
+**2.34× faster and 3.12× lighter on the plain `--clip` recipe; 2.49× and 9.19×
 with `--scroll`**, which paints one element-sized canvas per slide instead of one
 full-height canvas that is cropped afterwards.
 
@@ -45,8 +51,9 @@ so its two readings agree (81.2 vs 81.0 MiB). The memory ratios above therefore
 *understate* the difference; the wall ratios do not depend on the method.
 `python3 tools/measure_rss.py --rss-mode tree -- <command>` reproduces either.
 
-Both are lossless: they differ on 3,551 of 44,236,800 pixels (0.0080 %, max
-channel delta 2/255), which is antialiasing at fractional offsets. Output is byte-for-byte deterministic,
+Both encoders are lossless, and on the same document the two engines agree on all
+but 3,551 of 44,236,800 pixels (0.0080 %, max channel delta 2/255) — antialiasing
+at fractional offsets, not layout. Output is byte-for-byte deterministic,
 which a browser is not: ten renders of the same input produce one checksum, so
 output can be diffed in CI. That holds for a document whose resources are local
 or `data:` URIs. A remote image is fetched at render time and painted as
@@ -130,6 +137,11 @@ On Debian/Ubuntu the non-base half is one line:
 apt-get install -y libssl3 libfontconfig1 libfreetype6 libpng16-16 libbz2-1.0 libbrotli1
 ```
 
+`libexpat.so.1`, `libz.so.1` and `libgcc_s.so.1` are absent from that line on
+purpose: the six packages above depend on them, so apt pulls them in. `ldd` still
+lists all thirteen, which is why the table and the command do not match line for
+line — the table is the closure, the command is the shortest way to it.
+
 ### Fonts are a runtime dependency, and a silent one
 
 The binary ships **no** font. `assets/hero.html` and `assets/og.html` name
@@ -158,7 +170,9 @@ Everything above — the shared libraries, the glibc floor, the font — is
 discharged once by an image:
 
 ```bash
-docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" \
+docker run --rm --user "$(id -u):$(id -g)" \
+    --cap-drop ALL --security-opt no-new-privileges \
+    -v "$PWD:/work" \
     ghcr.io/leshchenko1979/html-render:latest \
     /work/card.html /work/card.png 1280 720 2
 ```
@@ -169,6 +183,26 @@ write into a bind mount owned by you: without `--user` the render exits 101 with
 `create png: Permission denied`. Passing your own uid:gid makes the PNG belong to
 you, which is what mounting a directory implies.
 
+`latest` is a **moving** tag: it follows the default branch and every release, so
+the same name can mean a different binary next week. Pin a digest or a `v*` tag
+for anything reproducible:
+
+```bash
+docker pull ghcr.io/leshchenko1979/html-render@sha256:<digest>
+```
+
+Rendering HTML you do not trust needs the network taken away, because remote
+sub-resources are fetched with no allowlist (see [Security](#security)):
+
+```bash
+docker run --rm --user "$(id -u):$(id -g)" \
+    --cap-drop ALL --security-opt no-new-privileges \
+    --network none --read-only --tmpfs /tmp \
+    -v "$PWD:/work" \
+    ghcr.io/leshchenko1979/html-render:latest \
+    /work/untrusted.html /work/out.png 1280 720 2
+```
+
 The image is built from the same commit as the release tarball, on the same tag
 push, and its own CI proves it renders: `ldd` resolves the full closure with
 none `not found`, `fc-match "DejaVu Sans"` returns DejaVu, and a shipped asset
@@ -176,9 +210,9 @@ renders inside it at the right dimensions with glyphs painted. The closure is
 asserted as *no library missing* plus a floor on the count, not as an exact
 number: the same source links 12 libraries on bookworm and 13 on jammy, because
 those freetype builds differ, and a gate pinned to one distro's transitive graph
-reports a defect every time the base image is rebuilt. `latest` is
-published on tag pushes only — an image that silently changes under a fixed name
-is not pinnable.
+reports a defect every time the base image is rebuilt. The gate therefore asserts
+the closure **of the image it just built**, not a number copied from a release
+log.
 
 ## Usage
 
@@ -193,6 +227,13 @@ html-render page.html out.png 1280 720 [scale] [--document] [--fragment]
 html-render --clip deck.html png/ 1280 720 2 'section.slide' [--document] [--fragment] [--scroll]
 ```
 
+`--help` prints those two lines plus every flag and exit code and exits `0`;
+`--version` prints the version and exits `0`. Both used to exit `2` with
+`unknown flag`, which made `docker run image --help` and every `cmd --help | head`
+pipeline read as a broken binary. The output directory is created if it does not
+exist, in both modes — a missing `out/` used to panic `101` in single-image mode
+while clip mode created it, so the same argument shape gave two answers.
+
 **A file that declares its own document root is rendered as one, automatically.**
 Detection reads the first tag after any BOM, whitespace and comments, and matches
 it against `<!doctype>`, `<html>`, `<head>`, `<body>`; anything else — a `<div>`,
@@ -206,13 +247,18 @@ silently preferring one. The resolved mode is on the `TIMING` line.
 This matters more than it looks. Wrapping a real document hands the canvas to the
 wrapper's `html{background:#ffffff}` reset, so a page that colours itself via
 `body{background:…}` — the common idiom — renders **white**, with identical
-geometry and nothing on stderr. Measured against the previous release: 50 % of
-pixels differ for such a page. Passing `--document` was already the documented
-advice; the guess means forgetting it is no longer silent.
+geometry and nothing on stderr. Measured against the previous release, a
+`body{background:…}` document differs from its `--document` render in **70.4 %**
+of pixels, and a file that opens at `<body …>` in **89.9 %** — which is why the
+rule matches all four opening tags, not just `<!doctype>`. Passing `--document`
+was already the documented advice; the guess means forgetting it is no longer
+silent.
 
 `--scroll` (clip mode) paints one element-sized canvas per match instead of one
-full-height canvas that is cropped afterwards — the same pixels for a third of
-the peak memory.
+full-height canvas that is cropped afterwards — the same picture for a third of
+the peak memory. Not byte-identical: on the 4-slide demo deck the two strategies
+differ on 0 / 75 / 58 / 125 pixels of 3.69 M per slide, never by more than one
+channel level, because a scrolled canvas rounds its origin differently.
 
 ```bash
 # a 12-slide deck, 2560×1440 per slide, ~93 MiB peak
@@ -248,7 +294,7 @@ in CI against the binary built from the same commit:
 
 | Code | Means |
 |---|---|
-| `0` | the PNG, or the whole clip directory, was written |
+| `0` | the PNG, or the whole clip directory, was written; or `--help` / `--version` printed and exited |
 | `2` | wrong argument count, an unknown flag, or `--clip` not first |
 | `3` | the selector matched nothing, or every match had no layout box |
 | `101` | a panic: an unparsable number, an invalid selector, an input file that cannot be read |
@@ -257,10 +303,13 @@ in CI against the binary built from the same commit:
 rather than the argument you got wrong, so read the argument before the file.
 
 **This table describes `main`, and the published `v0.3.0-beta.4-r2` predates
-it.** On that binary four of the ten asserted legs behave differently: an
-unknown flag exits `0`, `--clip` in the wrong position exits `0`, a selector
-whose matches are all boxless exits `101` instead of `3`, and the usage line
-still says `usage: render`. Everything else holds.
+it.** Nine of the fifteen legs `tools/test_exit_codes.py` now asserts fail
+against that binary: `--help`, `-h`, `--version` and `-V` exit `2` with
+`unknown flag`; an unknown flag exits `0`; `--clip` in the wrong position exits
+`0`; a selector whose matches are all boxless exits `101` instead of `3`; the
+usage line still says `usage: render`; and single-image mode panics `101` when the
+output directory does not exist. Everything else holds. A release cut from `main`
+is what closes that gap; until then the tarball and this page disagree.
 
 **The failure with no exit code is the one to watch.** Unsupported CSS is
 ignored, not rejected: an unimplemented property or value falls back to its
@@ -282,11 +331,18 @@ between two engines rather than between two rulers.
 | photo regions | 0.31 – 3.92 % |
 | best integer shift on every photo region | **0 px** |
 
-The residual is antialiasing, not layout: wrap points match, tables match, boxes
-sit at Chromium's coordinates, and images are sampled at zero offset. Vello's
+The residual is antialiasing, not layout: wrap points match, boxes sit at
+Chromium's coordinates, and images are sampled at zero offset. Vello's
 glyph AA is slightly softer than Skia's, so **you cannot diff html-render
 against Chromium at 99 %** — and you don't need to, because against *itself* it
 is exact.
+
+What the corpus does **not** cover is worth naming before you rely on the table
+above: **0 of 31 fixtures contain a table**, so `display: table` layout is
+untested here, and no fixture exercises non-Latin text shaping or right-to-left
+scripts. Both are Blitz surfaces rather than this CLI's, and both can move a
+layout without any error. If your document is table-heavy or CJK, render one page
+and look at it.
 
 Determinism is a first-class property, not a side effect. Both rows are a
 document with local resources only — the scope above:
@@ -414,17 +470,31 @@ The 4 divergent boxes are one open defect: consecutive `<br>` runs in a
 Six further boxes involve text and are reported separately, because without an
 identical embedded font they measure font availability rather than layout.
 
+**`absence` is a pass, not a gap.** One fixture (`margin-auto-stretch`) asserts
+that *neither* engine paints a probe, because auto cross margins cancel the
+stretch: there is no box to compare, and the absence itself is the assertion. So
+`1 absence` counts one fixture that behaved correctly, and `0 missing` counts
+boxes Chromium painted and Blitz did not.
+
+**This is a gate, not a report.** `tools/parity_baseline.json` pins the four
+known divergences by `fixture:colour` with their measured delta, and
+`run_parity.py` exits `1` on a new divergence, on one that grew, on a missing
+box, on a fixture that stopped running — and on a baseline entry that stopped
+diverging, so a fix cannot leave a stale tolerance behind that later hides the
+same box regressing. `python3 tools/test_parity_gate.py` proves each of those
+legs fails, without needing a browser.
+
 ## Building
 
 The build is a GitHub Actions job, because the host this was written on forbids
-local Rust compilation. Three workflows:
+local Rust compilation. Five workflows:
 
 | Workflow | Trigger | Output |
 |---|---|---|
-| `parity.yml` | push touching `src/`, `Cargo.*`, `build.rs`, `fixtures/`, `tools/` or the workflow itself; or manual | builds, runs the clip, exit-code, document-root and CSS-audit tests, measures the corpus, uploads results |
+| `parity.yml` | push touching `src/`, `Cargo.*`, `fixtures/`, `tools/`, `assets/` or the workflow itself; or manual | builds, runs the clip, exit-code, document-root, CSS-audit and corpus-gate tests, **measures the corpus and fails on a new divergence**, uploads results |
 | `drain-probe.yml` | manual dispatch only | builds, measures the image drain loop under each `BLITZ_DRAIN` mode, uploads the report |
 | `release.yml` | push a `v*` tag, or manual | builds, packages, publishes, **then verifies the published asset** |
-| `container.yml` | push a `v*` tag, or manual | builds the image, asserts the 13-library closure and the font, renders an asset inside it, pushes to GHCR |
+| `container.yml` | push a `v*` tag, or manual | builds the image, asserts the library closure is complete (`ldd` reports nothing `not found`, plus a floor on the count — a floor, not an exact number: the same source links 12 libraries on bookworm and 13 on jammy) and that the font resolves, renders an asset inside it, pushes to GHCR |
 | `lockfile.yml` | push touching `Cargo.toml`, or manual | resolves `Cargo.lock` and commits it back if it moved |
 
 Two hard requirements, both learned the hard way:
