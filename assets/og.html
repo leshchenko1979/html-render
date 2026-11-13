@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>html-render — og</title>
+<style>
+:root{
+  --navy:#1b3a5c; --blue:#2e6ea8; --green:#6fd08c;
+  --pale:#c9d8e6; --dim:#8fa8c2;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--navy)}
+body{font-family:"DejaVu Sans",Arial,sans-serif;
+     -webkit-font-smoothing:antialiased;text-rendering:geometricPrecision}
+
+#og{
+  width:1280px; height:640px; background:var(--navy); position:relative;
+  display:flex; flex-direction:column; padding:54px 64px 48px; overflow:hidden;
+}
+#og::before{
+  content:""; position:absolute; left:0; top:0; width:100%; height:8px;
+  background:var(--green);
+}
+/* soft glow, no images */
+#og::after{
+  content:""; position:absolute; right:-150px; bottom:-190px;
+  width:640px; height:640px; border-radius:50%;
+  background:#22456b;
+}
+
+.kicker{
+  font-size:21px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--dim); font-weight:700; position:relative;
+}
+.kicker b{color:#8fc6f5}
+
+h1{
+  font-size:84px; line-height:1.05; color:#fff; font-weight:700;
+  letter-spacing:-.02em; margin-top:30px; position:relative;
+}
+h1 span{color:var(--green)}
+
+.nums{display:flex; gap:56px; margin-top:auto; position:relative}
+.n .v{font-size:62px; line-height:1; font-weight:700; color:#fff;
+      font-variant-numeric:tabular-nums}
+.n .v em{font-style:normal; font-size:38px; color:var(--green)}
+.n .l{font-size:19px; letter-spacing:.09em; text-transform:uppercase;
+      color:var(--dim); font-weight:700; margin-top:10px}
+.n .d{font-size:17px; color:var(--pale); margin-top:6px}
+
+.bar{
+  position:relative; display:flex; justify-content:space-between;
+  align-items:baseline; border-top:1px solid #2c4a6b; margin-top:34px;
+  padding-top:20px; font-size:20px; color:var(--pale);
+}
+.bar b{color:#fff}
+</style>
+</head>
+<body>
+<div id="og">
+
+  <div class="kicker">html-render · <b>v0.3.0-beta.4</b> · Apache-2.0</div>
+
+  <h1>HTML + CSS → PNG,<br><span>with no browser</span></h1>
+
+  <div class="nums">
+    <div class="n">
+      <div class="v">2.49<em>×</em></div>
+      <div class="l">faster</div>
+      <div class="d">5.37 s vs 13.36 s</div>
+    </div>
+    <div class="n">
+      <div class="v">9.19<em>×</em></div>
+      <div class="l">lighter</div>
+      <div class="d">93.4 vs 858 MiB</div>
+    </div>
+    <div class="n">
+      <div class="v">25 <em>MB</em></div>
+      <div class="l">vs a browser</div>
+      <div class="d">~500 MB Chromium</div>
+    </div>
+  </div>
+
+  <div class="bar">
+    <div><b>github.com/leshchenko1979/html-render</b></div>
+    <div>Rust · Blitz · no V8, no JavaScript</div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>html-render — hero</title>
+<style>
+:root{
+  --navy:#1b3a5c; --blue:#2e6ea8; --lblue:#dfeaf6;
+  --green:#207656; --lgreen:#def0e7;
+  --gray:#5f6b7a; --lgray:#eef2f6; --ink:#1c222a;
+  --rule:#d9e1ea;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#fff}
+body{font-family:"DejaVu Sans",Arial,sans-serif;color:var(--ink);
+     -webkit-font-smoothing:antialiased;text-rendering:geometricPrecision}
+
+#hero{
+  width:1600px; height:900px; background:#fff; position:relative;
+  display:flex; flex-direction:column; padding:0 0 40px;
+}
+#hero::before{
+  content:""; position:absolute; left:0; top:0; width:100%; height:9px;
+  background:var(--navy);
+}
+
+.body{display:flex; flex:1; padding:56px 64px 22px; gap:56px}
+
+/* ---------- left ---------- */
+.left{width:830px; display:flex; flex-direction:column}
+
+.kicker{
+  font-size:20px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--gray); font-weight:700;
+}
+.kicker b{color:var(--blue)}
+
+h1{
+  font-size:76px; line-height:1.04; color:var(--navy); font-weight:700;
+  margin-top:26px; letter-spacing:-.015em;
+}
+h1 span{color:var(--blue)}
+
+.sub{
+  font-size:26px; line-height:1.46; color:var(--gray); margin-top:24px;
+  max-width:800px;
+}
+.sub b{color:var(--ink)}
+
+.caps{display:grid; grid-template-columns:1fr 1fr; gap:9px 30px; margin-top:34px}
+.cap{display:flex; align-items:baseline; gap:10px; font-size:20px; color:var(--ink)}
+.cap i{display:block; width:7px; height:7px; border-radius:4px;
+       background:var(--blue); flex:none; position:relative; top:-2px}
+
+.stats{display:flex; gap:14px; margin-top:auto; padding-bottom:8px}
+.stat{
+  background:var(--lgray); border-radius:14px; padding:20px 24px 22px;
+  border-left:6px solid var(--blue); flex:1;
+}
+.stat .v{font-size:58px; line-height:1.02; font-weight:700; color:var(--navy);
+         font-variant-numeric:tabular-nums}
+.stat .v em{font-style:normal; font-size:34px; color:var(--green)}
+.stat .l{font-size:17px; letter-spacing:.07em; text-transform:uppercase;
+         color:var(--gray); font-weight:700; margin-top:9px}
+.stat .d{font-size:16px; color:var(--gray); margin-top:7px;
+         font-variant-numeric:tabular-nums}
+.stat.g{border-left-color:var(--green)}
+
+/* ---------- right ---------- */
+.right{flex:1; display:flex; flex-direction:column; justify-content:space-between}
+
+.panel{
+  background:#f7f9fb; border:1px solid var(--rule); border-radius:16px;
+  padding:26px 28px 22px;
+}
+.ptitle{
+  font-size:18px; letter-spacing:.1em; text-transform:uppercase; font-weight:700;
+  color:var(--gray);
+}
+.metric{margin-top:22px}
+.ml{font-size:19px; font-weight:700; color:var(--navy); margin-bottom:11px}
+
+.bline{display:flex; align-items:center; gap:12px; margin-top:9px}
+.bn{font-size:16px; color:var(--gray); width:152px; flex:none}
+.bt{flex:1; height:20px; background:#e3e9f0; border-radius:5px; overflow:hidden}
+.bt i{display:block; height:20px; background:#9fb0c2; border-radius:5px}
+.bt i.win{background:var(--green)}
+.bv{font-size:17px; width:96px; flex:none; text-align:right;
+    font-variant-numeric:tabular-nums; color:var(--gray)}
+.bv.win{color:var(--green); font-weight:700}
+
+.pfoot{
+  margin-top:22px; border-top:1px solid var(--rule); padding-top:16px;
+  font-size:17px; line-height:1.4; color:var(--gray);
+}
+.pfoot b{color:var(--navy)}
+
+/* ---------- terminal ---------- */
+.term{background:var(--navy); border-radius:16px; overflow:hidden}
+.tbar{display:flex; align-items:center; gap:9px; padding:13px 20px;
+      background:#16304c}
+.dot{display:block; width:12px; height:12px; border-radius:6px; background:#3d5c7d}
+.tname{margin-left:auto; font-size:14px; letter-spacing:.1em;
+       text-transform:uppercase; color:#8fa8c2}
+
+.code{padding:20px 22px 8px; font-family:"DejaVu Sans Mono",monospace;
+      font-size:16px; line-height:1.6; color:#d5e4f2}
+.code .p{color:#6fd08c}
+.code .o{color:#9fb6cc}
+.code .d{color:#7e97b0}
+.code .sp{height:12px}
+.code .i2{padding-left:26px}
+
+.tfoot{margin:12px 22px 0; padding:14px 0 20px; border-top:1px solid #2c4a6b;
+       font-size:16px; color:#a8bdd2}
+.tfoot b{color:#d5e4f2}
+
+/* ---------- foot ---------- */
+.foot{
+  display:flex; justify-content:space-between; padding:0 64px;
+  font-size:18px; color:var(--gray);
+}
+.foot b{color:var(--navy)}
+</style>
+</head>
+<body>
+<div id="hero">
+
+  <div class="body">
+
+    <div class="left">
+      <div class="kicker">html-render · <b>v0.3.0-beta.4</b> · Apache-2.0</div>
+
+      <h1>HTML + CSS → PNG,<br><span>with no browser</span></h1>
+
+      <p class="sub">A <b>25 MB</b> Rust binary replaces a <b>500 MB</b> Chromium:
+      Blitz's Stylo + Taffy + Vello, one process, no JavaScript engine compiled in.</p>
+
+      <div class="caps">
+        <div class="cap"><i></i>flexbox and grid</div>
+        <div class="cap"><i></i>web fonts, <code>@font-face</code></div>
+        <div class="cap"><i></i>images over file, http, data</div>
+        <div class="cap"><i></i>backgrounds and gradients</div>
+        <div class="cap"><i></i>transforms, CSS variables</div>
+        <div class="cap"><i></i>absolute positioning</div>
+        <div class="cap"><i></i>aspect-ratio, <code>overflow: clip</code></div>
+        <div class="cap"><i></i>byte-identical output</div>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="v">2.49<em>×</em></div>
+          <div class="l">faster</div>
+          <div class="d">5.37 s vs 13.36 s</div>
+        </div>
+        <div class="stat">
+          <div class="v">9.19<em>×</em></div>
+          <div class="l">lighter</div>
+          <div class="d">93.4 vs 858 MiB</div>
+        </div>
+        <div class="stat g">
+          <div class="v">1 md5</div>
+          <div class="l">10 renders</div>
+          <div class="d">one checksum</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="panel">
+        <div class="ptitle">Measured · same host · same deck</div>
+
+
+        <div class="metric">
+          <div class="ml">Wall time · 12 slides at 2560×1440</div>
+          <div class="bline">
+            <span class="bn">Chromium 151</span>
+            <span class="bt"><i style="width:100%"></i></span>
+            <span class="bv">13.36 s</span>
+          </div>
+          <div class="bline">
+            <span class="bn">html-render</span>
+            <span class="bt"><i class="win" style="width:40.2%"></i></span>
+            <span class="bv win">5.37 s</span>
+          </div>
+        </div>
+
+        <div class="metric">
+          <div class="ml">Peak RSS · tree-summed</div>
+          <div class="bline">
+            <span class="bn">Chromium 151</span>
+            <span class="bt"><i style="width:100%"></i></span>
+            <span class="bv">858 MiB</span>
+          </div>
+          <div class="bline">
+            <span class="bn">html-render</span>
+            <span class="bt"><i class="win" style="width:10.9%"></i></span>
+            <span class="bv win">93.4 MiB</span>
+          </div>
+        </div>
+
+        <div class="metric">
+          <div class="ml">Install size · what you ship</div>
+          <div class="bline">
+            <span class="bn">Chromium 151</span>
+            <span class="bt"><i style="width:100%"></i></span>
+            <span class="bv">~500 MB</span>
+          </div>
+          <div class="bline">
+            <span class="bn">html-render</span>
+            <span class="bt"><i class="win" style="width:5%"></i></span>
+            <span class="bv win">25 MB</span>
+          </div>
+        </div>
+
+        <div class="pfoot">
+          Fidelity: <b>4.13 %</b> of pixels off by more than 16 — antialiasing,
+          not layout. Every photo region shifts <b>0 px</b>.
+        </div>
+      </div>
+
+      <div class="term">
+        <div class="tbar">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="tname">bash</span>
+        </div>
+        <div class="code">
+          <div><span class="p">$</span> html-render --clip deck.html slides/ \</div>
+          <div class="i2">1280 720 2 'section.slide' --document --scroll</div>
+          <div class="sp"></div>
+          <div class="o">clip_01 css x=0.00 y=0.00 w=1280.00 h=720.00</div>
+          <div class="o i2">physical 2560x1440 (scroll)</div>
+          <div class="o d">… 11 more, in document order</div>
+        </div>
+        <div class="tfoot">
+          One process, <b>12 slides</b>, <b>5.37 s</b>, <b>93.4 MiB</b> peak.
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="foot">
+    <div><b>github.com/leshchenko1979/html-render</b></div>
+    <div>4 vCPU · glibc 2.39 · reproducible with <b>tools/gates.py</b></div>
+  </div>
+
+</div>
+</body>
+</html>
