@@ -42,6 +42,21 @@ faces). Every figure here and in [GATES.md](GATES.md) is reproduced from your ow
 document with `python3 tools/gates.py --deck <path>` — a different deck gives
 different numbers by construction.
 
+## Use cases
+
+Four things this is used for, each one a file you can name:
+
+- **Slide images from HTML/CSS.** A deck authored as `<section class="slide">`
+  becomes one PNG per slide at any scale, with no browser in the loop —
+  `--clip` writes `clip_01.png`, `clip_02.png`, … in document order.
+- **Open Graph and social cards.** [`assets/og.png`](assets/og.png) is 1280×640,
+  rendered from [`assets/og.html`](assets/og.html) by the command in
+  [Usage](#usage).
+- **CI visual diffs.** Deterministic output makes a changed pixel a changed
+  document: commit the PNG, diff the PNG, fail the build.
+- **Report and chart images.** One-pagers and dashboards where the layout is CSS
+  and the alternative is a screenshot service you have to keep warm.
+
 ## Install
 
 No package manager, no toolchain — a static-ish binary plus glibc. From a
