@@ -78,6 +78,27 @@ async fn real_main() {
         "usage: html-render <html> <out.png> <width> <height> [scale] [--document]"
     };
 
+    // A flag we do not implement is an error, not noise to be filtered away.
+    // `--documnet` used to pass straight through the positional filter, so a
+    // typo rendered a FRAGMENT of a full document and wrote a plausible PNG of
+    // the wrong thing with nothing on stderr. `--clip` additionally shifts the
+    // positionals by one, so it is only a mode when it leads.
+    for (i, a) in args.iter().enumerate().skip(1) {
+        if !a.starts_with("--") {
+            continue;
+        }
+        if !matches!(a.as_str(), "--clip" | "--document" | "--scroll") {
+            eprintln!("unknown flag {a:?}");
+            eprintln!("{usage}");
+            std::process::exit(2);
+        }
+        if a == "--clip" && i != 1 {
+            eprintln!("--clip must be the first argument");
+            eprintln!("{usage}");
+            std::process::exit(2);
+        }
+    }
+
     let (html_path, out_path, width, height, scale, selector) = if clip {
         if pos.len() < 6 {
             eprintln!("{usage}");

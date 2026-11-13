@@ -86,6 +86,12 @@ jobs:
         # built, so a regression fails here rather than on someone's deck.
         run: python3 tools/test_clip_void.py --bin target/release/render
 
+      - name: Test the exit-code contract
+        # The README documents 0/2/3/101, so every one is asserted here. An
+        # unknown flag used to exit 0 and render anyway: a typo produced the
+        # wrong picture with nothing on stderr.
+        run: python3 tools/test_exit_codes.py --bin target/release/render
+
       - name: Locate Chromium
         run: |
           if command -v google-chrome >/dev/null; then
