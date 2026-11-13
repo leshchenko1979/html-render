@@ -215,5 +215,12 @@
     "width": 300,
     "height": 200,
     "text": false
+  },
+  {
+    "name": "table-collapse",
+    "file": "table-collapse.html",
+    "width": 400,
+    "height": 200,
+    "text": false
   }
 ]

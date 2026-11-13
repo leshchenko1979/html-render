@@ -337,12 +337,19 @@ glyph AA is slightly softer than Skia's, so **you cannot diff html-render
 against Chromium at 99 %** — and you don't need to, because against *itself* it
 is exact.
 
-What the corpus does **not** cover is worth naming before you rely on the table
-above: **0 of 31 fixtures contain a table**, so `display: table` layout is
-untested here, and no fixture exercises non-Latin text shaping or right-to-left
-scripts. Both are Blitz surfaces rather than this CLI's, and both can move a
-layout without any error. If your document is table-heavy or CJK, render one page
-and look at it.
+`display: table` used to be the biggest hole here, and it is now measured rather
+than absent. Fixture 32 (`table-collapse`) puts `border-collapse`, `colgroup`,
+`rowspan`, `colspan` and `border-spacing` in front of both engines, and **all
+seven of its boxes diverge**: the table comes out **18px shorter** than Chromium
+paints it, one cell is **12px tall where Chromium paints 28**, and the rest are
+off by 2-16px. Those seven are pinned in `tools/parity_baseline.json` with that
+reason written down, so a *further* regression still fails the build while the
+current defect stays visible instead of being forgotten.
+
+The remaining hole: **no fixture exercises non-Latin text shaping or
+right-to-left scripts**, and text-dependent rows are confounded by font
+availability, so they are a lower bound and not a verdict. If your document is
+CJK, RTL, or table-heavy, render one page and look at it.
 
 Determinism is a first-class property, not a side effect. Both rows are a
 document with local resources only — the scope above:
@@ -365,7 +372,7 @@ It needs Chromium (`--chrome`, auto-detected if omitted) and a built binary
 (`--blitz`, default `target/release/render`), so it is a local instrument rather
 than a CI gate; the corpus gate that does run in CI is
 [`tools/run_parity.py`](tools/run_parity.py), which compares per-element boxes
-across 31 fixtures instead of whole pages.
+across 32 fixtures instead of whole pages.
 
 ### Which declarations did it drop?
 
@@ -456,7 +463,7 @@ the measured egress proof, and how to report: [SECURITY.md](SECURITY.md).
 
 ## Corpus
 
-`fixtures/` holds 31 documents that each paint elements in exact probe colours, so
+`fixtures/` holds 32 documents that each paint elements in exact probe colours, so
 geometry can be read out of a PNG without the instrument knowing anything about
 the markup. `tools/run_parity.py` renders every fixture through Blitz and through
 Chromium and reports per-box deltas:

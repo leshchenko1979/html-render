@@ -39,6 +39,16 @@ are closed ranges and do not drift.
   without DejaVu re-wraps every line with no warning.
 - `dependabot.yml` gains the `cargo` ecosystem, which it could not have before
   the lockfile existed.
+- `tools/test_parity_gate.py`: 12 legs over the corpus gate's pure function, 8 of
+  them negative controls, so the gate is provable on a machine with no browser.
+- `tools/test_undefined_names.py`: walks every scope with `symtable` and reports a
+  name that is read but bound nowhere. `py_compile` accepts those, which is how
+  `run_parity.py` reached CI with a `NameError` on its own return statement.
+- Fixture 32 (`table-collapse`), the corpus's first `<table>`. It found a real
+  defect: all seven of its boxes diverge, the table is 18px shorter than
+  Chromium's, and two cells are roughly half height (#9).
+- `--help`/`--version` print USAGE, ARGS, FLAGS and EXIT CODES and exit `0`
+  instead of `2`.
 
 **Changed**
 
@@ -46,6 +56,14 @@ are closed ranges and do not drift.
   to a different graph fails instead of silently re-resolving.
 - `parity` runs on a `paths` allowlist with per-ref `concurrency`, so a docs
   commit no longer buys a Rust build and a superseded push stops paying for one.
+- Every `uses:` is pinned to a commit SHA with the version in a trailing comment.
+  `dtolnay/rust-toolchain` is the one exception: its ref name *is* the toolchain
+  spec, so a bare SHA makes it fail on `'toolchain' is a required input`. It is
+  pinned to a `master` commit with `toolchain: stable` passed explicitly.
+- The corpus gate actually gates. `run_parity.py` used to print a verdict and
+  return it without ever setting an exit code, so four divergences passed every
+  push; it now exits `1` on a new or grown divergence, on a baseline that went
+  stale, and on a missing box.
 - `drain-probe` is dispatch-only. It answers one question and was paying a
   build per push to answer it.
 
