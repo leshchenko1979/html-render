@@ -4,12 +4,14 @@ Newest first. Every entry names its commit range, so it can be re-derived with
 `git log --oneline <prev>..<tag>` rather than trusted. Pre-1.0: flags and output
 names may change between minor versions, and this file is where that shows up.
 
-## Unreleased
+## v0.3.0-beta.5 — 2026-11-13
 
 Everything landed since `v0.3.0-beta.4-r2`. The raw list is
-`git log --oneline v0.3.0-beta.4-r2..HEAD` — no count here, because a count that
-changes with every commit is wrong by the next one. The tag-to-tag counts below
-are closed ranges and do not drift.
+`git log --oneline v0.3.0-beta.4-r2..v0.3.0-beta.5`. This release exists to
+close the gap the fourth review round put first: `v0.3.0-beta.4-r2` predates
+every CLI fix below, so its tarball disagreed with the README on `--help`,
+`--version`, unknown flags and output-directory creation. A release cut from
+`main` is what makes the page and the artefact describe the same program.
 
 **Fixed**
 

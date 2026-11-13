@@ -829,7 +829,7 @@ checksum = "c9356095b4b41197bba32173600e1582792cda618f65d12f68e2e77d273413c5"
 
 [[package]]
 name = "html-render"
-version = "0.3.0-beta.4"
+version = "0.3.0-beta.5"
 dependencies = [
  "anyrender",
  "anyrender_vello_cpu",
