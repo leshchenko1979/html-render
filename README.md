@@ -26,7 +26,7 @@ It exists to answer a concrete question: can a 25 MB binary replace a 500 MB
 browser for server-side rendering? On a real 12-slide, 4 MB deck, yes
 (what changed between releases: [CHANGELOG.md](CHANGELOG.md)):
 
-| 12-slide deck, 2560×1440 | wall | peak RSS |
+| 12-slide deck, 2560×1440 | wall | peak RSS, largest process |
 |---|---|---|
 | headless Chromium (Playwright) | 13.36 s | 858 MiB |
 | **html-render `--scroll`** | **5.37 s** | **93.4 MiB** |
@@ -34,9 +34,19 @@ browser for server-side rendering? On a real 12-slide, 4 MB deck, yes
 
 **2.34× faster and 3.12× lighter on the default `--clip` recipe; 2.49× and 9.19×
 with `--scroll`**, which paints one element-sized canvas per slide instead of one
-full-height canvas that is cropped afterwards. Both are lossless: the two modes
-differ on 3,551 of 44,236,800 pixels (0.0080 %, max channel delta 2/255), which
-is antialiasing at fractional offsets. Output is byte-for-byte deterministic,
+full-height canvas that is cropped afterwards.
+
+Those RSS figures are the largest single process, which is the wrong unit for one
+of the two engines: Chromium is a tree of renderers and helpers. Measured on the
+deck in this repo (`assets/demo-deck.html`, 2560×1440, scale 2), its tree peaks at
+**1703.5–1826.2 MiB** while its largest process reads **297.1–299.2 MiB** — the
+single-process reading undercounts it **5.7–6.2×**. `html-render` is one process,
+so its two readings agree (81.2 vs 81.0 MiB). The memory ratios above therefore
+*understate* the difference; the wall ratios do not depend on the method.
+`python3 tools/measure_rss.py --rss-mode tree -- <command>` reproduces either.
+
+Both are lossless: they differ on 3,551 of 44,236,800 pixels (0.0080 %, max
+channel delta 2/255), which is antialiasing at fractional offsets. Output is byte-for-byte deterministic,
 which a browser is not: ten renders of the same input produce one checksum, so
 output can be diffed in CI. That holds for a document whose resources are local
 or `data:` URIs. A remote image is fetched at render time and painted as

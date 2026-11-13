@@ -22,7 +22,7 @@ Ten renders of the same input at `--scale 2` must be byte-identical.
 | result | **PASS** |
 | md5 of all ten | `1dffe1ae…` (one distinct hash) |
 | median wall | 2.51 s |
-| peak RSS | 86.7 MiB |
+| peak RSS | 86.7 MiB (single process: tree sum = process max) |
 
 Determinism is the gate that makes the rest useful: without it, output cannot be
 diffed in CI, and a pixel comparison is noise.
@@ -77,17 +77,32 @@ byte-exactly, which is what a CI gate needs.
 
 ## Cost
 
-Same host, same job, tree-summed RSS (a single-process reading undercounts a
-multi-process browser by roughly 4×):
+Same host, same job. **All three figures below are per-process maxima**, taken
+with `/usr/bin/time -f %M`, which reports the largest single process in the tree
+rather than what the host has to hold. The deck they were measured on — 12
+slides, 4 MB — is not in this repo, so these rows are history, not a gate:
 
-| engine | wall | tree peak RSS |
+| engine | wall | peak RSS (largest process) |
 |---|---|---|
 | Chromium 151, Playwright, 12 element screenshots at dsf=2 | 13.36 s | 858.4 MiB |
 | `--scroll` | **5.37 s** | **93.4 MiB** |
 | `--clip` (one full-height canvas, cropped) | 5.72 s | 275.2 MiB |
 
+That method is not comparable between the two engines, and the size of the error
+is measured: on `assets/demo-deck.html` at 2560×1440, scale 2, Chromium's process
+tree peaks at **1703.5–1826.2 MiB** across four runs while its largest single
+process reads **297.1–299.2 MiB** — a **5.7–6.2×** undercount. `html-render` is one
+process, so the two methods agree for it (tree 81.2 MiB, max 81.0 MiB). The
+memory ratios above are ratios of the wrong quantity and understate the tree
+difference; the wall times are unaffected. Re-measuring the external deck is one
+command once it is at hand:
+
+    python3 tools/measure_rss.py --rss-mode tree -- <engine command>
+
 `--scroll` paints one element-sized canvas per region instead of one
-full-height canvas, which is where the 3× memory difference comes from. It is
+full-height canvas, which is where the 3× memory difference comes from — that
+comparison is `html-render` against itself, so both sides are single-process and
+the per-process method is the right one there. It is
 lossless: `--scroll` and `--clip` differ on 3,551 of 44,236,800 pixels
 (0.0080 %), max channel delta 2/255, which is antialiasing at fractional
 offsets.
