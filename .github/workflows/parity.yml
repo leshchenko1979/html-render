@@ -11,7 +11,25 @@ name: parity
 on:
   push:
     branches: ["**"]
+    # A Rust build is not free, and this job only measures the renderer: a README
+    # or licence edit used to buy two full builds. Anything that can move a
+    # pixel, a fixture or the instrument is listed; docs are not.
+    paths:
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "build.rs"
+      - "fixtures/**"
+      - "tools/**"
+      - ".github/workflows/parity.yml"
   workflow_dispatch:
+
+# A superseded push must stop paying for a build nobody will read: on 11-05 ten
+# runs stacked up in 2h10m and not one was cancelled. Per-ref, so a branch push
+# never kills a run on main.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -61,6 +79,12 @@ jobs:
             exit 1
           fi
           echo "ok: runs on glibc >= 2.35"
+
+      - name: Test the --clip contract
+        # Regression for #1: `--clip … '*'` used to abort on the first `<br>`.
+        # Cheap (no browser, ~1 s), and it runs against the binary this job just
+        # built, so a regression fails here rather than on someone's deck.
+        run: python3 tools/test_clip_void.py --bin target/release/render
 
       - name: Locate Chromium
         run: |
