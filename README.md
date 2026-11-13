@@ -104,6 +104,28 @@ That makes `'*'` usable on a real document. `clip_NN` numbering stays contiguous
 over the emitted boxes. A selector whose matches are *all* boxless exits `3`, the
 same code as a selector that matched nothing.
 
+### Exit codes
+
+Four codes, and every one is asserted by `tools/test_exit_codes.py`, which runs
+in CI against the binary built from the same commit:
+
+| Code | Means |
+|---|---|
+| `0` | the PNG, or the whole clip directory, was written |
+| `2` | wrong argument count, an unknown flag, or `--clip` not first |
+| `3` | the selector matched nothing, or every match had no layout box |
+| `101` | a panic: an unparsable number, an invalid selector, an input file that cannot be read |
+
+`101` is a panic, not a diagnosis: the message names a line in `src/main.rs`
+rather than the argument you got wrong, so read the argument before the file.
+
+**The failure with no exit code is the one to watch.** Unsupported CSS is
+ignored, not rejected: an unimplemented property or value falls back to its
+initial value, the layout settles around it, and a plausible PNG comes out. No
+warning, no non-zero exit. A clean run proves the document rendered, not that it
+rendered as designed — check the properties you depend on against a browser
+once, before trusting a deck to this.
+
 ## Fidelity
 
 Measured against Chromium 151 on the same document, same viewport, same scale —
