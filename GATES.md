@@ -91,7 +91,7 @@ slides, 4 MB — is not in this repo, so these rows are history, not a gate:
 That method is not comparable between the two engines, and the size of the error
 is measured: on `assets/demo-deck.html` at 2560×1440, scale 2, Chromium's process
 tree peaks at **1703.5–1826.2 MiB** across four runs while its largest single
-process reads **297.1–299.2 MiB** — a **5.7–6.2×** undercount. `html-render` is one
+process reads **297.1–299.2 MiB** — a **5.7–6.1×** undercount. `html-render` is one
 process, so the two methods agree for it (tree 81.2 MiB, max 81.0 MiB). The
 memory ratios above are ratios of the wrong quantity and understate the tree
 difference; the wall times are unaffected. Re-measuring the external deck is one

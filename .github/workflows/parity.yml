@@ -105,6 +105,16 @@ jobs:
         # binary, which is why this runs against the freshly built one.
         run: python3 tools/test_document_detect.py --bin target/release/render
 
+      - name: Check the documented numbers
+        # README, GATES and the release template quote ratios derived from a
+        # handful of measurements. Those ratios rot silently: the source number
+        # gets re-measured and the "2.49x" three paragraphs away keeps its old
+        # value because nothing multiplies them again. This recomputes every
+        # derived figure and fails on a mismatch. It also re-renders the two
+        # committed asset PNGs and requires them byte-identical, so a renderer
+        # change that alters the hero image cannot pass unnoticed.
+        run: python3 tools/check_claims.py --bin target/release/render
+
       - name: Locate Chromium
         run: |
           if command -v google-chrome >/dev/null; then

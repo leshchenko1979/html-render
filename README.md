@@ -7,7 +7,7 @@
 **Linux x86_64, glibc ≥ 2.35.** No macOS, no Windows, no Docker image.
 
 ```bash
-# the image above is this command's output, byte for byte
+# the image above is this command's output, byte for byte: 3200×1800
 html-render assets/hero.html hero.png 1600 900 2 --document
 ```
 
@@ -40,7 +40,7 @@ Those RSS figures are the largest single process, which is the wrong unit for on
 of the two engines: Chromium is a tree of renderers and helpers. Measured on the
 deck in this repo (`assets/demo-deck.html`, 2560×1440, scale 2), its tree peaks at
 **1703.5–1826.2 MiB** while its largest process reads **297.1–299.2 MiB** — the
-single-process reading undercounts it **5.7–6.2×**. `html-render` is one process,
+single-process reading undercounts it **5.7–6.1×**. `html-render` is one process,
 so its two readings agree (81.2 vs 81.0 MiB). The memory ratios above therefore
 *understate* the difference; the wall ratios do not depend on the method.
 `python3 tools/measure_rss.py --rss-mode tree -- <command>` reproduces either.
@@ -78,9 +78,10 @@ Four things this is used for, each one a file you can name:
 - **Slide images from HTML/CSS.** A deck authored as `<section class="slide">`
   becomes one PNG per slide at any scale, with no browser in the loop —
   `--clip` writes `clip_01.png`, `clip_02.png`, … in document order.
-- **Open Graph and social cards.** [`assets/og.png`](assets/og.png) is 1280×640,
-  rendered from [`assets/og.html`](assets/og.html) by the command in
-  [Usage](#usage).
+- **Open Graph and social cards.** [`assets/og.png`](assets/og.png) is
+  2560×1280 — a 1280×640 card at scale 2 — rendered from
+  [`assets/og.html`](assets/og.html) by
+  `html-render assets/og.html og.png 1280 640 2 --document`.
 - **CI visual diffs.** Deterministic output makes a changed pixel a changed
   document: commit the PNG, diff the PNG, fail the build.
 - **Report and chart images.** One-pagers and dashboards where the layout is CSS
