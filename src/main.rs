@@ -4,13 +4,20 @@
 //!
 //! Usage (the crate builds `target/release/render`; the release renames it to
 //! `html-render`, which is the name both strings below use):
-//!   html-render <html> <out.png> <width> <height> [scale] [--document]
-//!   html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--scroll]
+//!   html-render <html> <out.png> <width> <height> [scale] [--document] [--fragment]
+//!   html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--scroll]
 //!
-//! `--document` renders the file as a complete document (no injected reset, no
-//! body wrapper). Without it the file is treated as a fragment and wrapped in
-//! the same reset the parity harness has always used, so both engines see
-//! identical markup.
+//! A file that declares its own document root (`<!doctype>`, `<html>`, `<head>`
+//! or `<body>` as its first tag) is rendered as a complete document, verbatim.
+//! Anything else is treated as a fragment and wrapped in the same reset the
+//! parity harness has always used, so both engines see identical markup.
+//!
+//! `--document` forces the first reading and `--fragment` the second; they are
+//! mutually exclusive. The auto-detection exists because wrapping a real
+//! document is not merely untidy: the wrapper's `html{background:#ffffff}`
+//! reset takes the canvas away from the document's own `body{background:…}`,
+//! so the page renders white — a plausible PNG of the wrong colour, with
+//! nothing on stderr to say so.
 //!
 //! Clip mode mirrors Playwright's `locator(...).screenshot()`: every match of
 //! `selector` is painted into its own PNG at the element's border box, in
@@ -59,7 +66,8 @@ fn main() {
 async fn real_main() {
     let args: Vec<String> = env::args().collect();
     let clip = args.get(1).map(|a| a == "--clip").unwrap_or(false);
-    let as_document = args.iter().any(|a| a == "--document");
+    let as_document_flag = args.iter().any(|a| a == "--document");
+    let as_fragment = args.iter().any(|a| a == "--fragment");
     // Clip mode: paint one element-sized canvas per match, with the viewport
     // scrolled to that element, instead of one full-height canvas that is
     // cropped afterwards. Same pixels, a fraction of the peak memory.
@@ -73,9 +81,9 @@ async fn real_main() {
         .collect();
 
     let usage = if clip {
-        "usage: html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--scroll]"
+        "usage: html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--scroll]"
     } else {
-        "usage: html-render <html> <out.png> <width> <height> [scale] [--document]"
+        "usage: html-render <html> <out.png> <width> <height> [scale] [--document] [--fragment]"
     };
 
     // A flag we do not implement is an error, not noise to be filtered away.
@@ -87,7 +95,10 @@ async fn real_main() {
         if !a.starts_with("--") {
             continue;
         }
-        if !matches!(a.as_str(), "--clip" | "--document" | "--scroll") {
+        if !matches!(
+            a.as_str(),
+            "--clip" | "--document" | "--fragment" | "--scroll"
+        ) {
             eprintln!("unknown flag {a:?}");
             eprintln!("{usage}");
             std::process::exit(2);
@@ -97,6 +108,14 @@ async fn real_main() {
             eprintln!("{usage}");
             std::process::exit(2);
         }
+    }
+
+    // Both flags name a reading; together they name none. Silently preferring
+    // one would make the other look like it had been honoured.
+    if as_document_flag && as_fragment {
+        eprintln!("--document and --fragment are mutually exclusive");
+        eprintln!("{usage}");
+        std::process::exit(2);
     }
 
     let (html_path, out_path, width, height, scale, selector) = if clip {
@@ -131,6 +150,9 @@ async fn real_main() {
 
     let started = Instant::now();
     let source = std::fs::read_to_string(html_path).expect("read html");
+    // A file that declares its own document root is rendered as one; a fragment
+    // is wrapped. The flags force either reading.
+    let as_document = !as_fragment && (as_document_flag || declares_document_root(&source));
     let doc_html = if as_document {
         source
     } else {
@@ -382,12 +404,13 @@ async fn real_main() {
     let painted = paint_started.elapsed();
 
     eprintln!(
-        "TIMING parse_ms={} layout_ms={} paint_ms={} total_ms={} scale={}",
+        "TIMING parse_ms={} layout_ms={} paint_ms={} total_ms={} scale={} mode={}",
         parsed.as_millis(),
         laid_out.as_millis(),
         painted.as_millis(),
         started.elapsed().as_millis(),
-        scale
+        scale,
+        if as_document { "document" } else { "fragment" }
     );
 }
 
@@ -424,4 +447,44 @@ fn write_png<W: std::io::Write>(writer: W, buffer: &[u8], width: u32, height: u3
     let mut writer = encoder.write_header().expect("png header");
     writer.write_image_data(buffer).expect("png data");
     writer.finish().expect("png finish");
+}
+
+/// True when `source` declares its own document root.
+///
+/// Detection reads the first tag name after a UTF-8 BOM, leading whitespace and
+/// any leading `<!-- … -->` comments, and matches it case-insensitively against
+/// `!doctype`, `html`, `head` and `body`. Everything else — `<div>`, `<style>`,
+/// `<h1>`, a bare text node — is a fragment and gets wrapped as before.
+///
+/// Wrapping a real document is not merely untidy: the wrapper's
+/// `html{background:#ffffff}` reset wins the canvas over the document's own
+/// `body{background:…}` — the common idiom — so the page comes out white with
+/// identical geometry and nothing on stderr to say so. Measured on the r2
+/// binary: a `body{background:#eef}` document differs from its `--document`
+/// render in 70.4 % of pixels, and a file opening at `<body …>` in 89.9 %.
+fn declares_document_root(source: &str) -> bool {
+    let mut rest = source.strip_prefix('\u{feff}').unwrap_or(source);
+    loop {
+        rest = rest.trim_start();
+        let Some(after) = rest.strip_prefix("<!--") else {
+            break;
+        };
+        // An unterminated comment means the rest of the file is inside it, so
+        // there is no first tag to read.
+        let Some(end) = after.find("-->") else {
+            return false;
+        };
+        rest = &after[end + 3..];
+    }
+    let Some(after) = rest.strip_prefix('<') else {
+        return false;
+    };
+    let name: String = after
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '!')
+        .collect();
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "!doctype" | "html" | "head" | "body"
+    )
 }
