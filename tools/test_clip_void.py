@@ -2,8 +2,9 @@
 """Regression test for the `--clip` panic on elements with no layout box (#1).
 
 `--clip … '*'` aborts the whole run when any matched element has no geometry,
-and `*` matches `<br>`, `<hr>`, `<wbr>`, `<script>` and `<style>` in every real
-document. The fix skips them and reports the count; this test pins that.
+and `*` matches `<br>`, `<wbr>`, `<script>` and `<style>` in every real document.
+The fix skips them and reports the count; this test pins that — and pins that the
+skip stays narrow, since `<hr>` is a block box with a border and must survive.
 
     python3 tools/test_clip_void.py --bin target/release/render
 
@@ -20,8 +21,9 @@ import subprocess
 import sys
 import tempfile
 
-# Two boxes and every void element that used to abort the run. `br`/`hr`/`wbr`
-# are inline and unlayoutable; `script`/`style` are in the DOM with no box.
+# Two boxes and every void element that used to abort the run. `br`/`wbr` are
+# unlayoutable; `script`/`style` are in the DOM with no box. `<hr>` is included
+# on purpose and is NOT boxless — it is the narrowness control.
 DOC = """<!doctype html><html><body style="margin:0">
 <div id="a" style="width:40px;height:20px;background:#c00">a<br>b<hr><wbr></div>
 <div id="b" style="width:30px;height:10px;background:#00c"></div>
@@ -105,12 +107,31 @@ def main():
         # 2. A selector whose matches are ALL boxless: exit 3, the same code as
         #    "matched nothing". Emitting an empty dump with rc=0 would report a
         #    complete run that produced no evidence.
+        #
+        #    `br, wbr` only, because `<hr>` is NOT boxless — it is a block box
+        #    with a default border, and CI proved it: `br, hr, wbr` matched 3,
+        #    skipped 2, and emitted one clip. Assuming "void element" meant "no
+        #    box" is what made this leg fail on its first run.
         outdir = os.path.join(tmp, "out_void_only")
-        rc, out, err = run(binary, html, outdir, "br, hr, wbr")
+        rc, out, err = run(binary, html, outdir, "br, wbr")
         if rc != 3:
             fails.append("[void-only selector] rc=%d (want 3)\n%s" % (rc, err[-400:]))
         if os.path.isdir(outdir) and os.listdir(outdir):
             fails.append("[void-only selector] wrote %r" % os.listdir(outdir))
+
+        # 2b. The skip must be NARROW. A "fix" that skips anything it cannot
+        #     handle would pass leg 1 and silently drop real boxes, so a block
+        #     element with a border is asserted to survive with no skip report.
+        outdir = os.path.join(tmp, "out_hr")
+        rc, out, err = run(binary, html, outdir, "hr")
+        if rc != 0:
+            fails.append("[hr control] rc=%d (want 0)\n%s" % (rc, err[-400:]))
+        else:
+            if SKIP_RE.search(err):
+                fails.append("[hr control] <hr> was skipped; the skip is too broad")
+            boxes = [ln for ln in out.splitlines() if ln.startswith("clip_")]
+            if len(boxes) != 1:
+                fails.append("[hr control] %d clip line(s), want 1" % len(boxes))
 
         # 3. Positive control: a normal selector still clips every match, so the
         #    skip path cannot be hiding a document that renders nothing at all.
