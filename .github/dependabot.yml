@@ -40,3 +40,35 @@ updates:
     labels:
       - "dependencies"
     open-pull-requests-limit: 5
+
+  # Rust dependencies. This entry could not exist until #2 landed a Cargo.lock:
+  # the updater resolves against the lockfile and fails without one, so the
+  # crates were unwatched while the actions were watched.
+  #
+  # The five `blitz-*` crates are pinned with `=` in Cargo.toml, which Dependabot
+  # respects as a hard pin: it will not open a PR to move them off 0.3.0-beta.4,
+  # and it should not, because a different Blitz release is a different renderer
+  # and every number in GATES.md would need re-measuring.
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "05:00"
+      timezone: "Etc/UTC"
+    # Longer than the actions cooldown: a crate bump moves the renderer's
+    # dependency graph, so it wants a week of soak before it is even proposed.
+    cooldown:
+      default-days: 14
+    groups:
+      cargo-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+    open-pull-requests-limit: 3

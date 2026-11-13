@@ -68,7 +68,11 @@ jobs:
         # pipefail, so a failed build is not masked by the tail's exit status.
         run: |
           set -o pipefail
-          cargo build --release 2>&1 | tail -60
+          # --locked: the committed Cargo.lock is the resolved graph every
+          # number in GATES.md was measured on. Without this flag a
+          # Cargo.toml that resolves differently re-resolves silently and
+          # the build no longer matches the published figures.
+          cargo build --release --locked 2>&1 | tail -60
 
       - name: Assert the glibc floor
         # The whole point of pinning the runner is portability, and a floor is
