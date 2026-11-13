@@ -6,7 +6,10 @@ names may change between minor versions, and this file is where that shows up.
 
 ## Unreleased
 
-Since `v0.3.0-beta.4-r2` (`git log --oneline v0.3.0-beta.4-r2..HEAD`).
+Everything landed since `v0.3.0-beta.4-r2`. The raw list is
+`git log --oneline v0.3.0-beta.4-r2..HEAD` — no count here, because a count that
+changes with every commit is wrong by the next one. The tag-to-tag counts below
+are closed ranges and do not drift.
 
 **Fixed**
 
