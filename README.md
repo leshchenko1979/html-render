@@ -19,7 +19,7 @@ Vello pipeline. No Chromium, no JavaScript engine, one process.
 
 ## Status
 
-`0.3.0-beta.4`, eight days old, one maintainer. No API promise: flags and output
+`0.3.0-beta.5`, one maintainer. No API promise: flags and output
 names may change between minor versions. Linux only. One known layout defect —
 four corpus boxes, consecutive `<br>` runs in a `font-size:0` inline-block
 context (see [Corpus](#corpus)).
@@ -101,8 +101,8 @@ one: it links glibc and the font stack at runtime. From a
 [release](https://github.com/leshchenko1979/html-render/releases):
 
 ```bash
-V=v0.3.0-beta.4-r2
-N=html-render_0.3.0-beta.4-r2_linux_amd64
+V=v0.3.0-beta.5
+N=html-render_0.3.0-beta.5_linux_amd64
 BASE="https://github.com/leshchenko1979/html-render/releases/download/$V"
 
 curl -fsSL -O "$BASE/$N.tar.gz"
@@ -302,14 +302,13 @@ in CI against the binary built from the same commit:
 `101` is a panic, not a diagnosis: the message names a line in `src/main.rs`
 rather than the argument you got wrong, so read the argument before the file.
 
-**This table describes `main`, and the published `v0.3.0-beta.4-r2` predates
-it.** Nine of the fifteen legs `tools/test_exit_codes.py` now asserts fail
-against that binary: `--help`, `-h`, `--version` and `-V` exit `2` with
-`unknown flag`; an unknown flag exits `0`; `--clip` in the wrong position exits
-`0`; a selector whose matches are all boxless exits `101` instead of `3`; the
-usage line still says `usage: render`; and single-image mode panics `101` when the
-output directory does not exist. Everything else holds. A release cut from `main`
-is what closes that gap; until then the tarball and this page disagree.
+**This table describes the published binary.** `v0.3.0-beta.5` was cut from
+`main` specifically to close the gap where the tarball and this page disagreed:
+`tools/test_exit_codes.py` passes all fifteen legs against the released asset,
+`--help` exits `0` and prints the flag list, an unknown flag exits `2`, and
+single-image mode creates its output directory. Earlier releases
+(`v0.3.0-beta.4-r2` and before) predate those fixes: nine of the fifteen legs
+fail against r2, including `--help`, `--version` and the outdir panic.
 
 **The failure with no exit code is the one to watch.** Unsupported CSS is
 ignored, not rejected: an unimplemented property or value falls back to its
