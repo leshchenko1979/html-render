@@ -1,0 +1,70 @@
+name: lockfile
+
+# `Cargo.lock` is resolved by CI, never typed by hand: the ops host has no Rust
+# toolchain, and a lockfile nobody resolved records nothing.
+#
+# Why it has to exist at all: `Cargo.toml` pins the five `blitz-*` crates, but
+# `anyrender`, `anyrender_vello_cpu`, `peniko`, `png` and `tokio` are ranges. Two
+# builds of one commit could resolve different versions of those five, which
+# makes every number in GATES.md a property of a dependency graph the tree never
+# recorded. It also blocks Dependabot's `cargo` ecosystem: the updater needs a
+# lockfile to resolve against and fails without one.
+#
+# Triggers on `Cargo.toml` only, so the commit this job makes cannot re-trigger
+# it: the lockfile it writes is an output, not an input.
+on:
+  push:
+    branches: [main]
+    paths: ["Cargo.toml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Serialised, not cancelled: two runs racing to commit one file would leave the
+# loser's push rejected after it had already resolved a graph.
+concurrency:
+  group: lockfile-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  lock:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate the lockfile
+        # No --locked here: this step is what CREATES the file. The build jobs
+        # use --locked, so a Cargo.toml that resolves to a different graph than
+        # the committed lockfile fails there instead of silently re-resolving.
+        run: cargo generate-lockfile
+
+      - name: Assert it resolved something
+        # A lockfile with no packages is the shape of a silent no-op.
+        run: |
+          test -f Cargo.lock || { echo "cargo generate-lockfile wrote nothing"; exit 1; }
+          pkgs=$(grep -c '^name = ' Cargo.lock)
+          echo "packages in Cargo.lock: $pkgs"
+          test "$pkgs" -gt 20 || { echo "only $pkgs packages resolved"; exit 1; }
+
+      - name: Commit it if it moved
+        # No `[skip ci]`: a lockfile change can move the resolved graph, so the
+        # parity build that follows is the check that the pixels did not.
+        run: |
+          if git ls-files --error-unmatch Cargo.lock >/dev/null 2>&1; then
+            if git diff --quiet -- Cargo.lock; then
+              echo "Cargo.lock unchanged: the committed graph is what Cargo.toml resolves to"
+              exit 0
+            fi
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock
+          git commit -m "chore(deps): resolve Cargo.lock from Cargo.toml"
+          git push
