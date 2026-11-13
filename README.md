@@ -317,9 +317,28 @@ A declaration whose removal changes no pixel is **inert**: either the renderer
 dropped it, or something else already sets that value. The report says "no pixel
 effect" and never "unsupported", because a pixel diff cannot tell those two
 apart — a `color` whose text all lives inside a child that overrides it is
-honoured and still invisible. One render per declaration at roughly 0.3 s each,
-so a 76-declaration card takes about 25 s. Audit at the size you ship: a
-declaration inert at 1280x720 can be load-bearing at 794x1123.
+honoured and still invisible.
+
+Cost is one render plus one PNG decode per declaration, and both halves are
+measured: a render is **0.23-0.28 s**, and decoding a 2560x1440 PNG is
+**0.13-0.21 s** with Pillow or **3.0-3.7 s** through the stdlib reader
+(`tools/measure.py`, which has no third-party imports). A declaration whose
+removal produces a byte-identical PNG is never decoded, so inert ones are nearly
+free: 48 of the 76 declarations in `assets/demo-deck.html` skip that step.
+
+The whole audit, 76 declarations at 1280x720 scale 2 across 4 parallel renders
+(`--jobs`, one per core by default):
+
+| Decoder | Wall clock |
+|---|---|
+| Pillow | **11.4 s** |
+| stdlib only | **100.5 s** |
+
+Same verdicts either way, so Pillow is a speed knob, not a correctness one.
+Install it before auditing anything large: an A4 card at scale 3.123 is 8.7
+megapixels, where the stdlib reader costs about 7 s per changed declaration.
+Audit at the size you ship, too — a declaration inert at 1280x720 can be
+load-bearing at 794x1123.
 
 ## What it does
 

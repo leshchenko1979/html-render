@@ -30,6 +30,7 @@ load-bearing at 794x1123, so the numbers below belong to `--width/--height`.
 """
 
 import argparse
+import concurrent.futures
 import json
 import os
 import re
@@ -38,6 +39,30 @@ import sys
 import tempfile
 
 from measure import read_png
+
+# A PNG decoder, fast path first. measure.read_png is stdlib-only and correct,
+# but it unfilters byte by byte in Python: measured 3.0-3.7 s for one 2560x1440
+# image, against 0.13-0.21 s for Pillow on the same file. On the shipped
+# demo-deck audit (76 declarations, 1280x720 at scale 2, 4 parallel renders)
+# that gap is the whole runtime: 11.43 s with Pillow, 100.49 s without, same
+# 48 inert / 28 load-bearing verdicts either way. An A4 card at scale 3.123 is
+# 8.7 megapixels, so the stdlib reader costs ~7 s per changed declaration there
+# — minutes, not seconds, which is why the README tells you to install Pillow.
+# Pillow stays optional on purpose: CI has no pip step, and a missing Pillow must
+# degrade to slow-but-correct rather than to an error.
+try:
+    from PIL import Image as _Image
+except ImportError:  # pragma: no cover - exercised by uninstalling Pillow
+    _Image = None
+
+
+def decode(path):
+    """Return (width, height, channels, pixels), via Pillow when it is present."""
+    if _Image is not None:
+        with _Image.open(path) as im:
+            im = im.convert("RGBA")
+            return im.width, im.height, 4, im.tobytes()
+    return read_png(path)
 
 STYLE_BLOCK = re.compile(r"<style\b[^>]*>(.*?)</style>", re.S | re.I)
 STYLE_ATTR = re.compile(r"""style\s*=\s*"([^"]*)\"""", re.I)
@@ -212,10 +237,24 @@ def render(binary, html, out_png, width, height, scale):
         )
 
 
-def compare(base_png, other_png):
-    """Return (changed_pixels, max_channel_delta) or None if geometry moved."""
-    wa, ha, ca, pa = read_png(base_png)
-    wb, hb, cb, pb = read_png(other_png)
+def compare(base_png, other_png, baseline=None):
+    """Return (changed_pixels, max_channel_delta) or None if geometry moved.
+
+    `baseline` is an already-decoded (w, h, channels, pixels) tuple. Decoding is
+    the expensive half of this tool — 3.0 s for one 2560x1440 PNG through the
+    stdlib reader — so re-decoding the SAME baseline once per declaration is
+    pure waste: 76 declarations paid 76 extra decodes before this was cached.
+
+    The byte comparison comes first because it is nearly free and the renderer is
+    deterministic: a mutant whose PNG is byte-identical to the baseline has no
+    changed pixels by definition, so it never needs decoding at all.
+    """
+    a_bytes = open(base_png, "rb").read()
+    b_bytes = open(other_png, "rb").read()
+    if a_bytes == b_bytes:
+        return 0, 0
+    wa, ha, ca, pa = baseline if baseline is not None else decode(base_png)
+    wb, hb, cb, pb = decode(other_png)
     if (wa, ha, ca) != (wb, hb, cb):
         return None
     if pa == pb:
@@ -246,6 +285,12 @@ def main():
     ap.add_argument("--height", type=int, default=720)
     ap.add_argument("--scale", type=float, default=2.0)
     ap.add_argument("--limit", type=int, default=0, help="audit at most N declarations")
+    ap.add_argument(
+        "--jobs",
+        type=int,
+        default=0,
+        help="parallel renders (default: one per core, capped at 8)",
+    )
     ap.add_argument("--json", action="store_true", help="machine-readable report")
     ap.add_argument("--fail-on-inert", action="store_true", help="exit 1 if any is inert")
     ap.add_argument("--keep", help="keep mutant files in this directory")
@@ -265,15 +310,18 @@ def main():
     os.makedirs(work, exist_ok=True)
     baseline = os.path.join(work, "baseline.png")
     render(binary, args.html, baseline, args.width, args.height, args.scale)
+    # Decoded once and reused: see compare().
+    baseline_px = decode(baseline)
 
-    rows = []
-    for n, d in enumerate(decls, 1):
+    def audit_one(job):
+        """One declaration: drop it, render, diff against the baseline."""
+        n, d = job
         mutant = os.path.join(work, f"m{n:04d}.html")
         out = os.path.join(work, f"m{n:04d}.png")
         with open(mutant, "w", encoding="utf-8") as fh:
             fh.write(src[: d.start] + src[d.end :])
         render(binary, mutant, out, args.width, args.height, args.scale)
-        got = compare(baseline, out)
+        got = compare(baseline, out, baseline_px)
         row = d.as_dict()
         if got is None:
             # Geometry moved: the declaration changes layout, so it is
@@ -286,15 +334,32 @@ def main():
                 max_delta=maxd,
                 verdict="no pixel effect" if changed == 0 else "load-bearing",
             )
-        rows.append(row)
         if not args.keep:
-            for p in (mutant, out):
+            for path in (mutant, out):
                 try:
-                    os.unlink(p)
+                    os.unlink(path)
                 except OSError:
                     pass
-        if not args.json and n % 10 == 0:
-            print(f"  … {n}/{len(decls)}", file=sys.stderr)
+        return row
+
+    # Renders are independent processes, so nothing but this loop decides
+    # whether they serialise. Measured on the shipped demo deck at 1280x720
+    # scale 2: a render is 0.23-0.28 s, so its 76 declarations are ~20 s of
+    # rendering, and the whole audit (renders plus decodes) measures 11.43 s on
+    # four cores against 100.49 s when only the stdlib decoder is available.
+    jobs = args.jobs or min(8, os.cpu_count() or 1)
+    rows = []
+    done = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+        futures = [pool.submit(audit_one, (n, d)) for n, d in enumerate(decls, 1)]
+        for fut in concurrent.futures.as_completed(futures):
+            rows.append(fut.result())
+            done += 1
+            if not args.json and done % 10 == 0:
+                print(f"  … {done}/{len(decls)}", file=sys.stderr)
+    # Completion order is not declaration order, and a report whose rows move
+    # between runs cannot be diffed. Key on source position.
+    rows.sort(key=lambda r: (r["line"], r["property"]))
 
     inert = [r for r in rows if r["verdict"] == "no pixel effect"]
     if args.json:
