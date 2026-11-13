@@ -89,7 +89,7 @@ USER render
 WORKDIR /work
 
 ENTRYPOINT ["html-render"]
-# No CMD: this binary has no --help and no --version, so `docker run image` with
-# no arguments prints usage and exits 2, which is the honest answer for a CLI
-# that needs a file, an output path and a size. A CMD naming a flag that does not
-# exist turns a bare run into a confusing "unknown flag" instead.
+# A bare `docker run image` prints usage and exits 0, which is what `--help` is
+# for. Before the flag existed this had to be left empty: a CMD naming a flag the
+# binary did not implement turned a bare run into "unknown flag" and exit 2.
+CMD ["--help"]

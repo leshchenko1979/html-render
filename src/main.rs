@@ -63,14 +63,68 @@ fn main() {
         .block_on(real_main());
 }
 
+/// The text `--help` prints. It lives next to the parser so a flag cannot be
+/// added to one and forgotten in the other: `tools/test_exit_codes.py` asserts
+/// every flag named here is accepted, and that `--help` exits 0.
+fn help_text() -> String {
+    format!(
+        "html-render {version}\n\
+         HTML + CSS to PNG, with no browser.\n\
+         \n\
+         USAGE:\n\
+         \x20 html-render <html> <out.png> <width> <height> [scale] [--document] [--fragment]\n\
+         \x20 html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--scroll]\n\
+         \n\
+         ARGS:\n\
+         \x20 <width> <height>   viewport in CSS pixels (scale multiplies the output)\n\
+         \x20 <scale>            device pixels per CSS pixel; 1 is 1:1\n\
+         \x20 <selector>         CSS selector; each match becomes clip_NN.png\n\
+         \n\
+         FLAGS:\n\
+         \x20 --clip        paint one canvas per matching element\n\
+         \x20 --document    treat the file as a full document (default: auto-detected)\n\
+         \x20 --fragment    treat the file as a fragment and wrap it\n\
+         \x20 --scroll      clip mode: scroll to each element instead of cropping\n\
+         \x20 -h, --help    print this text and exit 0\n\
+         \x20 -V, --version print the version and exit 0\n\
+         \n\
+         EXIT CODES:\n\
+         \x20 0    the PNG, or the clip directory, was written\n\
+         \x20 2    wrong argument count, an unknown flag, or --clip not first\n\
+         \x20 3    the selector matched nothing, or every match had no layout box\n\
+         \x20 101  a panic: an unparsable number, an invalid selector, an unreadable input\n",
+        version = env!("CARGO_PKG_VERSION")
+    )
+}
+
 async fn real_main() {
     let args: Vec<String> = env::args().collect();
+
+    // `--help` and `--version` are the two flags every CLI reader types before
+    // reading a README, and both used to exit 2 with "unknown flag". A usage
+    // request is not an error: it is the one exit that must be 0, or `docker
+    // run image --help` and every `cmd --help | head` pipeline reads as broken.
+    if let Some(first) = args.get(1) {
+        match first.as_str() {
+            "--help" | "-h" => {
+                print!("{}", help_text());
+                std::process::exit(0);
+            }
+            "--version" | "-V" => {
+                println!("html-render {}", env!("CARGO_PKG_VERSION"));
+                std::process::exit(0);
+            }
+            _ => {}
+        }
+    }
+
     let clip = args.get(1).map(|a| a == "--clip").unwrap_or(false);
     let as_document_flag = args.iter().any(|a| a == "--document");
     let as_fragment = args.iter().any(|a| a == "--fragment");
     // Clip mode: paint one element-sized canvas per match, with the viewport
     // scrolled to that element, instead of one full-height canvas that is
-    // cropped afterwards. Same pixels, a fraction of the peak memory.
+    // cropped afterwards. Same picture — 0/75/58/125 pixels of 3.69 M differ by
+    // one channel level on the demo deck — for a fraction of the peak memory.
     let use_scroll = args.iter().any(|a| a == "--scroll");
 
     // Positional args start after the program name, plus the `--clip` marker.
@@ -274,6 +328,15 @@ async fn real_main() {
     let paint_started = Instant::now();
     match selector {
         None => {
+            // Clip mode creates its output directory (`create_dir_all` below),
+            // so the single-image path must too: `out/card.png` with no `out/`
+            // used to panic 101 with "create png: No such file or directory",
+            // which reads as a renderer fault rather than a missing directory.
+            if let Some(parent) = std::path::Path::new(out_path).parent() {
+                if !parent.as_os_str().is_empty() {
+                    std::fs::create_dir_all(parent).expect("create outdir");
+                }
+            }
             let buffer = paint_region(&mut document, 0, 0, phys_w, phys_h, scale);
             write_png(
                 File::create(out_path).expect("create png"),

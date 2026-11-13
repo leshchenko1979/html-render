@@ -73,6 +73,32 @@ def main():
         check("0 success: clip mode",
               ["--clip", doc, os.path.join(tmp, "clips"), "120", "60", "2", "div"], 0)
 
+        # 0 — `--help` and `--version` are the two flags a reader types before
+        # reading a README, and both used to exit 2 with "unknown flag". A usage
+        # request is not an error: `docker run image --help` and every
+        # `cmd --help | head` pipeline read a nonzero here as a broken binary.
+        check("0 --help", ["--help"], 0)
+        check("0 -h", ["-h"], 0)
+        check("0 --version", ["--version"], 0)
+        check("0 -V", ["-V"], 0)
+        rc, out, _err = run(binary, ["--help"])
+        for needle in ("USAGE:", "--clip", "EXIT CODES:", "101"):
+            if needle not in out:
+                fails.append("--help stdout lacks %r" % needle)
+                print("FAIL --help stdout lacks %r" % needle)
+        if not out.startswith("html-render "):
+            fails.append("--help does not start with the program name and version")
+            print("FAIL --help does not start with the program name and version")
+
+        # 0 — a missing output directory is created, in BOTH modes. Clip mode
+        # always did; the single-image path panicked 101 instead, so the same
+        # argument shape gave two different answers.
+        nested = os.path.join(tmp, "deep", "nested", "one.png")
+        check("0 single image creates outdir", [doc, nested, "120", "60"], 0)
+        if not os.path.isfile(nested):
+            fails.append("single-image mode reported success without writing %s" % nested)
+            print("FAIL single image creates outdir wrote nothing")
+
         # 2 — arity. `scale` is optional, so four positionals is the floor.
         check("2 usage: too few args", [doc, os.path.join(tmp, "x.png")], 2,
               want_err="usage: html-render")
