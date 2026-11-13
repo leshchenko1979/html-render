@@ -2,9 +2,10 @@
 //! per-element clipping, so Blitz can be measured against Chromium the way the
 //! deck pipeline actually uses it.
 //!
-//! Usage:
-//!   render <html> <out.png> <width> <height> [scale] [--document]
-//!   render --clip <html> <outdir> <width> <height> <scale> <selector> [--document]
+//! Usage (the crate builds `target/release/render`; the release renames it to
+//! `html-render`, which is the name both strings below use):
+//!   html-render <html> <out.png> <width> <height> [scale] [--document]
+//!   html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--scroll]
 //!
 //! `--document` renders the file as a complete document (no injected reset, no
 //! body wrapper). Without it the file is treated as a fragment and wrapped in
@@ -72,9 +73,9 @@ async fn real_main() {
         .collect();
 
     let usage = if clip {
-        "usage: render --clip <html> <outdir> <width> <height> <scale> <selector> [--document]"
+        "usage: html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--scroll]"
     } else {
-        "usage: render <html> <out.png> <width> <height> [scale] [--document]"
+        "usage: html-render <html> <out.png> <width> <height> [scale] [--document]"
     };
 
     let (html_path, out_path, width, height, scale, selector) = if clip {
