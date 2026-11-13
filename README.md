@@ -169,9 +169,15 @@ positioning, CSS variables, `box-sizing`, `min`/`max` sizing, auto margins,
 
 - **JavaScript.** No script engine is compiled in. That is the point: no
   script-execution surface, and no 200 MB of V8.
-- **PDF.** PNG only.
-- **Everything CSS.** It is Blitz's CSS support, not Chromium's — expect gaps in
-  the long tail (print layout, exotic selectors, `@page`).
+- **PDF.** PNG only. For paged output see [Alternatives](#alternatives).
+- **`@page` and print layout.** No page boxes, no `@page` margins, no page
+  counters. A document authored for print renders as one continuous page at the
+  viewport you asked for. This is not the same gap as "exotic selectors": if you
+  need pagination, no selector will get you there.
+- **The long tail of CSS.** It is Blitz's CSS support, not Chromium's, so expect
+  gaps in newer properties, colour spaces and selector forms. Unsupported CSS is
+  **ignored, not rejected** — a gap shows up as a property that had no effect,
+  never as an error. See [Exit codes](#exit-codes).
 
 ## Building
 
