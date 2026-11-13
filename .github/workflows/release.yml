@@ -109,7 +109,10 @@ jobs:
           NAME='${{ steps.pkg.outputs.name }}'
           SIZE='${{ steps.pkg.outputs.size }}'
           NOTES=$(cat <<EOF
-          Static Blitz renderer CLI, built from \`${{ github.sha }}\`.
+          Blitz-based renderer CLI, built from \`${{ github.sha }}\`.
+
+          Dynamically linked, not static: the table below lists every shared
+          library it needs, and \`ldd\` on the asset prints the same list.
 
           | | |
           |---|---|

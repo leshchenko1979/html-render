@@ -372,7 +372,7 @@ Use one of these instead when the constraint is theirs, not ours:
 
 - **`wkhtmltoimage`** — when the deliverable is **PDF** as well as images and you
   already ship a Qt stack. This renders PNG only. Conversely, pick this over
-  `wkhtmltoimage` when a 25 MB static binary with no Qt is the requirement.
+  `wkhtmltoimage` when a 25 MB binary with no Qt is the requirement.
 - **WeasyPrint** — when the input is HTML *for print*: real `@page`, page
   counters, running headers, page breaks. It is a paged-media engine; this is a
   viewport rasteriser.

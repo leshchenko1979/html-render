@@ -159,7 +159,13 @@ def main():
         fails.append("README does not quote the hero command verbatim: %r" % hero_cmd)
 
     # --- claims that must be GONE ------------------------------------------
-    for retired in ("no runtime deps", "tree-summed"):
+    # "Static" was a lie the tree told twice: the release template called the CLI
+    # "Static Blitz renderer CLI" and the README offered "a 25 MB static binary"
+    # as a reason to pick it over wkhtmltoimage. ldd on the shipped asset lists 13
+    # dynamic libraries, so both sentences are false. Guard the exact phrases: a
+    # bare "static" is a CSS keyword and cannot be banned.
+    for retired in ("no runtime deps", "tree-summed", "Static Blitz",
+                    "static binary"):
         checked += 1
         hits = [f for f, t in (("README.md", readme), ("GATES.md", gates),
                                (".github/workflows/release.yml", release))
