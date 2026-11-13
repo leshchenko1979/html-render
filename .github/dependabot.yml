@@ -1,0 +1,42 @@
+# Keeps the workflow action pins fresh.
+#
+# Why this file exists: on 2026-11-13 all eight pins across the three workflows
+# were three majors behind (checkout v4 -> v7, upload-artifact v4 -> v7), so every
+# run carried a Node.js 20 deprecation warning and a forced runtime migration.
+# Nothing in the repo was watching them. Dependabot does.
+#
+# Every key below comes from the options reference, not from memory:
+# https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference
+
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    # For github-actions Dependabot reads /.github/workflows plus a root
+    # action.yml, so "/" is the whole surface.
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "05:00"
+      timezone: "Etc/UTC"
+    # A week of soak before an action version is adopted: a yanked or compromised
+    # release is usually loud within days, and this repo does not need yesterday's
+    # tag. Security updates ignore cooldown, so this never delays a CVE fix.
+    # (GitHub already applies a 3-day default; 7 is the deliberate choice here.)
+    cooldown:
+      default-days: 7
+    # Routine minor/patch bumps ride together in one PR. Majors arrive on their
+    # own so their breaking changes get read instead of rubber-stamped: both v7
+    # majors this file was born under changed runner and ESM requirements.
+    groups:
+      actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+    open-pull-requests-limit: 5
