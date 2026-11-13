@@ -15,8 +15,14 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to publish (must already exist)"
+        description: "Tag to publish (must already exist; the build is taken from this tag)"
         required: true
+
+# Serialised, NOT cancelled: a publish half-way through replacing an asset is
+# worse than waiting for the one ahead of it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write # gh release create
@@ -32,6 +38,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # A dispatch names a tag, and the asset must be built from THAT tag's
+          # source: building the dispatched ref while `--verify-tag` merely checks
+          # the tag exists publishes a binary that does not match its own tag.
+          # On a tag push `github.ref` is already the tag, so this is a no-op.
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', github.event.inputs.tag) || github.ref }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -112,19 +123,33 @@ jobs:
 
           Not a browser: renders JS-free HTML/CSS to PNG.
 
-          Measured on a 12-slide, 4 MB deck at 2560x1440: **5.56 s / 95 MiB**
-          against headless Chromium's 13.36 s / 858 MiB. 4.13% of pixels differ
-          by more than 16 levels (glyph antialiasing, not layout), and ten
-          renders of the same input are byte-identical.
+          Measured on a 12-slide, 4 MB deck at 2560x1440: **5.37 s / 93.4 MiB**
+          against headless Chromium's 13.36 s / 858 MiB — 2.49x faster and
+          9.19x lighter. 4.13% of pixels differ by more than 16 levels (glyph
+          antialiasing, not layout), and ten renders of the same input are
+          byte-identical. Source of these figures: \`GATES.md\`.
           EOF
           )
-          gh release create "$VERSION" \
-            "dist/${NAME}.tar.gz" \
-            dist/checksums.txt \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "$VERSION" \
-            --notes "$NOTES" \
-            --verify-tag
+          # Idempotent on purpose: a re-dispatch on a published tag must REPLACE
+          # the asset, not die. `gh release create` refuses an existing release,
+          # which is why tag v0.3.0-beta.4-r1 ran success/failure/success.
+          if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release $VERSION exists: replacing assets"
+            gh release upload "$VERSION" \
+              "dist/${NAME}.tar.gz" dist/checksums.txt \
+              --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$VERSION" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$VERSION" --notes "$NOTES"
+          else
+            gh release create "$VERSION" \
+              "dist/${NAME}.tar.gz" \
+              dist/checksums.txt \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$VERSION" \
+              --notes "$NOTES" \
+              --verify-tag
+          fi
 
       - name: Verify the published asset
         # A release is a claim that this URL serves the binary we built. Download
