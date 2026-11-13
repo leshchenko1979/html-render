@@ -42,6 +42,19 @@ faces). Every figure here and in [GATES.md](GATES.md) is reproduced from your ow
 document with `python3 tools/gates.py --deck <path>` — a different deck gives
 different numbers by construction.
 
+[`assets/demo-deck.html`](assets/demo-deck.html) is a four-slide, 4 KB layout
+fixture in the repo, so the two recipes are runnable from a fresh clone without
+that deck:
+
+```bash
+# four slides out, one PNG per section.slide
+html-render --clip assets/demo-deck.html slides/ 1280 720 2 'section.slide' --document
+
+# determinism: ten renders, one checksum
+for i in $(seq 10); do html-render assets/demo-deck.html /tmp/r$i.png 1280 720 1 --document; done
+sha256sum /tmp/r*.png | awk '{print $1}' | sort -u | wc -l   # → 1
+```
+
 ## Use cases
 
 Four things this is used for, each one a file you can name:

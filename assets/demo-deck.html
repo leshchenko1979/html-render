@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>html-render demo deck</title>
+<style>
+  /* Four slides, layout only, no images and no web fonts: this file exists so
+     the two recipes in the README are runnable from a fresh clone.
+     Every figure in the text is a placeholder — it is a layout fixture, not a
+     claim about the renderer. */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #ffffff; }
+  body { font-family: sans-serif; color: #1c222a; }
+  section.slide {
+    width: 1280px; height: 720px;
+    padding: 64px 72px;
+    display: flex; flex-direction: column;
+    page-break-after: always;
+  }
+  .kicker { font-size: 20px; letter-spacing: 2px; text-transform: uppercase; color: #2e6ea8; }
+  h1 { font-size: 68px; line-height: 1.05; margin: 18px 0 0; }
+  h2 { font-size: 44px; line-height: 1.1; margin: 12px 0 0; }
+  p.lead { font-size: 26px; line-height: 1.45; margin: 22px 0 0; max-width: 900px; color: #3b4553; }
+  .rule { height: 4px; background: #2e6ea8; width: 120px; margin: 28px 0 0; }
+  .cols { display: flex; gap: 32px; margin-top: 36px; }
+  .col { flex: 1 1 0; border-top: 3px solid #2e6ea8; padding-top: 18px; }
+  .col h3 { font-size: 26px; margin: 0 0 10px; }
+  .col p { font-size: 20px; line-height: 1.5; margin: 0; color: #4a5462; }
+  .kpis { display: flex; gap: 28px; margin-top: 44px; }
+  .kpi { flex: 1 1 0; background: #eef3f9; border-radius: 10px; padding: 24px 26px; }
+  .kpi .v { font-size: 54px; font-weight: bold; color: #1b3a5c; }
+  .kpi .l { font-size: 19px; color: #4a5462; margin-top: 6px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 34px; font-size: 22px; }
+  th, td { text-align: left; padding: 14px 16px; border-bottom: 1px solid #d6d6d0; }
+  th { color: #4a5462; font-weight: normal; font-size: 19px; text-transform: uppercase; letter-spacing: 1px; }
+  .foot { margin-top: auto; font-size: 18px; color: #7b8595; }
+  .dark { background: #1b3a5c; color: #ffffff; }
+  .dark .kicker { color: #9dc4e8; }
+  .dark p.lead { color: #cfdce9; }
+  .dark .rule { background: #9dc4e8; }
+</style>
+</head>
+<body>
+
+<section class="slide dark">
+  <div class="kicker">Layout fixture</div>
+  <h1>HTML and CSS in,<br>PNG out</h1>
+  <div class="rule"></div>
+  <p class="lead">Four slides of pure layout. No images, no web fonts, no script.
+  Every number below is a placeholder.</p>
+  <div class="foot">assets/demo-deck.html · slide 1 of 4</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Why a fixture</div>
+  <h2>Two recipes need a document in the repo</h2>
+  <div class="cols">
+    <div class="col">
+      <h3>Determinism</h3>
+      <p>Render the same file ten times and compare the checksums. A fixture
+      small enough to commit makes that reproducible from a fresh clone.</p>
+    </div>
+    <div class="col">
+      <h3>Cost</h3>
+      <p>Peak RSS and wall time on a known input, so a regression shows up as a
+      number rather than as an opinion.</p>
+    </div>
+    <div class="col">
+      <h3>Clip mode</h3>
+      <p>Four <code>section.slide</code> elements, so <code>--clip</code> has
+      exactly four matches and the count is checkable.</p>
+    </div>
+  </div>
+  <div class="foot">slide 2 of 4</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Placeholders</div>
+  <h2>A KPI row and a table</h2>
+  <div class="kpis">
+    <div class="kpi"><div class="v">4</div><div class="l">slides in this file</div></div>
+    <div class="kpi"><div class="v">1280</div><div class="l">CSS px per slide</div></div>
+    <div class="kpi"><div class="v">720</div><div class="l">CSS px tall</div></div>
+  </div>
+  <table>
+    <tr><th>Mode</th><th>Input</th><th>Output</th></tr>
+    <tr><td>single</td><td>one document</td><td>one PNG</td></tr>
+    <tr><td><code>--clip</code></td><td>one document, one selector</td><td>one PNG per match</td></tr>
+  </table>
+  <div class="foot">slide 3 of 4</div>
+</section>
+
+<section class="slide dark">
+  <div class="kicker">Replace me</div>
+  <h1>Swap the text,<br>keep the CSS</h1>
+  <p class="lead">This file is a starting point: the layout primitives here —
+  columns, KPI cards, a table, a footer — are the ones a deck actually uses.</p>
+  <div class="foot">slide 4 of 4</div>
+</section>
+
+</body>
+</html>
