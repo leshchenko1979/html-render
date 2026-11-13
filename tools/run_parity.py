@@ -19,6 +19,11 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import measure  # noqa: E402
+import measure_rss  # noqa: E402
+
+# "tree" sums the whole process tree (default); "max" is the old
+# RUSAGE_CHILDREN reading, kept so published figures stay reproducible.
+RSS_MODE = "tree"
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "out")
@@ -96,27 +101,16 @@ def render_blitz(binary, fixture, width, height, png):
 def timed(cmd):
     """Run a command and return (wall_seconds, peak_rss_kib).
 
-    Peak RSS is read in a fresh interpreter: `RUSAGE_CHILDREN` is a high-water
-    mark over every child of the process, so reusing one interpreter would
-    report the largest child so far rather than this one.
+    Peak RSS is the peak **sum over the command's whole process tree**, sampled
+    every 25 ms by tools/measure_rss.py. It used to be `ru_maxrss` from
+    `RUSAGE_CHILDREN`, which is one process's high-water mark: a browser that
+    hands the page to a renderer was measured at its largest process, not at what
+    the host holds. `--rss-mode max` reproduces the old reading.
     """
-    wrapper = (
-        "import resource, subprocess, sys, time\n"
-        "t = time.perf_counter()\n"
-        "subprocess.run(sys.argv[1:], check=True, stdout=subprocess.DEVNULL,"
-        " stderr=subprocess.DEVNULL)\n"
-        "print(time.perf_counter() - t, resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss)\n"
-    )
-    out = subprocess.run(
-        [sys.executable, "-c", wrapper] + cmd,
-        capture_output=True,
-        text=True,
-        timeout=600,
-    )
-    if out.returncode != 0:
-        raise SystemExit(f"benchmark failed for {cmd[0]}:\n{out.stderr}")
-    wall, rss = out.stdout.split()
-    return float(wall), int(rss)
+    rc, _out, err, wall, kib = measure_rss.run_measured(cmd, mode=RSS_MODE)
+    if rc != 0:
+        raise SystemExit(f"benchmark failed for {cmd[0]}:\n{err}")
+    return wall, kib
 
 
 def main():
@@ -124,7 +118,17 @@ def main():
     ap.add_argument("--blitz", default=os.path.join(ROOT, "target", "release", "render"))
     ap.add_argument("--chrome", default=None)
     ap.add_argument("--bench-repeats", type=int, default=5)
+    ap.add_argument(
+        "--rss-mode",
+        choices=("tree", "max"),
+        default="tree",
+        help="tree = peak sum over the process tree (default); max = the old "
+             "single-process reading, for reproducing published figures",
+    )
     args = ap.parse_args()
+
+    global RSS_MODE
+    RSS_MODE = args.rss_mode
 
     chrome = find_chrome(args.chrome)
     if not os.path.isfile(args.blitz):

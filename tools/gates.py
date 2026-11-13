@@ -26,6 +26,14 @@ import time
 
 from PIL import Image, ImageChops
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import measure_rss  # noqa: E402
+
+# `--rss-mode` sets this before any gate runs. "tree" sums the whole process
+# tree (the default); "max" is the old /usr/bin/time reading, kept so figures
+# published before the change stay reproducible.
+RSS_MODE = "tree"
+
 CSS_W, CSS_H = 1280, 720
 SLIDE_SELECTOR = "section.slide"
 
@@ -45,18 +53,17 @@ def run(cmd, **kw):
 
 
 def peak_rss(cmd):
-    """Peak RSS of a child in MiB, via /usr/bin/time if present."""
-    timer = shutil.which("time") or "/usr/bin/time"
-    if not os.path.exists("/usr/bin/time"):
-        rc, out, err, wall, _ = run(cmd)
-        return rc, out, err, wall, 0.0
-    rc, out, err, wall, _ = run(["/usr/bin/time", "-f", "%M"] + cmd)
-    mib = 0.0
-    for line in reversed(err.strip().splitlines()):
-        if line.strip().isdigit():
-            mib = int(line.strip()) / 1024
-            break
-    return rc, out, err, wall, mib
+    """Run `cmd` and return (rc, out, err, wall, peak MiB).
+
+    The figure is the peak **sum over the whole process tree**, sampled every
+    25 ms by tools/measure_rss.py. It used to be `/usr/bin/time -f %M`, which
+    reports one process's maximum: a browser that hands the page to a renderer
+    was measured at the size of its largest process rather than at what the host
+    has to hold, and every published figure inherited that. `--rss-mode max`
+    reproduces the old reading.
+    """
+    rc, out, err, wall, kib = measure_rss.run_measured(cmd, mode=RSS_MODE)
+    return rc, out, err, wall, kib / 1024.0
 
 
 def md5(path):
@@ -344,7 +351,17 @@ def main():
     ap.add_argument("--json", default=None, help="write results here")
     ap.add_argument("--only", default="abc", help="subset of gates, e.g. 'a'")
     ap.add_argument("--scale", type=int, default=2, help="gate A scale (pipeline ships 2)")
+    ap.add_argument(
+        "--rss-mode",
+        choices=("tree", "max"),
+        default="tree",
+        help="tree = peak sum over the process tree (default); max = the old "
+             "single-process /usr/bin/time reading, for reproducing published figures",
+    )
     args = ap.parse_args()
+
+    global RSS_MODE
+    RSS_MODE = args.rss_mode
 
     chrome = args.chromium
     if not chrome:
