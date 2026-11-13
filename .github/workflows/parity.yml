@@ -21,7 +21,12 @@ on:
       - "build.rs"
       - "fixtures/**"
       - "tools/**"
-      - ".github/workflows/parity.yml"
+      # Every workflow, not just this one: a Dependabot action bump edits the
+      # OTHER files, and a bump that merges untested is how all eight pins sat
+      # three majors behind. A workflow edit is cheap to re-verify and cannot
+      # move a pixel, so the run is the proof the job still starts.
+      - ".github/workflows/**"
+      - ".github/dependabot.yml"
   workflow_dispatch:
 
 # A superseded push must stop paying for a build nobody will read: on 11-05 ten
