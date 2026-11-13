@@ -12,10 +12,15 @@ browser for server-side rendering? On a real 12-slide, 4 MB deck, yes:
 | 12-slide deck, 2560×1440 | wall | peak RSS |
 |---|---|---|
 | headless Chromium (Playwright) | 13.36 s | 858 MiB |
-| **html-render** | **5.56 s** | **95 MiB** |
+| **html-render** | **5.37 s** | **93.4 MiB** |
 
-**2.4× faster, 9× lighter** — and byte-for-byte deterministic, which a browser is
-not: ten renders of the same input produce one md5, so output can be diffed in CI.
+**2.49× faster, 9.19× lighter** — and byte-for-byte deterministic, which a browser
+is not: ten renders of the same input produce one md5, so output can be diffed in CI.
+
+The deck is not part of this repo (4.16 MB, embedded JPEGs, four `@font-face`
+faces). Every figure here and in [GATES.md](GATES.md) is reproduced from your own
+document with `python3 tools/gates.py --deck <path>` — a different deck gives
+different numbers by construction.
 
 ## Install
 
@@ -60,7 +65,7 @@ full-height canvas that is cropped afterwards — the same pixels for a third of
 the peak memory.
 
 ```bash
-# a 12-slide deck, 2560×1440 per slide, ~95 MiB peak
+# a 12-slide deck, 2560×1440 per slide, ~93 MiB peak
 html-render --clip deck.html slides/ 1280 720 2 'section.slide' --document --scroll
 ```
 
@@ -80,7 +85,7 @@ between two engines rather than between two rulers.
 | Deck, scale 2, per slide vs `element.screenshot()` | |
 |---|---|
 | size | 12/12 at 2560×1440 |
-| pixels off by >16 | **4.13 %** (per slide 1.41 – 8.29 %) |
+| pixels off by >16 | **4.13 %** (per slide 0.88 – 11.67 %) |
 | photo regions | 0.31 – 3.92 % |
 | best integer shift on every photo region | **0 px** |
 
@@ -116,11 +121,12 @@ positioning, CSS variables, `box-sizing`, `min`/`max` sizing, auto margins,
 ## Building
 
 The build is a GitHub Actions job, because the host this was written on forbids
-local Rust compilation. Two workflows:
+local Rust compilation. Three workflows:
 
 | Workflow | Trigger | Output |
 |---|---|---|
 | `parity.yml` | push to any branch | builds, measures the corpus, uploads results |
+| `drain-probe.yml` | push to any branch | builds, measures the image drain loop under each `BLITZ_DRAIN` mode, uploads the report |
 | `release.yml` | push a `v*` tag | builds, packages, publishes, **then verifies the published asset** |
 
 Two hard requirements, both learned the hard way:
