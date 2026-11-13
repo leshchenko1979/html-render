@@ -152,6 +152,23 @@ minimal container:
 apt-get install -y fonts-dejavu-core
 ```
 
+### Or skip the host entirely
+
+Everything above — the 13 libraries, the glibc floor, the font — is discharged
+once by an image:
+
+```bash
+docker run --rm -v "$PWD:/work" ghcr.io/leshchenko1979/html-render:latest \
+    /work/card.html /work/card.png 1280 720 2
+```
+
+The image is built from the same commit as the release tarball, on the same tag
+push, and its own CI proves it renders: `ldd` resolves 13 of 13 with none
+`not found`, `fc-match "DejaVu Sans"` returns DejaVu, and a shipped asset
+renders inside it at the right dimensions with glyphs painted. `latest` is
+published on tag pushes only — an image that silently changes under a fixed name
+is not pinnable.
+
 ## Usage
 
 Two modes. Both take the **viewport in CSS pixels**; `scale` multiplies the
@@ -377,6 +394,8 @@ local Rust compilation. Three workflows:
 | `parity.yml` | push touching `src/`, `Cargo.*`, `build.rs`, `fixtures/`, `tools/` or the workflow itself; or manual | builds, runs the clip, exit-code, document-root and CSS-audit tests, measures the corpus, uploads results |
 | `drain-probe.yml` | manual dispatch only | builds, measures the image drain loop under each `BLITZ_DRAIN` mode, uploads the report |
 | `release.yml` | push a `v*` tag, or manual | builds, packages, publishes, **then verifies the published asset** |
+| `container.yml` | push a `v*` tag, or manual | builds the image, asserts the 13-library closure and the font, renders an asset inside it, pushes to GHCR |
+| `lockfile.yml` | push touching `Cargo.toml`, or manual | resolves `Cargo.lock` and commits it back if it moved |
 
 Two hard requirements, both learned the hard way:
 
