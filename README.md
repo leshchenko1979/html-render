@@ -29,14 +29,19 @@ browser for server-side rendering? On a real 12-slide, 4 MB deck, yes
 | 12-slide deck, 2560×1440 | wall | peak RSS |
 |---|---|---|
 | headless Chromium (Playwright) | 13.36 s | 858 MiB |
-| **html-render** | **5.37 s** | **93.4 MiB** |
+| **html-render `--scroll`** | **5.37 s** | **93.4 MiB** |
+| html-render `--clip` (the default) | 5.72 s | 275.2 MiB |
 
-**2.49× faster, 9.19× lighter** — and byte-for-byte deterministic, which a browser
-is not: ten renders of the same input produce one checksum, so output can be
-diffed in CI. That holds for a document whose resources are local or `data:`
-URIs. A remote image is fetched at render time and painted as **absent** if it
-misses `BLITZ_DEADLINE_SECS` (default 120 s), so a slow origin changes the
-picture without changing the input.
+**2.34× faster and 3.12× lighter on the default `--clip` recipe; 2.49× and 9.19×
+with `--scroll`**, which paints one element-sized canvas per slide instead of one
+full-height canvas that is cropped afterwards. Both are lossless: the two modes
+differ on 3,551 of 44,236,800 pixels (0.0080 %, max channel delta 2/255), which
+is antialiasing at fractional offsets. Output is byte-for-byte deterministic,
+which a browser is not: ten renders of the same input produce one checksum, so
+output can be diffed in CI. That holds for a document whose resources are local
+or `data:` URIs. A remote image is fetched at render time and painted as
+**absent** if it misses `BLITZ_DEADLINE_SECS` (default 120 s), so a slow origin
+changes the picture without changing the input.
 
 The deck is not part of this repo (4.16 MB, embedded JPEGs, four `@font-face`
 faces). Every figure here and in [GATES.md](GATES.md) is reproduced from your own
@@ -73,7 +78,8 @@ Four things this is used for, each one a file you can name:
 
 ## Install
 
-No package manager, no toolchain — a static-ish binary plus glibc. From a
+No package manager, no toolchain. A single 25 MB binary — but **not** a static
+one: it links glibc and the font stack at runtime. From a
 [release](https://github.com/leshchenko1979/html-render/releases):
 
 ```bash
@@ -93,6 +99,47 @@ tarball back over HTTPS, checks `checksums.txt`, byte-compares it with the build
 renders a PNG and asserts its dimensions. A release serving the wrong file fails
 its own run.
 
+### What it needs on the host
+
+`ldd` on the shipped binary lists **15** entries, and a `scratch` or distroless
+image satisfies none of them — the binary will not start:
+
+| | |
+|---|---|
+| glibc | **2.35+** (`libc.so.6`, `libm.so.6`, `libgcc_s.so.1`) |
+| TLS | `libssl.so.3`, `libcrypto.so.3` (Debian 12+ / Ubuntu 22.04+) |
+| fonts | `libfontconfig.so.1`, `libfreetype.so.6`, `libexpat.so.1` |
+| images | `libpng16.so.16`, `libbz2.so.1.0`, `libbrotlicommon.so.1`, `libbrotlidec.so.1` |
+| misc | `libz.so.1`, `ld-linux-x86-64.so.2`, `linux-vdso.so.1` |
+
+On Debian/Ubuntu the non-base half is one line:
+
+```bash
+apt-get install -y libssl3 libfontconfig1 libfreetype6 libpng16-16 libbz2-1.0 libbrotli1
+```
+
+### Fonts are a runtime dependency, and a silent one
+
+The binary ships **no** font. `assets/hero.html` and `assets/og.html` name
+`DejaVu Sans` explicitly, `assets/demo-deck.html` asks for plain `sans-serif`
+(which fontconfig resolves to DejaVu on most hosts), and the deck this was
+measured on names DejaVu too. If the host has it, nothing needs installing.
+Check before you trust a PNG:
+
+```bash
+fc-match "DejaVu Sans"    # → DejaVuSans.ttf, or a substitute you did not ask for
+```
+
+The failure mode is the reason this is a section rather than a footnote:
+fontconfig always resolves *something*, so a host without DejaVu renders every
+line in a fallback face, re-wraps the text to different line breaks, and produces
+a perfectly plausible PNG of the wrong thing. No warning, no non-zero exit. On a
+minimal container:
+
+```bash
+apt-get install -y fonts-dejavu-core
+```
+
 ## Usage
 
 Two modes. Both take the **viewport in CSS pixels**; `scale` multiplies the
@@ -100,15 +147,28 @@ output resolution (scale 2 → a 1280×720 viewport produces 2560×1440).
 
 ```bash
 # one image
-html-render page.html out.png 1280 720 [scale] [--document]
+html-render page.html out.png 1280 720 [scale] [--document] [--fragment]
 
 # one PNG per element matching a selector
-html-render --clip deck.html png/ 1280 720 2 'section.slide' [--document] [--scroll]
+html-render --clip deck.html png/ 1280 720 2 'section.slide' [--document] [--fragment] [--scroll]
 ```
 
-`--document` renders a complete HTML file as-is. **Use it for real documents**:
-without it the input is wrapped in a synthetic `<html><body>`, which is right for
-fragments and wrong for anything with its own `<head>`.
+**A file that declares its own document root is rendered as one, automatically.**
+Detection reads the first tag after any BOM, whitespace and comments, and matches
+it against `<!doctype>`, `<html>`, `<head>`, `<body>`; anything else — a `<div>`,
+a `<style>`, bare text — is a fragment and is wrapped in a synthetic
+`<html><body>` with a white-background reset.
+
+The two flags override the guess: `--document` forces the document reading,
+`--fragment` forces the wrapped one, and together they exit `2` rather than
+silently preferring one. The resolved mode is on the `TIMING` line.
+
+This matters more than it looks. Wrapping a real document hands the canvas to the
+wrapper's `html{background:#ffffff}` reset, so a page that colours itself via
+`body{background:…}` — the common idiom — renders **white**, with identical
+geometry and nothing on stderr. Measured against the previous release: 50 % of
+pixels differ for such a page. Passing `--document` was already the documented
+advice; the guess means forgetting it is no longer silent.
 
 `--scroll` (clip mode) paints one element-sized canvas per match instead of one
 full-height canvas that is cropped afterwards — the same pixels for a third of
@@ -126,16 +186,20 @@ document order) and prints each match's CSS box and physical size:
 clip_01 css x=0.00 y=0.00 w=1280.00 h=720.00  physical 2560x1440 (scroll)
 ```
 
-A matched element with no layout box (`<br>`, `<hr>`, `<wbr>`, `<script>`,
-`<style>`, …) is skipped, not fatal, and the skip is reported on stderr:
+A matched element with no layout box at all (`br`, `wbr`, `script`, `style`, …)
+is skipped, not fatal, and the skip is reported on stderr:
 
 ```
 skipped 3 of 306 matched element(s): no layout box
 ```
 
-That makes `'*'` usable on a real document. `clip_NN` numbering stays contiguous
-over the emitted boxes. A selector whose matches are *all* boxless exits `3`, the
-same code as a selector that matched nothing.
+That makes `'*'` usable on a real document. The skip is narrow on purpose:
+`hr` **is** emitted, because it is a block box with a default border (measured
+`w=400 h=2`), and so is anything else that has geometry — a skip that dropped
+whatever it could not handle would pass a casual test and lose real boxes.
+`clip_NN` numbering stays contiguous over the emitted boxes. A selector whose
+matches are *all* boxless exits `3`, the same code as a selector that matched
+nothing.
 
 ### Exit codes
 
@@ -191,6 +255,21 @@ document with local resources only — the scope above:
 |---|---|
 | 10 renders, scale 2, one checksum | `1dffe1ae…` |
 | two separate builds of one commit | different binary md5s, **identical pixels** (12/12 slides) |
+
+[`tools/deck_check.py`](tools/deck_check.py) is the loop behind those numbers: it
+renders one document with both engines at the same viewport, times each over
+`--repeats` runs, and compares the two PNGs — ink coverage, mean channel
+difference and the share of near-identical pixels.
+
+```bash
+python3 tools/deck_check.py --html your-deck.html --chrome "$(which google-chrome)"
+```
+
+It needs Chromium (`--chrome`, auto-detected if omitted) and a built binary
+(`--blitz`, default `target/release/render`), so it is a local instrument rather
+than a CI gate; the corpus gate that does run in CI is
+[`tools/run_parity.py`](tools/run_parity.py), which compares per-element boxes
+across 31 fixtures instead of whole pages.
 
 ## What it does
 
