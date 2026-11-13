@@ -1,0 +1,9 @@
+# GitHub's language bar counts markup as code, but not Markdown, YAML or TOML.
+# Without this file the badge reads "Python": tools/ holds 49,200 B of harness
+# scripts against 16,814 B in src/main.rs. Excluding tools/ alone is not enough
+# — assets/ (11,394 B) plus fixtures/ (7,702 B) add 19,096 B of HTML, which
+# would then win. The renderer is src/; everything else is harness, fixture or
+# rendered artefact.
+tools/**    linguist-detectable=false
+fixtures/** linguist-detectable=false
+assets/**   linguist-detectable=false
