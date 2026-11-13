@@ -283,6 +283,27 @@ than a CI gate; the corpus gate that does run in CI is
 [`tools/run_parity.py`](tools/run_parity.py), which compares per-element boxes
 across 31 fixtures instead of whole pages.
 
+### Which declarations did it drop?
+
+[`tools/css_audit.py`](tools/css_audit.py) answers that by measurement, not from
+a list of "supported properties": such a list rots the moment Blitz updates, and
+a stale list reports a dropped declaration as fine. It renders the file once,
+then re-renders once per declaration with exactly that declaration removed, and
+diffs the PNGs.
+
+```bash
+python3 tools/css_audit.py --bin target/release/render your-card.html \
+    --width 794 --height 1123 --scale 3.123
+```
+
+A declaration whose removal changes no pixel is **inert**: either the renderer
+dropped it, or something else already sets that value. The report says "no pixel
+effect" and never "unsupported", because a pixel diff cannot tell those two
+apart — a `color` whose text all lives inside a child that overrides it is
+honoured and still invisible. One render per declaration at roughly 0.3 s each,
+so a 76-declaration card takes about 25 s. Audit at the size you ship: a
+declaration inert at 1280x720 can be load-bearing at 794x1123.
+
 ## What it does
 
 Cascade and selectors, flexbox, grid, inline formatting and line boxes,
@@ -353,7 +374,7 @@ local Rust compilation. Three workflows:
 
 | Workflow | Trigger | Output |
 |---|---|---|
-| `parity.yml` | push touching `src/`, `Cargo.*`, `build.rs`, `fixtures/`, `tools/` or the workflow itself; or manual | builds, runs the clip and exit-code tests, measures the corpus, uploads results |
+| `parity.yml` | push touching `src/`, `Cargo.*`, `build.rs`, `fixtures/`, `tools/` or the workflow itself; or manual | builds, runs the clip, exit-code, document-root and CSS-audit tests, measures the corpus, uploads results |
 | `drain-probe.yml` | manual dispatch only | builds, measures the image drain loop under each `BLITZ_DRAIN` mode, uploads the report |
 | `release.yml` | push a `v*` tag, or manual | builds, packages, publishes, **then verifies the published asset** |
 

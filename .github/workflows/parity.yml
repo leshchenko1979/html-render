@@ -105,6 +105,15 @@ jobs:
         # binary, which is why this runs against the freshly built one.
         run: python3 tools/test_document_detect.py --bin target/release/render
 
+      - name: Test the CSS audit
+        # `tools/css_audit.py` answers "which declarations did you drop?" by
+        # removing one at a time and diffing the PNG. Its two controls are the
+        # point: a declaration no engine honours must read inert, and a
+        # load-bearing one must never. Without the second leg a tool that
+        # called everything inert would pass the first and be worse than
+        # useless.
+        run: python3 tools/test_css_audit.py --bin target/release/render
+
       - name: Check the documented numbers
         # README, GATES and the release template quote ratios derived from a
         # handful of measurements. Those ratios rot silently: the source number
