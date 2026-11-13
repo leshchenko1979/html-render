@@ -74,12 +74,24 @@ jobs:
           libs=$(echo "$out" | grep -c '=>' || true)
           echo "libraries resolved: $libs, missing: $missing"
           test "$missing" -eq 0 || { echo "::error::$missing libraries not found"; exit 1; }
-          # 2 libraries is the signature of the stub binary: `fn main() { print }`
+          # The CONTRACT is `missing == 0`: a library present in the builder but
+          # absent from the runtime image still lets the image build, and only
+          # ldd inside the runtime tells you.
+          #
+          # The count is a FLOOR, never an equality. An exact 13 was asserted
+          # here and failed a perfectly good image with 12: the same source
+          # yields a different closure per distro, because bookworm's freetype
+          # does not link libbz2 while the runner's jammy build does. A gate
+          # pinned to one distro's transitive graph reports a defect every time
+          # the base image is rebuilt.
+          #
+          # 2 is the signature of the stub binary: `fn main() { println!() }`
           # links libc and libgcc_s and nothing else. A mtime-preserving COPY
           # over a layer that already compiled a stub makes cargo skip the real
-          # build, so the count is what tells the two apart.
-          test "$libs" -eq 13 || {
-            echo "::error::expected 13 libraries, got $libs"
+          # build, so the floor is what tells the two apart. Real builds land at
+          # 12-13; the stub at 2.
+          test "$libs" -ge 10 || {
+            echo "::error::expected at least 10 libraries, got $libs"
             echo "2 means the image carries the build stub, not the renderer"
             exit 1
           }
