@@ -9,8 +9,8 @@
 //!
 //! `--document` renders the file as a complete document (no injected reset, no
 //! body wrapper). Without it the file is treated as a fragment and wrapped in
-//! the same reset the ogre parity harness uses, so both engines see identical
-//! markup.
+//! the same reset the parity harness has always used, so both engines see
+//! identical markup.
 //!
 //! Clip mode mirrors Playwright's `locator(...).screenshot()`: every match of
 //! `selector` is painted into its own PNG at the element's border box, in

@@ -13,7 +13,7 @@ Three numbers per engine, all against the browser's own screenshot:
 An engine that drops the stylesheet scores near 0 % ink and a huge mean diff,
 which is exactly what a "renders but ignores the cascade" failure looks like.
 
-Usage: python3 tools/deck_check.py --html deck.html --chrome <path> [--blitz ...] [--ogre ...]
+Usage: python3 tools/deck_check.py --html deck.html --chrome <path> [--blitz ...]
 """
 
 import argparse
@@ -89,7 +89,6 @@ def main():
     ap.add_argument("--html", required=True)
     ap.add_argument("--chrome", default=None)
     ap.add_argument("--blitz", default=os.path.join(ROOT, "target", "release", "render"))
-    ap.add_argument("--ogre", default=None)
     ap.add_argument("--repeats", type=int, default=3)
     args = ap.parse_args()
 
@@ -106,10 +105,6 @@ def main():
     if os.path.isfile(args.blitz):
         commands["blitz"] = [args.blitz, html, os.path.join(OUT, "blitz.png"),
                              str(WIDTH), str(HEIGHT)]
-    if args.ogre:
-        commands["ogre"] = [args.ogre, "--render", html, "--format", "png",
-                            "--output", os.path.join(OUT, "ogre.png"),
-                            "--width", str(WIDTH), "--height", str(HEIGHT)]
 
     print(f"document: {html} ({os.path.getsize(html)} bytes) at {WIDTH}x{HEIGHT}")
     print()

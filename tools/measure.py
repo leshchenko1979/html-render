@@ -1,7 +1,6 @@
 """Locate probe colours in a PNG and report their bounding boxes.
 
-This is the same instrument as `test/chromium/measure.go` in the ogre repo,
-reimplemented dependency-free so the spike needs nothing but python3:
+Reimplemented dependency-free so the spike needs nothing but python3:
 
   * pixels are composited over white first (a transparent pixel is not black),
   * a pixel matches a probe colour when every channel is within `TOLERANCE`,
