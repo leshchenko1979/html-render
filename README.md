@@ -165,22 +165,3 @@ identical embedded font they measure font availability rather than layout.
 ## Licence
 
 Apache-2.0. Same licence as Blitz itself, and it carries an explicit patent grant.
-
-## Assets
-
-`assets/` holds the two marketing images, both rendered by this tool from the HTML
-beside them — no browser, no external editor, and the numbers come from
-`GATES.md`, so they move when the gates are re-measured.
-
-| File | Source | Size |
-|---|---|---|
-| `hero.png` | `hero.html` | 3200×1800 (1600×900 at scale 2) |
-| `og.png` | `og.html` | 2560×1280 (1280×640 at scale 2) |
-
-```bash
-html-render assets/hero.html assets/hero.png 1600 900 2 --document
-html-render assets/og.html   assets/og.png   1280 640 2 --document
-```
-
-`og.png` is the GitHub **social preview**, which is set in the web UI
-(*Settings → Social preview → Upload*) — GitHub exposes no API for it.
