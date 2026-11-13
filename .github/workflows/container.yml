@@ -43,7 +43,7 @@ jobs:
         # `latest` only on a tag push, never on main: an image that silently
         # changes under a fixed name is not pinnable, the same reason the
         # release workflow is tag-triggered.
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
