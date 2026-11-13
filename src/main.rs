@@ -251,15 +251,35 @@ async fn real_main() {
             let s = scale as f64;
 
             // Every matched element's box, in document coordinates, at scroll 0.
+            //
+            // Elements with no layout box (`<br>`, `<hr>`, `<wbr>`, `<script>`,
+            // `<style>`, …) have no geometry, and `*` matches them in any real
+            // document. They are SKIPPED, not fatal: a clip dump is a diagnostic,
+            // so one unlayoutable element must not destroy the other 300 boxes.
+            // The skip is reported rather than silent, and `clip_NN` numbering
+            // stays contiguous over the emitted boxes, so a caller can tell a
+            // short dump from a complete one.
+            let mut skipped = 0usize;
             let rects: Vec<_> = ids
                 .iter()
-                .enumerate()
-                .map(|(i, id)| {
-                    document
-                        .get_client_bounding_rect(*id)
-                        .unwrap_or_else(|| panic!("no geometry for {sel} #{i}"))
+                .filter_map(|id| match document.get_client_bounding_rect(*id) {
+                    Some(rect) => Some(rect),
+                    None => {
+                        skipped += 1;
+                        None
+                    }
                 })
                 .collect();
+            if skipped > 0 {
+                eprintln!(
+                    "skipped {skipped} of {} matched element(s): no layout box",
+                    ids.len()
+                );
+            }
+            if rects.is_empty() {
+                eprintln!("no matched element for selector {sel:?} has a layout box");
+                std::process::exit(3);
+            }
 
             if use_scroll {
                 // One canvas per element, sized to the element, painted at zero

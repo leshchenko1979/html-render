@@ -78,6 +78,17 @@ document order) and prints each match's CSS box and physical size:
 clip_01 css x=0.00 y=0.00 w=1280.00 h=720.00  physical 2560x1440 (scroll)
 ```
 
+A matched element with no layout box (`<br>`, `<hr>`, `<wbr>`, `<script>`,
+`<style>`, …) is skipped, not fatal, and the skip is reported on stderr:
+
+```
+skipped 3 of 306 matched element(s): no layout box
+```
+
+That makes `'*'` usable on a real document. `clip_NN` numbering stays contiguous
+over the emitted boxes. A selector whose matches are *all* boxless exits `3`, the
+same code as a selector that matched nothing.
+
 ## Fidelity
 
 Measured against Chromium 151 on the same document, same viewport, same scale —
