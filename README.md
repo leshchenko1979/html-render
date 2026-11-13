@@ -152,6 +152,12 @@ in CI against the binary built from the same commit:
 `101` is a panic, not a diagnosis: the message names a line in `src/main.rs`
 rather than the argument you got wrong, so read the argument before the file.
 
+**This table describes `main`, and the published `v0.3.0-beta.4-r2` predates
+it.** On that binary four of the ten asserted legs behave differently: an
+unknown flag exits `0`, `--clip` in the wrong position exits `0`, a selector
+whose matches are all boxless exits `101` instead of `3`, and the usage line
+still says `usage: render`. Everything else holds.
+
 **The failure with no exit code is the one to watch.** Unsupported CSS is
 ignored, not rejected: an unimplemented property or value falls back to its
 initial value, the layout settles around it, and a plausible PNG comes out. No
