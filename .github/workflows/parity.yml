@@ -18,7 +18,8 @@ on:
       - "src/**"
       - "Cargo.toml"
       - "Cargo.lock"
-      - "build.rs"
+      # No build.rs exists; listing it made the trigger look broader than it was.
+      - "assets/**"
       - "fixtures/**"
       - "tools/**"
       # Every workflow, not just this one: a Dependabot action bump edits the
@@ -128,6 +129,12 @@ jobs:
         # change that alters the hero image cannot pass unnoticed.
         run: python3 tools/check_claims.py --bin target/release/render
 
+      - name: Test the corpus gate
+        # The gate's logic is a pure function, so it is tested here without a
+        # browser — including six negative controls that each assert a real
+        # defect makes it exit nonzero. A gate nobody can fail is decoration.
+        run: python3 tools/test_parity_gate.py
+
       - name: Locate Chromium
         run: |
           if command -v google-chrome >/dev/null; then
@@ -137,7 +144,11 @@ jobs:
             echo "CHROME=$(find ~/.cache/ms-playwright -name chrome -type f | head -1)" >> "$GITHUB_ENV"
           fi
 
-      - name: Measure
+      - name: Measure the corpus
+        # This is a GATE, not a report: tools/parity_baseline.json pins the four
+        # known divergences by fixture:colour with their measured delta, and any
+        # new or worsened one exits 1. It used to end at `return result`, so
+        # four divergences passed every push and forty would have passed too.
         run: python3 tools/run_parity.py
 
       - name: Upload the built renderer

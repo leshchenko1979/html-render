@@ -28,6 +28,10 @@ RSS_MODE = "tree"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "out")
 
+# Known divergences, pinned by fixture:colour with their measured delta. See
+# tools/parity_baseline.json.
+BASELINE = os.path.join(ROOT, "tools", "parity_baseline.json")
+
 # The document wrapper is byte-identical to the one the original parity harness
 # used, so both engines see the same reset and the same body.
 WRAPPER = (
@@ -124,6 +128,12 @@ def main():
         default="tree",
         help="tree = peak sum over the process tree (default); max = the old "
              "single-process reading, for reproducing published figures",
+    )
+    ap.add_argument(
+        "--update-baseline",
+        action="store_true",
+        help="rewrite tools/parity_baseline.json from this run; read the diff "
+             "before committing it",
     )
     args = ap.parse_args()
 
@@ -252,6 +262,105 @@ def main():
         open(os.path.join(OUT, "parity.json"), "w"),
         indent=2,
     )
+
+    # The gate runs last so the report above is always written, even on a
+    # failure: a red build has to leave the evidence behind.
+    baseline = json.load(open(BASELINE)) if os.path.isfile(BASELINE) else None
+    if args.update_baseline:
+        problems, current = gate(clean, fixtures, baseline or {"divergent": {}})
+        if baseline and baseline.get("note"):
+            current["note"] = baseline["note"]
+        with open(BASELINE, "w") as fh:
+            json.dump(current, fh, indent=2)
+            fh.write("\n")
+        print(f"\nBASELINE rewritten: {BASELINE}")
+        print(
+            f"  {current['text_free_boxes']} boxes, "
+            f"{len(current['divergent'])} divergent, "
+            f"{len(current['absence'])} absence"
+        )
+        return result
+
+    if baseline is None:
+        # Deleting the file must not disarm the gate.
+        print(f"\nGATE  FAIL  no baseline at {BASELINE}")
+        print("  create one with --update-baseline and read the diff before committing")
+        sys.exit(1)
+
+    problems, current = gate(clean, fixtures, baseline)
+    if problems:
+        print("\nGATE  FAIL")
+        for p in problems:
+            print(f"  {p}")
+        print(
+            "  this corpus is the repo's central claim: a box that diverges and "
+            "is not in the baseline is a regression, not a measurement"
+        )
+        sys.exit(1)
+    print(
+        f"\nGATE  PASS  {current['text_free_boxes']} boxes, "
+        f"{len(current['divergent'])} known divergence(s) within baseline, "
+        f"{len(current['absence'])} absence"
+    )
+    return result
+
+
+def box_key(row):
+    return "{}:{}".format(row["fixture"], row["colour"])
+
+
+def gate(clean, fixtures, baseline):
+    """Compare the text-free corpus against the pinned baseline.
+
+    This harness used to be a report, not a gate: `main()` returned, and every
+    `SystemExit` in the file was an *error* path (no Chromium, no binary, a
+    fixture that crashed). No code path exited nonzero because a box diverged,
+    so the four known divergences passed on every push and forty would have
+    passed identically. A measurement that cannot say no is not evidence.
+
+    A baseline entry that stops diverging is a failure too, not a bonus: left
+    in place it would silently tolerate the same box regressing later, which is
+    how a control disarms itself.
+    """
+    divergent, missing, absences = {}, [], []
+    for r in clean:
+        if r["verdict"] == "ok (absence)":
+            absences.append(r["fixture"])
+        elif r["verdict"] == "MISSING":
+            missing.append(box_key(r))
+        elif r["verdict"] != "exact" and not str(r["verdict"]).startswith("ok"):
+            divergent[box_key(r)] = r["delta"]
+
+    problems = []
+    want = baseline.get("divergent", {})
+    for key, delta in sorted(divergent.items()):
+        if key not in want:
+            problems.append(f"NEW divergence {key} at {delta}px")
+        elif delta > want[key]:
+            problems.append(f"WORSE divergence {key}: {want[key]}px -> {delta}px")
+        elif delta < want[key]:
+            problems.append(
+                f"IMPROVED divergence {key}: {want[key]}px -> {delta}px "
+                "(update tools/parity_baseline.json in the commit that fixes it)"
+            )
+    for key in sorted(set(want) - set(divergent)):
+        problems.append(f"BASELINE STALE {key}: pinned at {want[key]}px, no longer divergent")
+    for key in missing:
+        problems.append(f"MISSING box {key}")
+    if baseline.get("text_free_boxes") is not None and len(clean) != baseline["text_free_boxes"]:
+        problems.append(f"BOX COUNT {len(clean)} != baseline {baseline['text_free_boxes']}")
+    if baseline.get("fixtures") is not None and len(fixtures) != baseline["fixtures"]:
+        problems.append(f"FIXTURE COUNT {len(fixtures)} != baseline {baseline['fixtures']}")
+    if sorted(absences) != sorted(baseline.get("absence", [])):
+        problems.append(
+            f"ABSENCE SET {sorted(absences)} != baseline {sorted(baseline.get('absence', []))}"
+        )
+    return problems, {
+        "fixtures": len(fixtures),
+        "text_free_boxes": len(clean),
+        "divergent": dict(sorted(divergent.items())),
+        "absence": sorted(absences),
+    }
 
 
 def fmt(box):

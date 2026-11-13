@@ -1,0 +1,14 @@
+{
+  "note": "Known divergence between Blitz and Chromium on the text-free corpus. run_parity.py exits 1 on a NEW divergence, on a delta that grew, on a baseline entry that no longer diverges (update this file in the commit that fixes it), and on any missing box. Rewrite with --update-baseline and read the diff before committing it.",
+  "fixtures": 31,
+  "text_free_boxes": 47,
+  "divergent": {
+    "br-run-blocks:blue": 38,
+    "br-run-blocks:green": 22,
+    "br-run-blocks:red": 6,
+    "br-run-blocks:yellow": 54
+  },
+  "absence": [
+    "margin-auto-stretch"
+  ]
+}
