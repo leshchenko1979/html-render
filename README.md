@@ -19,7 +19,7 @@ Vello pipeline. No Chromium, no JavaScript engine, one process.
 
 ## Status
 
-`0.3.0-beta`, ten days old, one maintainer. No API promise: flags and output
+`0.3.0-beta.4`, eight days old, one maintainer. No API promise: flags and output
 names may change between minor versions. Linux only. One known layout defect —
 four corpus boxes, consecutive `<br>` runs in a `font-size:0` inline-block
 context (see [Corpus](#corpus)).
@@ -341,7 +341,7 @@ is exact.
 than absent. Fixture 32 (`table-collapse`) puts `border-collapse`, `colgroup`,
 `rowspan`, `colspan` and `border-spacing` in front of both engines, and **all
 seven of its boxes diverge**: the table comes out **18px shorter** than Chromium
-paints it, one cell is **12px tall where Chromium paints 28**, and the rest are
+paints it, one cell is **12px tall where Chromium paints 28**, and the other six are
 off by 2-16px. Those seven are pinned in `tools/parity_baseline.json` with that
 reason written down, so a *further* regression still fails the build while the
 current defect stays visible instead of being forgotten.

@@ -9,9 +9,13 @@ tested here — one scripted pass, against the binary CI just built.
     python3 tools/test_exit_codes.py --bin target/release/render
 
 Exit 0 = the contract holds. Exit 1 = it does not (the message says which leg).
-Run it against an older binary and two legs fail (unknown flag, all-boxless),
-which is the point: a test that cannot observe the defect it was written for is
+Run it against the published r2 binary and nine of the fifteen legs fail, which
+is the point: a test that cannot observe the defect it was written for is
 decoration.
+
+The summary counts failed *assertions*, not legs: r2 prints "15 leg(s) failed"
+because the `--help` leg alone contributes six of them (exit code plus five
+stdout checks). Nine distinct legs, fifteen entries.
 """
 
 import argparse

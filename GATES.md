@@ -137,7 +137,7 @@ Each of these cost real time, and none of them raises an error.
 4. **Know the document height.** A 12-slide deck with 24 px gaps is 8904 CSS px,
    not 8640. Guessing short makes the last slide read as 37.6 % wrong when the
    real figure is 1.41 %: the crop, not the renderer.
-5. **`--help` exits 2.** Usage goes to stderr, so `set -euo pipefail` fails on a
+5. **`--help` used to exit 2.** Usage went to stderr, so `set -euo pipefail` failed on a
    successful invocation. Use `|| true` in scripts.
 
 ## Withdrawn claims

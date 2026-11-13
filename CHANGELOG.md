@@ -46,7 +46,7 @@ are closed ranges and do not drift.
   `run_parity.py` reached CI with a `NameError` on its own return statement.
 - Fixture 32 (`table-collapse`), the corpus's first `<table>`. It found a real
   defect: all seven of its boxes diverge, the table is 18px shorter than
-  Chromium's, and two cells are roughly half height (#9).
+  Chromium's, and one cell is 12px tall where Chromium paints 28 (#9).
 - `--help`/`--version` print USAGE, ARGS, FLAGS and EXIT CODES and exit `0`
   instead of `2`.
 

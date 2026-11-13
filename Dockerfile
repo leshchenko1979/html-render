@@ -37,8 +37,9 @@ RUN find src -name '*.rs' -exec touch {} +
 # --locked, for the same reason parity and release use it: the committed
 # Cargo.lock is the resolved graph the published numbers were measured on, so a
 # build that would re-resolve must fail here rather than drift silently.
-# The liveness check RENDERS, it does not ask for --help: this binary has no
-# --help flag (unknown flags print usage and exit 2), so `--help` made the guard
+# The liveness check RENDERS rather than asking for --help. `--help` now exits 0,
+# but it proves only that the binary loads, not that the renderer works: an image
+# with a broken font stack answers --help happily. Rendering is the real check.
 # itself the build failure — it proved nothing about the renderer while failing
 # every build. A 4x4 fragment exercises the whole path (parse, lay out, rasterise,
 # encode) and the PNG magic number proves a real image came out, which is what

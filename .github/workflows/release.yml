@@ -191,7 +191,8 @@ jobs:
           echo "built:   $BUILT"
           echo "fetched: $FETCHED"
           [ "$BUILT" = "$FETCHED" ] || { echo "::error::published asset differs from the build"; exit 1; }
-          # `--help` is not a flag: the CLI prints usage and exits 2, which
+          # `--help` exits 0, but it proves only that the binary loads; the render
+          # below is what proves the build. The `--help` line is a cheap smoke check, which
           # `pipefail` would turn into a failed step. The render below is the
           # real liveness check, so tolerate the usage exit.
           ./html-render --help 2>&1 | head -3 || true
