@@ -49,6 +49,10 @@ jobs:
           tags: |
             type=ref,event=tag
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            # A dispatch has no tag, so `type=ref,event=tag` yields nothing and
+            # the metadata step warns that no tag was generated. A sha tag is
+            # enough to build, prove and push a testable image from main.
+            type=sha,enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Build and load
         uses: docker/build-push-action@v6
@@ -70,7 +74,15 @@ jobs:
           libs=$(echo "$out" | grep -c '=>' || true)
           echo "libraries resolved: $libs, missing: $missing"
           test "$missing" -eq 0 || { echo "::error::$missing libraries not found"; exit 1; }
-          test "$libs" -eq 13 || { echo "::error::expected 13 libraries, got $libs"; exit 1; }
+          # 2 libraries is the signature of the stub binary: `fn main() { print }`
+          # links libc and libgcc_s and nothing else. A mtime-preserving COPY
+          # over a layer that already compiled a stub makes cargo skip the real
+          # build, so the count is what tells the two apart.
+          test "$libs" -eq 13 || {
+            echo "::error::expected 13 libraries, got $libs"
+            echo "2 means the image carries the build stub, not the renderer"
+            exit 1
+          }
 
       - name: Assert the font is the one the assets name
         # A silent substitution re-wraps every line of text while the PNG still

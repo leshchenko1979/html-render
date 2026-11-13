@@ -26,10 +26,20 @@ RUN mkdir -p src \
  && rm -rf src target/release/render target/release/deps/render-*
 
 COPY src ./src
+# `touch` is not tidiness, it is the fix for a trap that shipped a stub binary
+# once. Docker's COPY preserves the mtimes from the build context, and a git
+# checkout's mtimes are OLDER than the stub compiled in the layer above. Cargo
+# compares mtimes against its fingerprint, decides nothing changed, skips the
+# rebuild, and the image then carries `fn main() { println!("stub") }`: a binary
+# that starts, prints one line, and links 2 libraries instead of 13. The layer
+# that was supposed to be thrown away is the one that ended up in the image.
+RUN find src -name '*.rs' -exec touch {} +
 # --locked, for the same reason parity and release use it: the committed
 # Cargo.lock is the resolved graph the published numbers were measured on, so a
 # build that would re-resolve must fail here rather than drift silently.
-RUN cargo build --release --locked
+RUN cargo build --release --locked \
+ && ./target/release/render --help > /dev/null \
+ && test "$(ldd target/release/render | grep -c '=>')" -gt 5
 
 # ---- runtime -------------------------------------------------------------
 FROM debian:bookworm-slim
