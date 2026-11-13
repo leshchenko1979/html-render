@@ -4,9 +4,23 @@
 
 **HTML + CSS → PNG, with no browser.**
 
+**Linux x86_64, glibc ≥ 2.35.** No macOS, no Windows, no Docker image.
+
+```bash
+# the image above is this command's output, byte for byte
+html-render assets/hero.html hero.png 1600 900 2 --document
+```
+
 A small Rust CLI that renders real documents — stylesheets, flexbox, grid, images,
 web fonts — using [Blitz](https://github.com/DioxusLabs/blitz)'s Stylo + Taffy +
 Vello pipeline. No Chromium, no JavaScript engine, one process.
+
+## Status
+
+`0.3.0-beta`, ten days old, one maintainer. No API promise: flags and output
+names may change between minor versions. Linux only. One known layout defect —
+four corpus boxes, consecutive `<br>` runs in a `font-size:0` inline-block
+context (see [Corpus](#corpus)).
 
 It exists to answer a concrete question: can a 25 MB binary replace a 500 MB
 browser for server-side rendering? On a real 12-slide, 4 MB deck, yes:
@@ -26,7 +40,8 @@ different numbers by construction.
 
 ## Install
 
-Linux x86_64, glibc ≥ 2.35. From a [release](https://github.com/leshchenko1979/html-render/releases):
+No package manager, no toolchain — a static-ish binary plus glibc. From a
+[release](https://github.com/leshchenko1979/html-render/releases):
 
 ```bash
 V=v0.3.0-beta.4-r2
