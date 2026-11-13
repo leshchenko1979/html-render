@@ -258,7 +258,9 @@ silent.
 full-height canvas that is cropped afterwards — the same picture for a third of
 the peak memory. Not byte-identical: on the 4-slide demo deck the two strategies
 differ on 0 / 75 / 58 / 125 pixels of 3.69 M per slide, never by more than one
-channel level, because a scrolled canvas rounds its origin differently.
+channel level, because a scrolled canvas rounds its origin differently. It is a
+clip-mode reading and nothing else reads it, so passing it without `--clip`
+exits `2` rather than being silently ignored.
 
 ```bash
 # a 12-slide deck, 2560×1440 per slide, ~93 MiB peak
@@ -295,8 +297,9 @@ in CI against the binary built from the same commit:
 | Code | Means |
 |---|---|
 | `0` | the PNG, or the whole clip directory, was written; or `--help` / `--version` printed and exited |
-| `2` | wrong argument count, an unknown flag, or `--clip` not first |
+| `2` | wrong argument count, an unknown flag, `--clip` not first, or `--scroll` outside `--clip` |
 | `3` | the selector matched nothing, or every match had no layout box |
+| `4` | an asset fetch hit its deadline: the output was written, but may be missing images |
 | `101` | a panic: an unparsable number, an invalid selector, an input file that cannot be read |
 
 `101` is a panic, not a diagnosis: the message names a line in `src/main.rs`
@@ -304,18 +307,21 @@ rather than the argument you got wrong, so read the argument before the file.
 
 **This table describes the published binary.** `v0.3.0-beta.5` was cut from
 `main` specifically to close the gap where the tarball and this page disagreed:
-`tools/test_exit_codes.py` passes all fifteen legs against the released asset,
+`tools/test_exit_codes.py` passes all twenty legs against the released asset,
 `--help` exits `0` and prints the flag list, an unknown flag exits `2`, and
 single-image mode creates its output directory. Earlier releases
-(`v0.3.0-beta.4-r2` and before) predate those fixes: nine of the fifteen legs
-fail against r2, including `--help`, `--version` and the outdir panic.
+(`v0.3.0-beta.4-r2` and before) predate those fixes: 21 failed assertions across
+14 legs, including `--help`, `--version` and the outdir panic. The legs added
+for codes `4` and the `--scroll` rule are not in beta.5 either: they land after
+it, so a beta.5 binary fails those two.
 
 **The failure with no exit code is the one to watch.** Unsupported CSS is
 ignored, not rejected: an unimplemented property or value falls back to its
 initial value, the layout settles around it, and a plausible PNG comes out. No
 warning, no non-zero exit. A clean run proves the document rendered, not that it
 rendered as designed — check the properties you depend on against a browser
-once, before trusting a deck to this.
+once, before trusting a deck to this. (A missing *image* is no longer in this
+class: the asset deadline exits `4`.)
 
 ## Fidelity
 

@@ -4,6 +4,33 @@ Newest first. Every entry names its commit range, so it can be re-derived with
 `git log --oneline <prev>..<tag>` rather than trusted. Pre-1.0: flags and output
 names may change between minor versions, and this file is where that shows up.
 
+## Unreleased
+
+**Fixed**
+
+- `--scroll` without `--clip` is a usage error (`2`). It was accepted in
+  single-image mode and ignored, so the flag looked honoured while the output
+  was the plain full-document render — the same "did something else, said
+  nothing" class as a mistyped flag.
+- Clip mode sweeps `clip_NN.png` frames left by a previous, longer run before it
+  paints. Numbering restarts at 1 each run, so a re-render matching fewer
+  elements left the old tail in place and a caller could not tell a 3-frame dump
+  from a 9-frame one. The sweep matches `clip_` + digits + `.png` exactly and
+  reports the count.
+- An asset that never arrives now exits `4` instead of `0`. The drain loop used
+  to print `warning: asset fetch deadline reached, painting anyway`, write a
+  plausible PNG missing its images, and report success — the one failure mode
+  with no exit code at all. The output is still written (diagnosis beats
+  nothing) but the run no longer claims success.
+- `--help` and `--version` are honoured anywhere in argv, not only at `argv[1]`.
+  `html-render in.html out.png 794 900 --help` fell through to the arity check
+  and exited `2`, so the flag looked broken from the position a reader is most
+  likely to type it.
+
+`tools/test_exit_codes.py` grew from 15 legs to 20 and pins all four: against
+the pre-fix binary all four new legs fail, and against `v0.3.0-beta.4-r2` the
+suite prints 21 failed assertions across 14 legs.
+
 ## v0.3.0-beta.5 — 2026-11-13
 
 Everything landed since `v0.3.0-beta.4-r2`. The raw list is

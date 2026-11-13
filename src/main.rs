@@ -90,11 +90,44 @@ fn help_text() -> String {
          \n\
          EXIT CODES:\n\
          \x20 0    the PNG, or the clip directory, was written\n\
-         \x20 2    wrong argument count, an unknown flag, or --clip not first\n\
+         \x20 2    wrong argument count, an unknown flag, --clip not first, or --scroll outside --clip\n\
          \x20 3    the selector matched nothing, or every match had no layout box\n\
+         \x20 4    an asset fetch hit the deadline; the output was written but may be incomplete\n\
          \x20 101  a panic: an unparsable number, an invalid selector, an unreadable input\n",
         version = env!("CARGO_PKG_VERSION")
     )
+}
+
+/// Remove `clip_NN.png` files left in `dir` by an earlier, longer run.
+///
+/// Clip numbering restarts at 1 every run, so a re-render that matches FEWER
+/// elements used to leave the tail of the previous dump behind: the caller saw
+/// `clip_01..clip_03` beside stale `clip_04..clip_09` and could not tell a
+/// short dump from a complete one. The pattern is exact (`clip_` + digits +
+/// `.png`), so nothing else in the directory is touched, and the count is
+/// reported rather than removed silently.
+fn remove_stale_clip_frames(dir: &Path) -> usize {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    let mut removed = 0usize;
+    for entry in entries.flatten() {
+        let os_name = entry.file_name();
+        let Some(name) = os_name.to_str() else { continue };
+        let Some(rest) = name.strip_prefix("clip_") else {
+            continue;
+        };
+        let Some(stem) = rest.strip_suffix(".png") else {
+            continue;
+        };
+        if stem.is_empty() || !stem.bytes().all(|b| b.is_ascii_digit()) {
+            continue;
+        }
+        if std::fs::remove_file(entry.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
 }
 
 async fn real_main() {
@@ -104,18 +137,19 @@ async fn real_main() {
     // reading a README, and both used to exit 2 with "unknown flag". A usage
     // request is not an error: it is the one exit that must be 0, or `docker
     // run image --help` and every `cmd --help | head` pipeline reads as broken.
-    if let Some(first) = args.get(1) {
-        match first.as_str() {
-            "--help" | "-h" => {
-                print!("{}", help_text());
-                std::process::exit(0);
-            }
-            "--version" | "-V" => {
-                println!("html-render {}", env!("CARGO_PKG_VERSION"));
-                std::process::exit(0);
-            }
-            _ => {}
-        }
+    //
+    // Scanned over EVERY argument, not just argv[1]: a reader who types
+    // `html-render in.html out.png 794 900 --help` is asking for the same text,
+    // and honouring it only in first position made the flag look broken from
+    // the one place it is easiest to type. No positional is a flag, so a scan
+    // cannot steal one; `--help` wins if both are present.
+    if args.iter().skip(1).any(|a| a == "--help" || a == "-h") {
+        print!("{}", help_text());
+        std::process::exit(0);
+    }
+    if args.iter().skip(1).any(|a| a == "--version" || a == "-V") {
+        println!("html-render {}", env!("CARGO_PKG_VERSION"));
+        std::process::exit(0);
     }
 
     let clip = args.get(1).map(|a| a == "--clip").unwrap_or(false);
@@ -159,6 +193,16 @@ async fn real_main() {
         }
         if a == "--clip" && i != 1 {
             eprintln!("--clip must be the first argument");
+            eprintln!("{usage}");
+            std::process::exit(2);
+        }
+        // `--scroll` is a clip-mode reading and nothing else reads it. Accepting
+        // it in single-image mode and ignoring it made the flag look honoured
+        // while the output was the plain full-document render — the same
+        // "silently did something else" class as an unknown flag, so it is an
+        // error here too. The non-clip usage line does not list it.
+        if a == "--scroll" && !clip {
+            eprintln!("--scroll only applies to --clip mode");
             eprintln!("{usage}");
             std::process::exit(2);
         }
@@ -267,6 +311,9 @@ async fn real_main() {
     let mut quiet = 0u32;
     let mut pass = 0u32;
     let trace = std::env::var("BLITZ_TRACE").is_ok();
+    // Set when the drain loop gives up on a slow asset. The paint still runs —
+    // a partial PNG beats no PNG for diagnosis — but the run exits 4, not 0.
+    let mut asset_deadline_hit = false;
     loop {
         if trace && pass < TRACE_PASSES {
             eprintln!("pass {pass}: before resolve count={} empty={}", net.count(), net.is_empty());
@@ -302,7 +349,15 @@ async fn real_main() {
             }
         }
         if Instant::now() > deadline {
-            eprintln!("warning: asset fetch deadline reached, painting anyway");
+            // This used to print a warning and exit 0 with a plausible PNG of a
+            // document whose images never arrived — the one failure mode with
+            // no exit code at all. The output is still written (diagnosis is
+            // worth more than nothing) but the run now exits 4.
+            eprintln!(
+                "warning: asset fetch deadline reached after {deadline_secs}s; \
+                 output will be written but may be missing images"
+            );
+            asset_deadline_hit = true;
             break;
         }
     }
@@ -354,6 +409,12 @@ async fn real_main() {
                 std::process::exit(3);
             }
             std::fs::create_dir_all(out_path).expect("create outdir");
+            // Swept BEFORE painting: a crash mid-emit must not leave a mixed
+            // dump of this run's frames and the previous run's tail.
+            let stale = remove_stale_clip_frames(Path::new(out_path));
+            if stale > 0 {
+                eprintln!("removed {stale} stale clip frame(s) from a previous run");
+            }
             let s = scale as f64;
 
             // Every matched element's box, in document coordinates, at scroll 0.
@@ -475,6 +536,13 @@ async fn real_main() {
         scale,
         if as_document { "document" } else { "fragment" }
     );
+
+    // After the diagnostics, so a caller still gets the timing that says how
+    // far the run got before the asset deadline.
+    if asset_deadline_hit {
+        eprintln!("error: exiting 4: assets may be missing (see the warning above)");
+        std::process::exit(4);
+    }
 }
 
 /// Paint a `w`x`h` physical-pixel region whose top-left is at (`x`, `y`) in
