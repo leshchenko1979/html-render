@@ -194,32 +194,6 @@ positioning, CSS variables, `box-sizing`, `min`/`max` sizing, auto margins,
   **ignored, not rejected** — a gap shows up as a property that had no effect,
   never as an error. See [Exit codes](#exit-codes).
 
-## Building
-
-The build is a GitHub Actions job, because the host this was written on forbids
-local Rust compilation. Three workflows:
-
-| Workflow | Trigger | Output |
-|---|---|---|
-| `parity.yml` | push touching `src/`, `Cargo.*`, `build.rs`, `fixtures/`, `tools/` or the workflow itself; or manual | builds, runs the clip and exit-code tests, measures the corpus, uploads results |
-| `drain-probe.yml` | manual dispatch only | builds, measures the image drain loop under each `BLITZ_DRAIN` mode, uploads the report |
-| `release.yml` | push a `v*` tag, or manual | builds, packages, publishes, **then verifies the published asset** |
-
-Two hard requirements, both learned the hard way:
-
-- **`runs-on: ubuntu-22.04`, never `ubuntu-latest`.** The `latest` image produced
-  a `GLIBC_2.43` binary that would not start on a glibc 2.39 host. The runner is
-  pinned, and a guard fails the build if any `GLIBC_*` symbol exceeds 2.35 —
-  otherwise a future image bump silently raises the floor again.
-- **`libfontconfig1-dev`** is needed to build Stylo.
-
-Locally, where Rust is allowed:
-
-```bash
-cargo build --release
-python3 tools/run_parity.py --blitz target/release/render
-```
-
 ## Alternatives
 
 Use one of these instead when the constraint is theirs, not ours:
@@ -252,6 +226,32 @@ The 4 divergent boxes are one open defect: consecutive `<br>` runs in a
 `font-size:0` inline-block context, where the deltas grow 16 px per extra break.
 Six further boxes involve text and are reported separately, because without an
 identical embedded font they measure font availability rather than layout.
+
+## Building
+
+The build is a GitHub Actions job, because the host this was written on forbids
+local Rust compilation. Three workflows:
+
+| Workflow | Trigger | Output |
+|---|---|---|
+| `parity.yml` | push touching `src/`, `Cargo.*`, `build.rs`, `fixtures/`, `tools/` or the workflow itself; or manual | builds, runs the clip and exit-code tests, measures the corpus, uploads results |
+| `drain-probe.yml` | manual dispatch only | builds, measures the image drain loop under each `BLITZ_DRAIN` mode, uploads the report |
+| `release.yml` | push a `v*` tag, or manual | builds, packages, publishes, **then verifies the published asset** |
+
+Two hard requirements, both learned the hard way:
+
+- **`runs-on: ubuntu-22.04`, never `ubuntu-latest`.** The `latest` image produced
+  a `GLIBC_2.43` binary that would not start on a glibc 2.39 host. The runner is
+  pinned, and a guard fails the build if any `GLIBC_*` symbol exceeds 2.35 —
+  otherwise a future image bump silently raises the floor again.
+- **`libfontconfig1-dev`** is needed to build Stylo.
+
+Locally, where Rust is allowed:
+
+```bash
+cargo build --release
+python3 tools/run_parity.py --blitz target/release/render
+```
 
 ## Licence
 
