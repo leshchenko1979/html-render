@@ -211,6 +211,14 @@ Use one of these instead when the constraint is theirs, not ours:
   13.36 s this exists to avoid, and it is the right call when fidelity to Chrome
   *is* the requirement rather than an implementation detail.
 
+## Security
+
+No JavaScript engine is compiled in, so a document cannot execute code. **That is
+not the same thing as a sandbox:** `http(s)://` sub-resources are fetched at
+render time with no allowlist, and `file://` is readable, so rendering untrusted
+HTML gives that HTML the network reach of the machine you render on. Details,
+the measured egress proof, and how to report: [SECURITY.md](SECURITY.md).
+
 ## Corpus
 
 `fixtures/` holds 31 documents that each paint elements in exact probe colours, so
