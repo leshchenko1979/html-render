@@ -24,8 +24,26 @@ are closed ranges and do not drift.
   instead of failing on `gh release create`, and the build resolves the
   dispatched tag rather than only asserting it exists.
 
+**Added**
+
+- `tools/css_audit.py`: reports which declarations change no pixel, by removing
+  one at a time and diffing the PNG. No supported-property list — that rots with
+  Blitz, and a stale list calls a dropped declaration fine. Says "no pixel
+  effect", never "unsupported", because a pixel diff cannot tell a dropped
+  declaration from one another rule already sets.
+- `Cargo.lock`, resolved by `lockfile.yml` (326 packages) and committed back.
+  Five crates were ranges, so two builds of one commit could resolve different
+  graphs while `GATES.md` quoted numbers as if they could not.
+- A container image (`container.yml`, GHCR): 13 libraries, the glibc floor and
+  `DejaVu Sans` discharged once. The binary is not self-contained, and a host
+  without DejaVu re-wraps every line with no warning.
+- `dependabot.yml` gains the `cargo` ecosystem, which it could not have before
+  the lockfile existed.
+
 **Changed**
 
+- Builds use `cargo build --release --locked`, so a `Cargo.toml` that resolves
+  to a different graph fails instead of silently re-resolving.
 - `parity` runs on a `paths` allowlist with per-ref `concurrency`, so a docs
   commit no longer buys a Rust build and a superseded push stops paying for one.
 - `drain-probe` is dispatch-only. It answers one question and was paying a
