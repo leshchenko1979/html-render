@@ -44,3 +44,21 @@ routing it is still ours.
   will use the memory it needs. Bound it with your own timeout and memory limit.
 - **Pixels that differ from Chromium.** A fidelity gap is a correctness issue,
   reported as a normal issue — see the [Corpus](README.md#corpus) section.
+
+## This repository's own supply chain
+
+Every `uses:` in `.github/workflows/` is pinned to a full commit SHA, with the
+version in a trailing comment so a reader still knows what it was. A tag can be
+re-pointed at a different commit; a SHA cannot, and a silently swapped action is
+the shape of most CI compromises.
+
+`dtolnay/rust-toolchain` is the single exception, and it is not an oversight: that
+action's **ref name is its input**. `@stable` means "install stable", and a bare
+SHA arrives with no toolchain spec and fails on `'toolchain' is a required
+input`. It is pinned to a `master` commit with `toolchain: stable` passed
+explicitly, so the code is frozen and the toolchain still tracks stable.
+
+`.github/dependabot.yml` keeps the pins current. Minor and patch bumps arrive as
+one grouped PR; majors arrive separately, because both `checkout` and
+`upload-artifact` v7 changed runner and module requirements and a major is not
+something to merge unread.
