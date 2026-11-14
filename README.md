@@ -2,6 +2,10 @@
 
 ![html-render: HTML + CSS to PNG with no browser](assets/hero.png)
 
+[![parity](https://github.com/leshchenko1979/html-render/actions/workflows/parity.yml/badge.svg)](https://github.com/leshchenko1979/html-render/actions/workflows/parity.yml)
+[![release](https://img.shields.io/github/v/release/leshchenko1979/html-render)](https://github.com/leshchenko1979/html-render/releases)
+[![licence](https://img.shields.io/github/license/leshchenko1979/html-render)](https://github.com/leshchenko1979/html-render/blob/main/LICENSE)
+
 **HTML + CSS → PNG, with no browser.**
 
 **Linux x86_64, glibc ≥ 2.35.** No macOS, no Windows. A container image carries
@@ -17,12 +21,19 @@ A small Rust CLI that renders real documents — stylesheets, flexbox, grid, ima
 web fonts — using [Blitz](https://github.com/DioxusLabs/blitz)'s Stylo + Taffy +
 Vello pipeline. No Chromium, no JavaScript engine, one process.
 
+## Contents
+
+- [Status](#status) · [Install](#install) · [Use cases](#use-cases) · [Usage](#usage)
+- [Fidelity](#fidelity) · [What it doesn't](#what-it-doesnt) · [Security](#security)
+- [Contributing](#contributing) · [Licence](#licence)
+
 ## Status
 
 `0.3.0-beta.6`, one maintainer. No API promise: flags and output
 names may change between minor versions. Linux only. Two known layout defects,
 eleven corpus boxes: consecutive `<br>` runs in a `font-size:0` inline-block
-context (4 boxes) and table layout, up to 18 px short (7 boxes, issue #9). See
+context (4 boxes) and table layout, up to 18 px short (7 boxes,
+[issue #9](https://github.com/leshchenko1979/html-render/issues/9)). See
 [the corpus gate](GATES.md#corpus).
 
 It exists to answer a concrete question: can a 25 MB binary replace a 500 MB
@@ -112,22 +123,6 @@ html-render --clip assets/demo-deck.html slides/ 1280 720 2 'section.slide' --do
 for i in $(seq 10); do html-render assets/demo-deck.html /tmp/r$i.png 1280 720 1 --document; done
 sha256sum /tmp/r*.png | awk '{print $1}' | sort -u | wc -l   # → 1
 ```
-
-## Use cases
-
-Four things this is used for, each one a file you can name:
-
-- **Slide images from HTML/CSS.** A deck authored as `<section class="slide">`
-  becomes one PNG per slide at any scale, with no browser in the loop —
-  `--clip` writes `clip_01.png`, `clip_02.png`, … in document order.
-- **Open Graph and social cards.** [`assets/og.png`](assets/og.png) is
-  2560×1280 — a 1280×640 card at scale 2 — rendered from
-  [`assets/og.html`](assets/og.html) by
-  `html-render assets/og.html og.png 1280 640 2 --document`.
-- **CI visual diffs.** Deterministic output makes a changed pixel a changed
-  document: commit the PNG, diff the PNG, fail the build.
-- **Report and chart images.** One-pagers and dashboards where the layout is CSS
-  and the alternative is a screenshot service you have to keep warm.
 
 ## Install
 
@@ -255,6 +250,22 @@ closure **of the image it just built**, not a number copied from a release log �
 why that distinction matters is in
 [CONTRIBUTING.md](CONTRIBUTING.md#building).
 
+## Use cases
+
+Four things this is used for, each one a file you can name:
+
+- **Slide images from HTML/CSS.** A deck authored as `<section class="slide">`
+  becomes one PNG per slide at any scale, with no browser in the loop —
+  `--clip` writes `clip_01.png`, `clip_02.png`, … in document order.
+- **Open Graph and social cards.** [`assets/og.png`](assets/og.png) is
+  2560×1280 — a 1280×640 card at scale 2 — rendered from
+  [`assets/og.html`](assets/og.html) by
+  `html-render assets/og.html og.png 1280 640 2 --document`.
+- **CI visual diffs.** Deterministic output makes a changed pixel a changed
+  document: commit the PNG, diff the PNG, fail the build.
+- **Report and chart images.** One-pagers and dashboards where the layout is CSS
+  and the alternative is a screenshot service you have to keep warm.
+
 ## Usage
 
 Two modes. Both take the **viewport in CSS pixels**; `scale` multiplies the
@@ -373,6 +384,23 @@ rendered as designed — check the properties you depend on against a browser
 once, before trusting a deck to this. (A missing *image* is no longer in this
 class: the asset deadline exits `4`.)
 
+### Environment variables
+
+Four, all optional, read once at startup from the process environment. They
+exist for diagnosis and for reproducing a measurement; none of them changes what
+a successful render looks like.
+
+| Variable | Default | Effect |
+|---|---|---|
+| `BLITZ_DEADLINE_SECS` | `120` | How long a sub-resource fetch may take before the image is painted **absent**. The render still finishes and writes a PNG, but exits `4` instead of `0`, so a slow origin is visible in the exit code rather than only in the picture. |
+| `BLITZ_DRAIN` | `quiet` | Selects the sub-resource drain loop, so the documented pattern and the one that works can be compared on the same binary: `naive`, `naive2`, `yield`, `quiet`. `naive` loses images on both runtime flavours; `quiet` is what the shipped build uses. `tools/drain_probe.py` sweeps them. |
+| `BLITZ_RUNTIME` | current-thread | `multi` selects the tokio multi-thread runtime, reproducing upstream's `#[tokio::main]` examples. Anything else, including unset, uses the current-thread runtime the CLI ships with. |
+| `BLITZ_TRACE` | unset | Set to anything and every drain pass prints its resolve count and emptiness to stderr. Diagnostic only; it never changes the PNG. |
+
+They are deliberately not listed in `--help`: that text is tested against the
+argument parser by `tools/test_exit_codes.py`, and an environment variable is not
+an argument.
+
 ## Fidelity
 
 Measured against Chromium 151 on the same document, same viewport, same scale:
@@ -458,7 +486,8 @@ The 11 divergent boxes are two open defects: four from consecutive `<br>` runs i
 a `font-size:0` inline-block context, where the deltas grow 16 px per extra break,
 and seven from table layout — every box in `table-collapse.html` diverges, the
 table landing 18 px shorter than Chromium's and two cells at half height
-(issue #9). `tools/parity_baseline.json` pins all eleven, so a *new* divergence
+([issue #9](https://github.com/leshchenko1979/html-render/issues/9)).
+`tools/parity_baseline.json` pins all eleven, so a *new* divergence
 still fails the build.
 
 **`absence` is a pass, not a gap.** One fixture (`margin-auto-stretch`) asserts
@@ -489,4 +518,5 @@ Two rules that bite before you open a pull request:
 
 ## Licence
 
-Apache-2.0. Same licence as Blitz itself, and it carries an explicit patent grant.
+Apache-2.0 — see [LICENSE](LICENSE).
+Same licence as Blitz itself, and it carries an explicit patent grant.
