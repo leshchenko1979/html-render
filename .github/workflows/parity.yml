@@ -148,6 +148,24 @@ jobs:
           rel_ver=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
           rel_ver=${rel_ver#v}
 
+          # The README names one exact asset, and the glob above accepts any
+          # spelling of it: `html-render_*.tar.gz` keeps matching if a release
+          # renames the platform suffix from `linux_amd64` to `linux-x86_64`,
+          # and `sha256sum -c` keeps passing because checksums.txt is published
+          # beside the tarball it names. So the install snippet could 404 while
+          # this job stayed green -- the same class of drift as the version
+          # mismatch it was built to catch, one field over. Assert the filename
+          # the page tells people to download, and list what actually shipped.
+          want="html-render_${main_ver}_linux_amd64.tar.gz"
+          if [ -f "$want" ]; then
+            echo "README install snippet names $want and the release carries it"
+          elif [ "$main_ver" = "$rel_ver" ]; then
+            echo "::error::README install snippet downloads $want; the $rel_ver release carries: $(ls html-render_*.tar.gz | tr '\n' ' ')"
+            exit 1
+          else
+            echo "::warning::README documents $main_ver, not yet released; latest is $rel_ver"
+          fi
+
           if python3 ../tools/test_exit_codes.py --bin ./html-render; then
             echo "published $rel_ver satisfies the contract this tree documents"
           elif [ "$main_ver" = "$rel_ver" ]; then
