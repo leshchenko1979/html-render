@@ -114,12 +114,24 @@ fn help_text() -> String {
 /// Rewriting the url back to the requested one before the handler sees it makes
 /// both sides of that map agree, and needs no fork of the dependency.
 struct RequestedUrlProvider {
-    inner: Arc<dyn NetProvider>,
+    inner: Arc<Provider>,
 }
 
 impl RequestedUrlProvider {
-    fn new(inner: Arc<dyn NetProvider>) -> Self {
+    fn new(inner: Arc<Provider>) -> Self {
         Self { inner }
+    }
+
+    /// In-flight request count. `Provider` exposes this as an inherent method
+    /// derived from its waker's refcount (`count`, `is_empty`), not through the
+    /// `NetProvider` trait, so a wrapper has to forward them by hand or the
+    /// drain loop loses the only signal that tells it the fetches are done.
+    fn count(&self) -> usize {
+        self.inner.count()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
     }
 }
 
