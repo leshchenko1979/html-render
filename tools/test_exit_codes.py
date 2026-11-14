@@ -143,6 +143,13 @@ def main():
         check("2 --scroll outside --clip", [doc, os.path.join(tmp, "sc.png"), "120", "60", "1", "--scroll"], 2,
               want_err="only applies to --clip")
 
+        # 2 — `--full` is a single-image reading: it makes the canvas the
+        # document's own height. Clip mode already derives its canvas from the
+        # matched elements, so the flag would name nothing there. Accepting it
+        # and ignoring it is the same defect as `--scroll` above, mirrored.
+        check("2 --full with --clip", ["--clip", doc, os.path.join(tmp, "fu"), "120", "60", "1", "div", "--full"], 2,
+              want_err="only applies to single-image")
+
         # 0 — stale clip frames are swept. Numbering restarts at 1 each run, so
         # a shorter re-render used to leave the previous run's tail in place and
         # a caller could not tell a 1-frame dump from a 5-frame one. The sweep

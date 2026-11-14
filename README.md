@@ -90,9 +90,13 @@ exit code:** check the magic bytes and the IHDR dimensions against
 `width × scale`, and diff against a golden render, which determinism makes exact.
 
 The deck is not part of this repo (4.16 MB, embedded JPEGs, four `@font-face`
-faces). Every figure here and in [GATES.md](GATES.md) is reproduced from your own
-document with `python3 tools/gates.py --deck <path>` — a different deck gives
-different numbers by construction.
+faces), so the headline cost table below is **history, not a gate**: nobody
+outside this project can re-run it, because the input is not here. What
+`python3 tools/gates.py --deck <path>` reproduces is the *method* — fidelity,
+determinism and dimensions on **your** document — and a different deck gives
+different numbers by construction. `tools/gates.py` has no cost gate at all
+(`grep '^def ' tools/gates.py` lists `gate_a`, `gate_b`, `gate_c`), so it never
+measures Chromium wall time or RSS.
 
 [`assets/demo-deck.html`](assets/demo-deck.html) is a four-slide, 4 KB layout
 fixture in the repo, so the two recipes are runnable from a fresh clone without
@@ -259,11 +263,22 @@ output resolution (scale 2 → a 1280×720 viewport produces 2560×1440).
 
 ```bash
 # one image
-html-render page.html out.png 1280 720 [scale] [--document] [--fragment]
+html-render page.html out.png 1280 720 [scale] [--document] [--fragment] [--full]
 
 # one PNG per element matching a selector
 html-render --clip deck.html png/ 1280 720 2 'section.slide' [--document] [--fragment] [--scroll]
 ```
+
+**Single-image mode paints exactly `<width> × <height>`, so a taller document is
+cut.** A 2200 px page rendered at `800 600` produces an 800×600 PNG of its top
+600 px — exit `0`, nothing on stderr, the rest of the page simply gone. This is
+the trap behind the "one-pagers and dashboards" recommendation above: those are
+precisely the documents taller than a viewport. Pass `--full` to make the canvas
+the document's own scroll height instead (`800×2200` for the same page), or use
+clip mode with a selector that matches the whole body, which derives its canvas
+from the element. The default stays the viewport because every golden image in
+this repo and in CI was rendered that way; `tools/test_full_page.py` pins both
+halves — that the default cuts, and that `--full` does not.
 
 `--help` prints those two lines plus every flag and exit code and exits `0`;
 `--version` prints the version and exits `0`. Both used to exit `2` with
@@ -346,8 +361,8 @@ rather than the argument you got wrong, so read the argument before the file.
 **This table describes `main`, not every release.** `v0.3.0-beta.5` was cut to
 close most of the gap between the tarball and this page, and it is a real
 improvement on `v0.3.0-beta.4-r2` — but it is not this table. Measured on the
-published beta.5 asset, `tools/test_exit_codes.py` **passes 13 of its 20 legs**
-and fails seven:
+published beta.5 asset, `tools/test_exit_codes.py` **passes 13 of its 21 legs**
+and fails eight:
 
 | Fails on beta.5 | Because |
 |---|---|
@@ -358,6 +373,7 @@ and fails seven:
 | stale `clip_NN.png` swept | beta.5 leaves frames from a previous run in place |
 | stale sweep leaves only the new frames | same |
 | code `4` on an asset deadline | beta.5 prints "painting anyway" and exits `0` |
+| `--full` with `--clip` rejected | beta.5 has no `--full` at all: `unknown flag`, `rc=2` |
 
 `v0.3.0-beta.4-r2` and before fail 21 assertions across 14 legs, including
 `--help`, `--version` and the outdir panic. A release cut from this commit
@@ -480,6 +496,10 @@ positioning, CSS variables, `box-sizing`, `min`/`max` sizing, auto margins,
 - **JavaScript.** No script engine is compiled in. That is the point: no
   script-execution surface, and no 200 MB of V8.
 - **PDF.** PNG only. For paged output see [Alternatives](#alternatives).
+- **A canvas taller than the viewport, unless you ask.** Single-image mode cuts
+  at `<height>`; `--full` raises the canvas to the document, but nothing here
+  paginates a long page into several images. Use clip mode with a selector for
+  that.
 - **`@page` and print layout.** No page boxes, no `@page` margins, no page
   counters. A document authored for print renders as one continuous page at the
   viewport you asked for. This is not the same gap as "exotic selectors": if you

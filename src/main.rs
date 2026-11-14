@@ -73,7 +73,7 @@ fn help_text() -> String {
          HTML + CSS to PNG, with no browser.\n\
          \n\
          USAGE:\n\
-         \x20 html-render <html> <out.png> <width> <height> [scale] [--document] [--fragment]\n\
+         \x20 html-render <html> <out.png> <width> <height> [scale] [--document] [--fragment] [--full]\n\
          \x20 html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--scroll]\n\
          \n\
          ARGS:\n\
@@ -86,12 +86,14 @@ fn help_text() -> String {
          \x20 --document    treat the file as a full document (default: auto-detected)\n\
          \x20 --fragment    treat the file as a fragment and wrap it\n\
          \x20 --scroll      clip mode: scroll to each element instead of cropping\n\
+         \x20 --full        single image: canvas height = the document, not <height>\n\
          \x20 -h, --help    print this text and exit 0\n\
          \x20 -V, --version print the version and exit 0\n\
          \n\
          EXIT CODES:\n\
          \x20 0    the PNG, or the clip directory, was written\n\
-         \x20 2    wrong argument count, an unknown flag, --clip not first, or --scroll outside --clip\n\
+         \x20 2    wrong argument count, an unknown flag, --clip not first, --scroll outside\n\
+         \x20      --clip, or --full with --clip\n\
          \x20 3    the selector matched nothing, or every match had no layout box\n\
          \x20 4    an asset fetch hit the deadline; the output was written but may be incomplete\n\
          \x20 101  a panic: an unparsable number, an invalid selector, an unreadable input\n",
@@ -227,6 +229,7 @@ async fn real_main() {
     // cropped afterwards. Same picture — 0/75/58/125 pixels of 3.69 M differ by
     // one channel level on the demo deck — for a fraction of the peak memory.
     let use_scroll = args.iter().any(|a| a == "--scroll");
+    let full_page = args.iter().any(|a| a == "--full");
 
     // Positional args start after the program name, plus the `--clip` marker.
     let pos: Vec<&String> = args
@@ -238,7 +241,7 @@ async fn real_main() {
     let usage = if clip {
         "usage: html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--scroll]"
     } else {
-        "usage: html-render <html> <out.png> <width> <height> [scale] [--document] [--fragment]"
+        "usage: html-render <html> <out.png> <width> <height> [scale] [--document] [--fragment] [--full]"
     };
 
     // A flag we do not implement is an error, not noise to be filtered away.
@@ -252,7 +255,7 @@ async fn real_main() {
         }
         if !matches!(
             a.as_str(),
-            "--clip" | "--document" | "--fragment" | "--scroll"
+            "--clip" | "--document" | "--fragment" | "--scroll" | "--full"
         ) {
             eprintln!("unknown flag {a:?}");
             eprintln!("{usage}");
@@ -270,6 +273,15 @@ async fn real_main() {
         // error here too. The non-clip usage line does not list it.
         if a == "--scroll" && !clip {
             eprintln!("--scroll only applies to --clip mode");
+            eprintln!("{usage}");
+            std::process::exit(2);
+        }
+        // `--full` asks for the document's own height as the canvas. In clip
+        // mode the canvas is already derived from the matched elements, so the
+        // flag would name nothing; accepting it there would be the same
+        // "looks honoured, changes nothing" defect as `--scroll` outside clip.
+        if a == "--full" && clip {
+            eprintln!("--full only applies to single-image mode");
             eprintln!("{usage}");
             std::process::exit(2);
         }
@@ -461,12 +473,23 @@ async fn real_main() {
                     std::fs::create_dir_all(parent).expect("create outdir");
                 }
             }
-            let buffer = paint_region(&mut document, 0, 0, phys_w, phys_h, scale);
+            // Without `--full` the canvas is exactly the requested viewport,
+            // so a document taller than `height` is CUT with rc=0 — a plausible
+            // PNG of the top of the page and nothing on stderr. `--full` asks
+            // for the document's own scroll height instead; the default stays
+            // the viewport so existing goldens do not move.
+            let out_phys_h = if full_page {
+                let css_h = document.root_element().scroll_height();
+                ((css_h * scale).round() as u32).max(phys_h)
+            } else {
+                phys_h
+            };
+            let buffer = paint_region(&mut document, 0, 0, phys_w, out_phys_h, scale);
             write_png(
                 File::create(out_path).expect("create png"),
                 &buffer,
                 phys_w,
-                phys_h,
+                out_phys_h,
             );
         }
         Some(sel) => {
