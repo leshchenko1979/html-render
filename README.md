@@ -542,7 +542,7 @@ the markup. `tools/run_parity.py` renders every fixture through Blitz and throug
 Chromium and reports per-box deltas:
 
 ```
-VERDICT  text-free (54 boxes): 42 exact, 0 within 1px, 11 divergent, 0 missing, 1 absence
+VERDICT  text-free (54 rows): 42 exact, 0 within 1px, 11 divergent, 0 missing, 1 absence
 ```
 
 The 11 divergent boxes are two open defects: four from consecutive `<br>` runs in
@@ -563,9 +563,10 @@ boxes Chromium painted and Blitz did not.
 **This is a gate, not a report.** `tools/parity_baseline.json` pins the four
 known divergences by `fixture:colour` with their measured delta, and
 `run_parity.py` exits `1` on a new divergence, on one that grew, on a missing
-box, on a fixture that stopped running — and on a baseline entry that stopped
-diverging, so a fix cannot leave a stale tolerance behind that later hides the
-same box regressing. `python3 tools/test_parity_gate.py` proves each of those
+box, on a corpus that lost rows, on a fixture that stopped running, on a
+baseline that predates a field it now checks — and on a baseline entry that
+stopped diverging, so a fix cannot leave a stale tolerance behind that later
+hides the same box regressing. `python3 tools/test_parity_gate.py` proves each of those
 legs fails, without needing a browser.
 
 ## Building

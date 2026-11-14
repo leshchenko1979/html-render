@@ -239,7 +239,7 @@ def main():
 
     def line(label, c, n):
         return (
-            f"{label} ({n} boxes): {c['exact']} exact, {c['within 1px']} within 1px, "
+            f"{label} ({n} rows): {c['exact']} exact, {c['within 1px']} within 1px, "
             f"{c['DIFF']} divergent, {c['MISSING']} missing, {c['absence']} absence"
         )
 
@@ -275,7 +275,7 @@ def main():
             fh.write("\n")
         print(f"\nBASELINE rewritten: {BASELINE}")
         print(
-            f"  {current['text_free_boxes']} boxes, "
+            f"  {current['text_free_rows']} rows, "
             f"{len(current['divergent'])} divergent, "
             f"{len(current['absence'])} absence"
         )
@@ -298,7 +298,7 @@ def main():
         )
         sys.exit(1)
     print(
-        f"\nGATE  PASS  {current['text_free_boxes']} boxes, "
+        f"\nGATE  PASS  {current['text_free_rows']} rows, "
         f"{len(current['divergent'])} known divergence(s) within baseline, "
         f"{len(current['absence'])} absence"
     )
@@ -347,8 +347,16 @@ def gate(clean, fixtures, baseline):
         problems.append(f"BASELINE STALE {key}: pinned at {want[key]}px, no longer divergent")
     for key in missing:
         problems.append(f"MISSING box {key}")
-    if baseline.get("text_free_boxes") is not None and len(clean) != baseline["text_free_boxes"]:
-        problems.append(f"BOX COUNT {len(clean)} != baseline {baseline['text_free_boxes']}")
+    # Keyed on text_free_rows, not text_free_boxes: `clean` is a bucket of
+    # verdict ROWS, and one of them is an absence assertion that has no box
+    # at all. A missing key is a STALE baseline, never a skip -- renaming the
+    # field must not disarm the count check.
+    if "text_free_rows" not in baseline:
+        problems.append(
+            "BASELINE STALE no text_free_rows key (regenerate with --update-baseline)"
+        )
+    elif len(clean) != baseline["text_free_rows"]:
+        problems.append(f"ROW COUNT {len(clean)} != baseline {baseline['text_free_rows']}")
     if baseline.get("fixtures") is not None and len(fixtures) != baseline["fixtures"]:
         problems.append(f"FIXTURE COUNT {len(fixtures)} != baseline {baseline['fixtures']}")
     if sorted(absences) != sorted(baseline.get("absence", [])):
@@ -357,7 +365,7 @@ def gate(clean, fixtures, baseline):
         )
     return problems, {
         "fixtures": len(fixtures),
-        "text_free_boxes": len(clean),
+        "text_free_rows": len(clean),
         "divergent": dict(sorted(divergent.items())),
         "absence": sorted(absences),
     }

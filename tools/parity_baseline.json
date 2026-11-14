@@ -1,7 +1,7 @@
 {
   "note": "Known divergence between Blitz and Chromium on the text-free corpus. run_parity.py exits 1 on a NEW divergence, on a delta that grew, on a baseline entry that no longer diverges (update this file in the commit that fixes it), and on any missing box. Rewrite with --update-baseline and read the diff before committing it. The seven table-collapse entries are a real defect, not noise: Blitz computes table row heights differently from Chromium (the whole table is 18px shorter and one cell is 12px where Chromium paints 28px). They are pinned so that a REGRESSION in table layout still reddens, and so that an improvement fails until this file is updated in the same commit.",
   "fixtures": 32,
-  "text_free_boxes": 54,
+  "text_free_rows": 54,
   "divergent": {
     "br-run-blocks:blue": 38,
     "br-run-blocks:green": 22,

@@ -4,6 +4,24 @@ Newest first. Every entry names its commit range, so it can be re-derived with
 `git log --oneline <prev>..<tag>` rather than trusted. Pre-1.0: flags and output
 names may change between minor versions, and this file is where that shows up.
 
+## Unreleased
+
+**Fixed**
+
+- The corpus verdict line said `text-free (54 boxes)` while one of those 54
+  entries is an absence assertion with no box at all — `run_parity.py`'s own
+  comment two lines above says "there is no box to compare and the absence
+  itself is the assertion". 53 boxes, 54 rows. The baseline key is now
+  `text_free_rows`, and the line says `rows`.
+- That count check was guarded by `baseline.get("text_free_boxes") is not None`,
+  so renaming the key would have skipped it silently — a check that passes
+  because it never ran. A baseline missing the key is now a hard failure, with
+  a leg in `test_parity_gate.py` that proves it.
+- `tools/test_parity_gate.py` printed a hand-written `legs run: 12 / PASS`. It
+  counts its legs now. A hardcoded leg count is the same class of lie as a
+  hardcoded measurement: it stays 12 when a leg is added, and 12 when one is
+  deleted.
+
 ## v0.3.0-beta.6 — 2026-11-14
 
 Raw list: `git log --oneline v0.3.0-beta.5..v0.3.0-beta.6`. This cut exists so

@@ -188,17 +188,18 @@ def main():
     # These numbers drifted once already: README said "47 boxes ... 4 divergent"
     # while the baseline pinned 54 and 11, and both were "measured". They are
     # derived here from the same file the gate reads, so prose and gate cannot
-    # disagree without this failing. Note the absence: it is a CATEGORY, not a
-    # box, which is why 42 + 11 + 1 sums to the 54 the line quotes.
+    # disagree without this failing. The unit is a verdict ROW, not a box: the
+    # absence assertion has no box, which is why 42 + 11 + 1 sums to the 54
+    # rows the line quotes while only 53 of them are boxes.
     import json as _json
     baseline = _json.load(open(os.path.join(ROOT, "tools", "parity_baseline.json"),
                                encoding="utf-8"))
-    boxes = baseline["text_free_boxes"]
+    rows = baseline["text_free_rows"]
     divergent = len(baseline["divergent"])
     absences = len(baseline["absence"])
-    exact = boxes - divergent - absences
-    claim("README", readme, "text-free (%d boxes): %d exact, 0 within 1px, "
-          "%d divergent, 0 missing, %d absence" % (boxes, exact, divergent, absences),
+    exact = rows - divergent - absences
+    claim("README", readme, "text-free (%d rows): %d exact, 0 within 1px, "
+          "%d divergent, 0 missing, %d absence" % (rows, exact, divergent, absences),
           "tools/parity_baseline.json")
     claim("README", readme, "%d divergent boxes are two open defects" % divergent,
           "baseline divergence count")
