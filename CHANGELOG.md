@@ -4,7 +4,33 @@ Newest first. Every entry names its commit range, so it can be re-derived with
 `git log --oneline <prev>..<tag>` rather than trusted. Pre-1.0: flags and output
 names may change between minor versions, and this file is where that shows up.
 
-## Unreleased
+## v0.3.0-beta.6 — 2026-11-14
+
+Raw list: `git log --oneline v0.3.0-beta.5..v0.3.0-beta.6`. This cut exists so
+the published tarball finally passes the contract the page documents: `beta.5`
+failed 8 of the 21 legs, and CI can now prove that against the release itself
+rather than against its own build.
+
+**Added**
+
+- `--full` paints the whole document instead of the viewport. Single-image
+  mode sized the canvas from the width/height arguments and cut anything
+  taller — 2200 px at `800 600` produced an 800x600 PNG, lost the bottom 1600
+  px, and exited `0` with nothing on stderr. `--scroll` is clip-only, so it
+  never helped here. The escape hatch existed (`--clip body` returns 800x2200)
+  but had to be guessed. Height now comes from
+  `root_element().scroll_height()`; `--full` with `--clip` is a usage error
+  (`2`) because they are two different modes.
+- `tools/test_full_page.py`: leg (a) pins the truncation trap itself so a
+  change to the default is visible, (b) and (c) prove `--full` raises the
+  canvas to the document and never below it. Against the pre-fix binary (a)
+  passes and (b)/(c) fail.
+- CI runs the exit-code contract against the **published tarball**, not only
+  against the binary the job just built. Every previous step tested the
+  latter, which is how the page and `beta.5` drifted apart with both
+  considered verified. The step downloads the release, verifies
+  `checksums.txt`, and runs the suite; it is soft until a release is cut from
+  `main`, then it becomes a hard gate.
 
 **Fixed**
 
@@ -27,8 +53,8 @@ names may change between minor versions, and this file is where that shows up.
   and exited `2`, so the flag looked broken from the position a reader is most
   likely to type it.
 
-`tools/test_exit_codes.py` grew from 15 legs to 20 and pins all four: against
-the pre-fix binary all four new legs fail, and against `v0.3.0-beta.4-r2` the
+`tools/test_exit_codes.py` grew from 15 legs to 21 and pins all five: against
+the pre-fix binary every new leg fails, and against `v0.3.0-beta.4-r2` the
 suite prints 21 failed assertions across 14 legs.
 
 ## v0.3.0-beta.5 — 2026-11-13
