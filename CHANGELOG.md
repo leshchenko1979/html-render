@@ -34,6 +34,29 @@ names may change between minor versions, and this file is where that shows up.
   runtime now, and the docstring states what the script prints instead of
   what a previous edit remembered.
 
+**Changed**
+
+- README rewritten from scratch against a researched structure rather than
+  edited in place: 522 lines to 172, one screen per section. Every figure the
+  CI guard checks is still present, so `check_claims.py` reads 36 claims PASS
+  and `--selftest` 5/5 — but they now sit where a cold visitor meets them
+  instead of inside the methodology that derived them.
+- The seven open defects left the README as prose and became issues #9-#15,
+  each filed with the measurement that exposes it. The README keeps one line
+  per defect and the issue number; the repro, the deltas and the dates live on
+  the tracker.
+- `GATES.md` was referenced by five workflows and the guard but linked from
+  nowhere in the README — the measurement document was orphaned while the page
+  carried its contents. It is linked now, under "Where the detail lives".
+
+**Documented**
+
+- The README's account of a failed sub-resource was wrong: it claimed the
+  decode OOM was swallowed into a blank PNG at exit 0. Measured on beta.6 it
+  aborts with `memory allocation of 324000000 bytes failed`, exit 134, and
+  writes no file. Issue #11 carries the correction and the README no longer
+  repeats the claim.
+
 ## v0.3.0-beta.6 — 2026-11-14
 
 Raw list: `git log --oneline v0.3.0-beta.5..v0.3.0-beta.6`. This cut exists so
