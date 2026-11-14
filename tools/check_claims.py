@@ -184,6 +184,25 @@ def main():
         if hits:
             fails.append("retired claim %r survives in %s" % (retired, ", ".join(hits)))
 
+    # --- the version the page claims to document ----------------------------
+    # The Status line and the install snippet name a release. Both are copies of
+    # Cargo.toml, and both drifted: after beta.6 was cut the page still said
+    # beta.5 in two places, so a reader following the install snippet would
+    # download an artefact the page had just called stale. Derived from
+    # Cargo.toml, so a bump that forgets the page fails here instead of shipping.
+    version = ""
+    for line in read("Cargo.toml").splitlines():
+        if line.startswith("version = "):
+            version = line.split('"')[1]
+            break
+    if not version:
+        fails.append("Cargo.toml carries no version line")
+    else:
+        claim("README", readme, "`%s`, one maintainer" % version, "Cargo.toml version")
+        claim("README", readme, "V=v%s" % version, "Cargo.toml version, install tag")
+        claim("README", readme, "N=html-render_%s_linux_amd64" % version,
+              "Cargo.toml version, asset name")
+
     # --- the corpus verdict ------------------------------------------------
     # These numbers drifted once already: README said "47 boxes ... 4 divergent"
     # while the baseline pinned 54 and 11, and both were "measured". They are

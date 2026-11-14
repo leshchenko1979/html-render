@@ -19,7 +19,7 @@ Vello pipeline. No Chromium, no JavaScript engine, one process.
 
 ## Status
 
-`0.3.0-beta.5`, one maintainer. No API promise: flags and output
+`0.3.0-beta.6`, one maintainer. No API promise: flags and output
 names may change between minor versions. Linux only. Two known layout defects,
 eleven corpus boxes: consecutive `<br>` runs in a `font-size:0` inline-block
 context (4 boxes) and table layout, up to 18 px short (7 boxes, issue #9). See
@@ -74,15 +74,16 @@ changes the picture without changing the input.
 
 ### Remote assets fail silently, and the failure looks like success
 
-Measured on beta.5, every one of these writes a PNG, prints nothing beyond
-`TIMING`, and exits `0`:
+Every one of these writes a PNG, prints nothing beyond `TIMING`, and exits `0`.
+The redirect row is fixed in `v0.3.0-beta.6` and pinned by
+`tools/test_redirect.py`; the rest still stand:
 
 | Case | What you get |
 |---|---|
-| `302` / `301` / `307` redirect | both hops are fetched (the server log shows them), the image is **not painted** — a 759-byte blank PNG. Any CDN or signed-URL origin hits this |
 | `404`, or a `200` with a body that is not an image | blank box, no diagnostic |
 | a 197 KB image that decodes to 522 MB of pixels | no cap on decoded size: RSS follows the image, not the document |
 | decode OOM under `ulimit -v` | the panic is swallowed and a blank PNG is written with `rc=0` |
+| **fixed in beta.6:** `302` / `301` / `307` redirect | both hops were fetched and the image was then **dropped**, because Blitz keyed the decoded result on the *final* URL while the node was registered under the *requested* one. Every CDN and signed-URL origin hit it. `--bin` a beta.5 build and leg `b-redirect` still fails: `painted=False wanted=True` |
 
 So the pipeline this README recommends — commit the PNG, diff the PNG, fail the
 build — is the only thing that catches a dropped asset. **Verify the PNG, not the
@@ -134,8 +135,8 @@ one: it links glibc and the font stack at runtime. From a
 [release](https://github.com/leshchenko1979/html-render/releases):
 
 ```bash
-V=v0.3.0-beta.5
-N=html-render_0.3.0-beta.5_linux_amd64
+V=v0.3.0-beta.6
+N=html-render_0.3.0-beta.6_linux_amd64
 BASE="https://github.com/leshchenko1979/html-render/releases/download/$V"
 
 curl -fsSL -O "$BASE/$N.tar.gz"
@@ -358,26 +359,21 @@ against the binary built from the same commit:
 `101` is a panic, not a diagnosis: the message names a line in `src/main.rs`
 rather than the argument you got wrong, so read the argument before the file.
 
-**This table describes `main`, not every release.** `v0.3.0-beta.5` was cut to
-close most of the gap between the tarball and this page, and it is a real
-improvement on `v0.3.0-beta.4-r2` — but it is not this table. Measured on the
-published beta.5 asset, `tools/test_exit_codes.py` **passes 13 of its 21 legs**
-and fails eight:
+**`v0.3.0-beta.6` is the first release that satisfies this table.** Earlier ones
+do not, and the numbers below are what `tools/test_exit_codes.py` prints against
+each artefact — not a hand-written summary:
 
-| Fails on beta.5 | Because |
-|---|---|
-| `--help` after another argument | beta.5 only honours it at `argv[1]`: `rc=2`, "unknown flag" |
-| `-V` after another argument | beta.5 tries to parse it as the scale and panics: `rc=101` |
-| `--help` text mentions code `4` | the code landed after beta.5 |
-| `--scroll` outside `--clip` | beta.5 exits `0` and silently ignores it |
-| stale `clip_NN.png` swept | beta.5 leaves frames from a previous run in place |
-| stale sweep leaves only the new frames | same |
-| code `4` on an asset deadline | beta.5 prints "painting anyway" and exits `0` |
-| `--full` with `--clip` rejected | beta.5 has no `--full` at all: `unknown flag`, `rc=2` |
+| Published asset | Contract | Because |
+|---|---|---|
+| `v0.3.0-beta.6` | **all 21 legs hold** | cut from the commit this page documents |
+| `v0.3.0-beta.5` | 8 failed assertions | `--help` only at `argv[1]`; `-V` panics (`rc=101`); no code `4`; `--scroll` silently ignored; stale frames kept; `--full` unknown |
+| `v0.3.0-beta.4-r2` | 22 failed assertions | all of the above plus `--help` exits `2`, `--version` exits `2`, and a single image into a missing directory panics |
 
-`v0.3.0-beta.4-r2` and before fail 21 assertions across 14 legs, including
-`--help`, `--version` and the outdir panic. A release cut from this commit
-closes the rest.
+A release older than this page is not a scandal — the page moves and artefacts
+don't. What would be a scandal is the page claiming otherwise, which is why the
+published-artefact step in CI is now a **hard gate**: when `Cargo.toml` and the
+release tag name the same version, a failing leg fails the build. A tag that
+predates `main` only warns, so red still means something.
 
 **The failure with no exit code is the one to watch.** Unsupported CSS is
 ignored, not rejected: an unimplemented property or value falls back to its
