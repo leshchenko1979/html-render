@@ -21,6 +21,18 @@ names may change between minor versions, and this file is where that shows up.
   counts its legs now. A hardcoded leg count is the same class of lie as a
   hardcoded measurement: it stays 12 when a leg is added, and 12 when one is
   deleted.
+- The asset-deadline leg bet on a non-routable address (`10.255.255.1`) to make
+  a fetch block. That is a bet on network failure MODE, not on the renderer:
+  while the kernel retries, connect hangs and the deadline trips; once an ICMP
+  unreachable is cached, connect fails in milliseconds, the deadline never
+  arrives, and the leg reports a product defect that is really a routing
+  coincidence. It now blocks on a localhost socket that accepts and never
+  writes, so the fetch blocks by construction.
+- `tools/test_exit_codes.py` claimed in its own docstring that r2 fails "21
+  leg(s) ... across 14 distinct legs". Neither number was measured: the run
+  prints 22 failed assertions across 21 legs. Both totals are counted at
+  runtime now, and the docstring states what the script prints instead of
+  what a previous edit remembered.
 
 ## v0.3.0-beta.6 — 2026-11-14
 

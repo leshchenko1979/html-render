@@ -9,20 +9,23 @@ tested here — one scripted pass, against the binary CI just built.
     python3 tools/test_exit_codes.py --bin target/release/render
 
 Exit 0 = the contract holds. Exit 1 = it does not (the message says which leg).
-Run it against the published r2 binary and it prints "21 leg(s) failed" — the
-point being that a test which cannot observe the defect it was written for is
-decoration.
+Run it against the published r2 binary and most legs fail — the point being that
+a test which cannot observe the defect it was written for is decoration.
 
-The summary counts failed *assertions*, not legs: r2 prints "21 leg(s) failed"
-across 14 distinct legs, because the `--help` leg alone contributes six of them
-(exit code plus five stdout checks).
+The summary counts both numbers at runtime: failed ASSERTIONS and the LEGS that
+ran. They differ, because one leg can report several failures (the `--help` leg
+checks an exit code and a handful of stdout needles). Neither total is written
+by hand here, because a hand-written total is the same class of lie as a
+hand-written measurement: it stays put when a leg is added or deleted.
 """
 
 import argparse
 import os
+import socket
 import subprocess
 import sys
 import tempfile
+import threading
 
 # One box, one boxless pair, one empty document. Small enough that the whole
 # pass is a few hundred milliseconds and can afford to run on every push.
@@ -45,14 +48,51 @@ def run(binary, argv, env=None):
     return p.returncode, p.stdout, p.stderr
 
 
+def black_hole():
+    """A local TCP server that accepts and then says nothing.
+
+    The asset-deadline leg needs a fetch that BLOCKS. A non-routable address
+    looks like it does, but it is a bet on network failure MODE: while the
+    kernel is still retrying, connect hangs and the deadline trips; the moment
+    an ICMP unreachable is cached, connect fails in milliseconds, the image
+    errors out instead of blocking, the deadline never arrives, and the leg
+    reports a product defect that is really a routing coincidence. Measured
+    once against the published beta.6 -- layout_ms=13, rc=0, no warning -- and
+    21/21 passed on the same binary a minute later.
+
+    This server accepts the connection and never writes a byte, so the client
+    blocks for exactly as long as its deadline allows. No routing, no DNS, no
+    external host: the leg is a property of the renderer, not of the network.
+    """
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(8)
+    held = []
+
+    def serve():
+        while True:
+            try:
+                conn, _ = srv.accept()
+            except OSError:
+                return
+            held.append(conn)  # keep it open, never respond
+
+    threading.Thread(target=serve, daemon=True).start()
+    return srv.getsockname()[1]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", required=True, help="path to the renderer binary")
     args = ap.parse_args()
     binary = os.path.abspath(args.bin)
     fails = []
+    legs = 0
 
     def check(name, argv, want_rc, want_err=None, env=None):
+        nonlocal legs
+        legs += 1
         rc, out, err = run(binary, argv, env=env)
         why = []
         if rc != want_rc:
@@ -181,13 +221,14 @@ def main():
         # 4 — an asset that never arrives. The drain loop gives up at the
         # deadline and still paints, which used to exit 0 with a plausible PNG
         # missing its images: the one failure mode with no exit code at all.
-        # 10.255.255.1 is non-routable, so the fetch cannot complete; a 1 s
-        # deadline keeps the leg fast.
+        # The server below accepts and never answers, so the fetch blocks for
+        # the full deadline by construction rather than by routing luck.
+        port = black_hole()
         slow = os.path.join(tmp, "slow.html")
         with open(slow, "w") as fh:
             fh.write('<!doctype html><html><body style="margin:0">'
-                     '<img src="http://10.255.255.1/never.png" width="40" height="20">'
-                     "</body></html>\n")
+                     '<img src="http://127.0.0.1:%d/never.png" width="40" height="20">'
+                     "</body></html>\n" % port)
         try:
             check("4 asset deadline", [slow, os.path.join(tmp, "slow.png"), "120", "60"], 4,
                   want_err="deadline", env={"BLITZ_DEADLINE_SECS": "1"})
@@ -201,11 +242,15 @@ def main():
         check("101 missing input", [os.path.join(tmp, "nope.html"), os.path.join(tmp, "m.png"), "120", "60"], 101)
 
     if fails:
-        print("\n%d leg(s) failed:" % len(fails))
+        # Both numbers are counted, never written by hand. They differ because a
+        # single leg can report more than one failed assertion (the --help leg
+        # checks one exit code and several stdout needles), and a hardcoded
+        # total would stay put when a leg is added or deleted.
+        print("\n%d failed assertion(s) across %d leg(s):" % (len(fails), legs))
         for f in fails:
             print("  - " + f)
         return 1
-    print("\nall legs hold")
+    print("\nall %d legs hold" % legs)
     return 0
 
 
