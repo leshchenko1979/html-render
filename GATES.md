@@ -152,3 +152,23 @@ is a line-box *height* computation in a `font-size: 0` + inline-block context,
 still unidentified and unfiled.
 
 **"`Provider::is_empty()` races the first poll."** Also wrong: see trap 1.
+
+## Corpus
+
+`tools/run_parity.py` renders every fixture in `fixtures/` through Blitz and
+through Chromium and compares per-box geometry, each fixture painting its probes
+in exact colours so the PNG can be read without the instrument knowing anything
+about the markup. README quotes the current verdict; what does not belong on a
+landing page lives here.
+
+Six further boxes involve text and are reported separately, because without an
+identical embedded font they measure font availability rather than layout.
+
+**This is a gate, not a report.** `tools/parity_baseline.json` pins every
+divergent box by `fixture:colour` with its measured delta, and `run_parity.py`
+exits `1` on a new divergence, on one that grew, on a missing box, on a corpus
+that lost rows, on a fixture that stopped running, on a baseline that predates a
+field it now checks — and on a baseline entry that stopped diverging, so a fix
+cannot leave a stale tolerance behind that later hides the same box regressing.
+`python3 tools/test_parity_gate.py` proves each of those legs fails, without
+needing a browser.

@@ -23,7 +23,7 @@ Vello pipeline. No Chromium, no JavaScript engine, one process.
 names may change between minor versions. Linux only. Two known layout defects,
 eleven corpus boxes: consecutive `<br>` runs in a `font-size:0` inline-block
 context (4 boxes) and table layout, up to 18 px short (7 boxes, issue #9). See
-[Corpus](#corpus).
+[the corpus gate](GATES.md#corpus).
 
 It exists to answer a concrete question: can a 25 MB binary replace a 500 MB
 browser for server-side rendering? On a real 12-slide, 4 MB deck, yes
@@ -547,23 +547,15 @@ and seven from table layout — every box in `table-collapse.html` diverges, the
 table landing 18 px shorter than Chromium's and two cells at half height
 (issue #9). `tools/parity_baseline.json` pins all eleven, so a *new* divergence
 still fails the build.
-Six further boxes involve text and are reported separately, because without an
-identical embedded font they measure font availability rather than layout.
 
 **`absence` is a pass, not a gap.** One fixture (`margin-auto-stretch`) asserts
 that *neither* engine paints a probe, because auto cross margins cancel the
-stretch: there is no box to compare, and the absence itself is the assertion. So
-`1 absence` counts one fixture that behaved correctly, and `0 missing` counts
-boxes Chromium painted and Blitz did not.
+stretch: there is no box to compare, and the absence itself is the assertion.
 
-**This is a gate, not a report.** `tools/parity_baseline.json` pins the four
-known divergences by `fixture:colour` with their measured delta, and
-`run_parity.py` exits `1` on a new divergence, on one that grew, on a missing
-box, on a corpus that lost rows, on a fixture that stopped running, on a
-baseline that predates a field it now checks — and on a baseline entry that
-stopped diverging, so a fix cannot leave a stale tolerance behind that later
-hides the same box regressing. `python3 tools/test_parity_gate.py` proves each of those
-legs fails, without needing a browser.
+**This is a gate, not a report.** [GATES.md](GATES.md#corpus) carries the rest:
+the six text-dependent boxes that are reported separately, every leg
+`run_parity.py` exits `1` on, and `tools/test_parity_gate.py`, which proves each
+one fires without needing a browser.
 
 ## Building
 

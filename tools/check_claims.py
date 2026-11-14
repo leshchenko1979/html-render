@@ -62,6 +62,70 @@ ASSETS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Spelled-out counts. A number written in letters is still a claim.
+# ---------------------------------------------------------------------------
+# `claim()` below looks for a computed value ANYWHERE in the text, which is the
+# right test for a single figure and the wrong one for a fact stated twice: the
+# README said "pins the four known divergences" while `parity_baseline.json`
+# pinned eleven, and every claim passed because "11 divergent boxes" appears
+# further up the same file. A digit-boundary regex cannot see a number spelled
+# in letters at all, so the words are enumerated here and read against the same
+# baseline the digits come from.
+WORD_NUMBERS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+}
+
+# Only the "<n> [known] divergence(s)" shape is read, because only that shape
+# states the PINNED TOTAL. The sentence that splits eleven into four and seven
+# legitimately names both numbers, and a guard that fired on every spelled
+# number near the word "divergence" would be red on a correct page — a guard
+# that cries wolf gets muted, which is how this one would die.
+PINNED_DIVERGENCES = re.compile(
+    r"\b(%s|\d+)\s+(?:known\s+)?divergences?\b" % "|".join(WORD_NUMBERS),
+    re.IGNORECASE,
+)
+
+
+def pinned_divergence_counts(text):
+    """Every total stated as "<n> [known] divergence(s)", as integers."""
+    out = []
+    for match in PINNED_DIVERGENCES.finditer(text):
+        token = match.group(1).lower()
+        out.append(WORD_NUMBERS[token] if token in WORD_NUMBERS else int(token))
+    return out
+
+
+def selftest():
+    """Prove the spelled-count guard fires on the defect it was written for.
+
+    A guard nobody has seen fail is indistinguishable from a guard that cannot
+    fail, so the historical text is kept here as the positive control.
+    """
+    cases = [
+        ("historical defect (README L559)",
+         "pins the four\nknown divergences by `fixture:colour`", [4]),
+        ("corrected prose",
+         "pins every divergent box by `fixture:colour`", []),
+        ("the 4 + 7 split is not a pinned total",
+         "The 11 divergent boxes are two open defects: four from consecutive "
+         "`<br>` runs and seven from table layout", []),
+        ("digit form is read too",
+         "the 11 known divergences", [11]),
+        ("singular and plural both read",
+         "four divergences", [4]),
+    ]
+    bad = 0
+    for name, text, want in cases:
+        got = pinned_divergence_counts(text)
+        ok = got == want
+        bad += 0 if ok else 1
+        print("%-44s %s  %r" % (name, "ok" if ok else "FAIL", got))
+    print("\n%d/%d selftest case(s) hold" % (len(cases) - bad, len(cases)))
+    return 1 if bad else 0
+
+
 def read(rel):
     with open(os.path.join(ROOT, rel), encoding="utf-8") as fh:
         return fh.read()
@@ -76,7 +140,12 @@ def png_size(rel):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", default=None, help="also re-render the assets with this binary")
+    ap.add_argument("--selftest", action="store_true",
+                    help="prove the spelled-count guard fires, then exit")
     args = ap.parse_args()
+
+    if args.selftest:
+        return selftest()
 
     readme = read("README.md")
     gates = read("GATES.md")
@@ -225,6 +294,16 @@ def main():
     # The baseline pins a fixture count too; a fixture added without the prose
     # following leaves a page describing a corpus it no longer runs.
     claim("README", readme, str(baseline["fixtures"]), "baseline fixture count")
+    # A count written in letters is a claim too, and `claim()` above cannot see
+    # one. Read every "N [known] divergence(s)" total in both files against the
+    # baseline, so a second sentence about the same fact cannot drift while the
+    # first one keeps the digit claim green.
+    for where, text in (("README", readme), ("GATES", gates)):
+        checked += 1
+        for stated in pinned_divergence_counts(text):
+            if stated != divergent:
+                fails.append("%s states %d pinned divergence(s); the baseline "
+                             "pins %d" % (where, stated, divergent))
 
     # --- optional: re-render the assets and compare -------------------------
     if args.bin:
