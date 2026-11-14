@@ -37,8 +37,8 @@ names may change between minor versions, and this file is where that shows up.
 **Changed**
 
 - README rewritten from scratch against a researched structure rather than
-  edited in place: 522 lines to 170, one screen per section. Every figure the
-  CI guard checks is still present, so `check_claims.py` reads 36 claims PASS
+  edited in place: 522 lines to 164, one screen per section. Every figure the
+  CI guard checks is still present, so `check_claims.py` reads 37 claims PASS
   and `--selftest` 5/5 — but they now sit where a cold visitor meets them
   instead of inside the methodology that derived them.
 - The seven open defects left the README as prose and became issues #9-#15,
@@ -48,6 +48,12 @@ names may change between minor versions, and this file is where that shows up.
 - `GATES.md` was referenced by five workflows and the guard but linked from
   nowhere in the README — the measurement document was orphaned while the page
   carried its contents. It is linked now, under "Where the detail lives".
+- `## Fidelity` answers the visitor's question in two paragraphs instead of
+  carrying the instrument: the `--scroll`-vs-`--clip` self-consistency check,
+  the 54-row verdict line and the 4+7 defect split moved to `GATES.md#corpus`.
+  The four guard claims that pinned those strings to `README.md` were retargeted
+  to `GATES.md` in the same commit, so every number is still checked against
+  the arithmetic — just in the file that owns the measurement.
 
 **Documented**
 

@@ -119,21 +119,15 @@ Method, host and the runs behind these figures: [GATES.md](GATES.md#cost).
 
 ## Fidelity against Chromium
 
-Diffed pixel for pixel against Chromium, the same deck comes out 4.13 % of pixels differing by more than 16 levels — antialiasing and font rasterisation, mostly.
+Diffed pixel for pixel against Chromium at the same viewport and scale, a
+12-slide deck comes out **4.13 % of pixels differing by more than 16 levels** —
+antialiasing and glyph rasterisation, not layout: wrap points match, boxes sit at
+Chromium's coordinates, and every photo region lands at a 0 px shift.
 
-The two painting strategies agree with each other far more closely: `--scroll` differs from `--clip` on 0.0080 % of pixels, 3,551 out of 44,236,800.
-
-Geometry is measured separately, over a text-free corpus of 32 fixtures:
-
-```
-text-free (54 rows): 42 exact, 0 within 1px, 11 divergent, 0 missing, 1 absence
-```
-
-All 11 divergent boxes are two open defects:
-four from consecutive `<br>` runs inside a `font-size:0` context ([#15](https://github.com/leshchenko1979/html-render/issues/15)),
-seven from table layout, up to 18 px out ([#9](https://github.com/leshchenko1979/html-render/issues/9)).
-The remaining 42 rows land where Chromium puts them.
-Per-box record: [GATES.md](GATES.md#corpus).
+Geometry is measured separately over 32 fixtures: 42 of the 54 text-free rows
+land exactly where Chromium puts them. The divergent ones are open defects,
+tracked rather than described here — per-box record in
+[GATES.md](GATES.md#corpus).
 
 ## Limits
 

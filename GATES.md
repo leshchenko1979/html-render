@@ -158,8 +158,19 @@ still unidentified and unfiled.
 `tools/run_parity.py` renders every fixture in `fixtures/` through Blitz and
 through Chromium and compares per-box geometry, each fixture painting its probes
 in exact colours so the PNG can be read without the instrument knowing anything
-about the markup. README quotes the current verdict; what does not belong on a
-landing page lives here.
+about the markup. The current verdict, and the detail that does not belong on a
+landing page, live here.
+
+```
+text-free (54 rows): 42 exact, 0 within 1px, 11 divergent, 0 missing, 1 absence
+```
+
+All 11 divergent boxes are two open defects: four from consecutive `<br>` runs
+inside a `font-size:0` context
+([#15](https://github.com/leshchenko1979/html-render/issues/15)), seven from
+table layout, up to 18 px out
+([#9](https://github.com/leshchenko1979/html-render/issues/9)). The remaining 42
+rows land where Chromium puts them.
 
 Six further boxes involve text and are reported separately, because without an
 identical embedded font they measure font availability rather than layout.

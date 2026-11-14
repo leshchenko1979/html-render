@@ -200,10 +200,9 @@ def main():
 
     # --- pixel counts ------------------------------------------------------
     pct = "%.4f" % (DIFF_PIXELS * 100.0 / TOTAL_PIXELS)
-    claim("README", readme, pct, "3,551/44,236,800")
     claim("GATES", gates, pct, "3,551/44,236,800")
-    claim("README", readme, "{:,}".format(DIFF_PIXELS), "pixels differing")
-    claim("README", readme, "{:,}".format(TOTAL_PIXELS), "12 x 2560 x 1440")
+    claim("GATES", gates, "{:,}".format(DIFF_PIXELS), "pixels differing")
+    claim("GATES", gates, "{:,}".format(TOTAL_PIXELS), "12 x 2560 x 1440")
     # 12 slides x 2560 x 1440 must be the number the docs call the total. This
     # one has no prose to match, so it is a bare assertion rather than a claim.
     checked += 1
@@ -286,10 +285,10 @@ def main():
     divergent = len(baseline["divergent"])
     absences = len(baseline["absence"])
     exact = rows - divergent - absences
-    claim("README", readme, "text-free (%d rows): %d exact, 0 within 1px, "
+    claim("GATES", gates, "text-free (%d rows): %d exact, 0 within 1px, "
           "%d divergent, 0 missing, %d absence" % (rows, exact, divergent, absences),
           "tools/parity_baseline.json")
-    claim("README", readme, "%d divergent boxes are two open defects" % divergent,
+    claim("GATES", gates, "%d divergent boxes are two open defects" % divergent,
           "baseline divergence count")
     # The baseline pins a fixture count too; a fixture added without the prose
     # following leaves a page describing a corpus it no longer runs.

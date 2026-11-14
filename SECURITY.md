@@ -57,7 +57,7 @@ routing it is still ours.
 - **Resource exhaustion from a deliberately huge document.** A 10,000-row table
   will use the memory it needs. Bound it with your own timeout and memory limit.
 - **Pixels that differ from Chromium.** A fidelity gap is a correctness issue,
-  reported as a normal issue — see the [Corpus](README.md#corpus) section.
+  reported as a normal issue — see the [Corpus](GATES.md#corpus) section.
 
 ## This repository's own supply chain
 
