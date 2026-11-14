@@ -38,6 +38,12 @@ DOC = """<!doctype html><html><body style="margin:0">
 EMPTY = """<!doctype html><html><body><p>no divs here</p></body></html>
 """
 
+# Taller than any canvas the renderer can paint (65532 px). Used to prove the
+# ceiling is refused BEFORE painting, so a caller never finds a partial dump.
+TALL = """<!doctype html><html><body style="margin:0">
+<div style="height:70000px"></div></body></html>
+"""
+
 
 def run(binary, argv, env=None):
     full_env = dict(os.environ)
@@ -108,7 +114,8 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         doc = os.path.join(tmp, "doc.html")
         empty = os.path.join(tmp, "empty.html")
-        for path, body in ((doc, DOC), (empty, EMPTY)):
+        tall = os.path.join(tmp, "tall.html")
+        for path, body in ((doc, DOC), (empty, EMPTY), (tall, TALL)):
             with open(path, "w") as fh:
                 fh.write(body)
 
@@ -136,7 +143,7 @@ def main():
         check("0 --help trailing", [doc, os.path.join(tmp, "t.png"), "120", "60", "--help"], 0)
         check("0 -V trailing", [doc, os.path.join(tmp, "t2.png"), "120", "60", "-V"], 0)
         rc, out, _err = run(binary, ["--help"])
-        for needle in ("USAGE:", "--clip", "EXIT CODES:", "101", "4"):
+        for needle in ("USAGE:", "--clip", "--per-element", "EXIT CODES:", "101", "4", "5"):
             if needle not in out:
                 fails.append("--help stdout lacks %r" % needle)
                 print("FAIL --help stdout lacks %r" % needle)
@@ -176,19 +183,39 @@ def main():
         check("3 all matches boxless", ["--clip", doc, os.path.join(tmp, "bl"), "120", "60", "1", "br, wbr"], 3,
               want_err="no layout box")
 
-        # 2 — `--scroll` is a clip-mode reading and nothing else reads it. It
-        # used to be accepted in single-image mode and silently ignored, so the
-        # flag looked honoured while the output was the plain full-document
+        # 2 — `--per-element` is a clip-mode reading and nothing else reads it.
+        # It used to be accepted in single-image mode and silently ignored, so
+        # the flag looked honoured while the output was the plain full-document
         # render — the same "did something else, said nothing" class as a typo.
-        check("2 --scroll outside --clip", [doc, os.path.join(tmp, "sc.png"), "120", "60", "1", "--scroll"], 2,
+        # `--scroll` is the retired spelling, kept as a hidden alias: an alias
+        # that silently stops being honoured is that same defect wearing a
+        # compatibility story, so both spellings are checked.
+        check("2 --per-element outside --clip", [doc, os.path.join(tmp, "sc.png"), "120", "60", "1", "--per-element"], 2,
+              want_err="only applies to --clip")
+        check("2 --scroll alias outside --clip", [doc, os.path.join(tmp, "sc2.png"), "120", "60", "1", "--scroll"], 2,
               want_err="only applies to --clip")
 
         # 2 — `--full` is a single-image reading: it makes the canvas the
         # document's own height. Clip mode already derives its canvas from the
         # matched elements, so the flag would name nothing there. Accepting it
-        # and ignoring it is the same defect as `--scroll` above, mirrored.
+        # and ignoring it is the same defect as `--per-element` above, mirrored.
         check("2 --full with --clip", ["--clip", doc, os.path.join(tmp, "fu"), "120", "60", "1", "div", "--full"], 2,
               want_err="only applies to single-image")
+
+        # 5 — the canvas the renderer cannot paint. Both ceilings are measured
+        # on a released binary: 65408 wide and 65532 tall render, one pixel past
+        # each panics inside vello with an out-of-range index and leaves a
+        # partial dump behind. Refusing up front turns that into one documented
+        # code. The assertion is not the number, it is that NOTHING is written:
+        # a caller reading rc=5 must not find half a file on disk.
+        wide_png = os.path.join(tmp, "wide.png")
+        check("5 canvas too wide", [doc, wide_png, "70000", "60", "1"], 5,
+              want_err="exceeds the renderer limit")
+        if os.path.exists(wide_png):
+            fails.append("5 canvas too wide wrote a file before refusing")
+            print("FAIL 5 canvas too wide wrote a file before refusing")
+        check("5 canvas too tall (--full)", [tall, os.path.join(tmp, "tall.png"), "120", "60", "1", "--full"], 5,
+              want_err="--per-element paints one element-sized canvas")
 
         # 0 — stale clip frames are swept. Numbering restarts at 1 each run, so
         # a shorter re-render used to leave the previous run's tail in place and

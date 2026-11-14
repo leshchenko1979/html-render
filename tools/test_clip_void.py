@@ -64,7 +64,8 @@ def main():
         # 1. The reported panic: '*' over a document with void elements.
         #    Both paint paths, because they build `rects` the same way but crop
         #    differently, and a fix in one is not a fix in the other.
-        for label, extra in (("crop", ()), ("scroll", ("--document", "--scroll"))):
+        for label, extra in (("crop", ()), ("per-element", ("--document", "--per-element")),
+                             ("per-element alias --scroll", ("--document", "--scroll"))):
             outdir = os.path.join(tmp, "out_" + label)
             rc, out, err = run(binary, html, outdir, "*", extra)
             tag = "[%s] '*' with void elements" % label

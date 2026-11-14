@@ -5,7 +5,7 @@
 //! Usage (the crate builds `target/release/render`; the release renames it to
 //! `html-render`, which is the name both strings below use):
 //!   html-render <html> <out.png> <width> <height> [scale] [--document] [--fragment]
-//!   html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--scroll]
+//!   html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--per-element]
 //!
 //! A file that declares its own document root (`<!doctype>`, `<html>`, `<head>`
 //! or `<body>` as its first tag) is rendered as a complete document, verbatim.
@@ -74,21 +74,23 @@ fn help_text() -> String {
          \n\
          USAGE:\n\
          \x20 html-render <html> <out.png> <width> <height> [scale] [--document] [--fragment] [--full]\n\
-         \x20 html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--scroll]\n\
+         \x20 html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--per-element]\n\
          \n\
          MODES:\n\
          \x20 (default)     one PNG of the viewport\n\
          \x20 --full        one PNG, canvas as tall as the whole document\n\
          \x20 --clip        one PNG per selector match, written as clip_NN.png, by\n\
          \x20               one of two strategies:\n\
-         \x20                 (no flag)   paint ONE document-height canvas, then cut each\n\
-         \x20                             frame out of it. Peak memory grows with page\n\
-         \x20                             height; a canvas 65535 px tall or taller fails.\n\
-         \x20                 --scroll    paint each frame on its OWN element-sized canvas,\n\
-         \x20                             viewport scrolled to it. Peak memory stays flat\n\
-         \x20                             and total page height stops mattering, though\n\
-         \x20                             one element past 65535 px still hits the same\n\
-         \x20                             canvas limit.\n\
+         \x20                 (no flag)      paint ONE document-height canvas, then cut\n\
+         \x20                                each frame out of it. Peak memory grows with\n\
+         \x20                                page height.\n\
+         \x20                 --per-element  paint each frame on its OWN element-sized\n\
+         \x20                                canvas, viewport scrolled to it. Peak memory\n\
+         \x20                                stays flat and total page height stops\n\
+         \x20                                mattering.\n\
+         \x20               Either strategy refuses a canvas wider than 65408 px or taller\n\
+         \x20               than 65532 px with exit 5: past that the renderer truncates the\n\
+         \x20               dimension through a u16 and then panics with an index error.\n\
          \n\
          ARGS:\n\
          \x20 <width> <height>   viewport in CSS pixels (scale multiplies the output)\n\
@@ -103,10 +105,13 @@ fn help_text() -> String {
          \n\
          EXIT CODES:\n\
          \x20 0    the PNG, or the clip directory, was written\n\
-         \x20 2    wrong argument count, an unknown flag, --clip not first, --scroll outside\n\
-         \x20      --clip, or --full with --clip\n\
+         \x20 2    wrong argument count, an unknown flag, --clip not first, --per-element\n\
+         \x20      outside --clip, or --full with --clip\n\
          \x20 3    the selector matched nothing, or every match had no layout box\n\
-         \x20 4    an asset fetch hit the deadline; the output was written but may be incomplete\n\
+         \x20 4    the output was written but is known to be incomplete: an asset fetch\n\
+         \x20      hit the deadline, or a frame was cut to the canvas width\n\
+         \x20 5    the canvas would exceed the renderer limit (65408 wide, 65532 tall);\n\
+         \x20      nothing was written\n\
          \x20 101  a panic: an unparsable number, an invalid selector, an unreadable input\n",
         version = env!("CARGO_PKG_VERSION")
     )
@@ -239,7 +244,13 @@ async fn real_main() {
     // scrolled to that element, instead of one full-height canvas that is
     // cropped afterwards. Same picture — 0/75/58/125 pixels of 3.69 M differ by
     // one channel level on the demo deck — for a fraction of the peak memory.
-    let use_scroll = args.iter().any(|a| a == "--scroll");
+    //
+    // `--scroll` named the mechanism, not the choice: every strategy here
+    // scrolls. `--per-element` says what it paints, and is the exact inverse of
+    // the default's ONE document-height canvas. `--scroll` stays accepted so no
+    // existing caller breaks, and stays out of `--help`: a documented alias is a
+    // second name to keep true.
+    let use_per_element = args.iter().any(|a| a == "--per-element" || a == "--scroll");
     let full_page = args.iter().any(|a| a == "--full");
 
     // Positional args start after the program name, plus the `--clip` marker.
@@ -250,7 +261,7 @@ async fn real_main() {
         .collect();
 
     let usage = if clip {
-        "usage: html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--scroll]"
+        "usage: html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--per-element]"
     } else {
         "usage: html-render <html> <out.png> <width> <height> [scale] [--document] [--fragment] [--full]"
     };
@@ -266,7 +277,7 @@ async fn real_main() {
         }
         if !matches!(
             a.as_str(),
-            "--clip" | "--document" | "--fragment" | "--scroll" | "--full"
+            "--clip" | "--document" | "--fragment" | "--per-element" | "--scroll" | "--full"
         ) {
             eprintln!("unknown flag {a:?}");
             eprintln!("{usage}");
@@ -277,20 +288,20 @@ async fn real_main() {
             eprintln!("{usage}");
             std::process::exit(2);
         }
-        // `--scroll` is a clip-mode reading and nothing else reads it. Accepting
-        // it in single-image mode and ignoring it made the flag look honoured
-        // while the output was the plain full-document render — the same
-        // "silently did something else" class as an unknown flag, so it is an
-        // error here too. The non-clip usage line does not list it.
-        if a == "--scroll" && !clip {
-            eprintln!("--scroll only applies to --clip mode");
+        // `--per-element` (and its `--scroll` alias) is a clip-mode reading and
+        // nothing else reads it. Accepting it in single-image mode and ignoring
+        // it made the flag look honoured while the output was the plain
+        // full-document render — the same "silently did something else" class as
+        // an unknown flag, so it is an error here too.
+        if (a == "--per-element" || a == "--scroll") && !clip {
+            eprintln!("--per-element only applies to --clip mode");
             eprintln!("{usage}");
             std::process::exit(2);
         }
         // `--full` asks for the document's own height as the canvas. In clip
         // mode the canvas is already derived from the matched elements, so the
         // flag would name nothing; accepting it there would be the same
-        // "looks honoured, changes nothing" defect as `--scroll` outside clip.
+        // "looks honoured, changes nothing" defect as `--per-element` outside clip.
         if a == "--full" && clip {
             eprintln!("--full only applies to single-image mode");
             eprintln!("{usage}");
@@ -344,9 +355,14 @@ async fn real_main() {
     let doc_html = if as_document {
         source
     } else {
-        format!(
+        let wrapped = format!(
             "<html><head><style>html,body{{margin:0;padding:0;background:#ffffff;}}</style></head><body>{source}</body></html>"
-        )
+        );
+        // The wrapper already copied the text, so `source` is dead from here —
+        // but it stayed alive to the end of `main`, holding a second copy of the
+        // whole file for the entire render.
+        drop(source);
+        wrapped
     };
     let base_url = format!(
         "file://{}",
@@ -473,6 +489,10 @@ async fn real_main() {
     let laid_out = layout_started.elapsed();
 
     let paint_started = Instant::now();
+    // Frames cut to the canvas width. A cut frame is a plausible PNG of part of
+    // the element with rc=0 — the class this CLI keeps closing — so the count is
+    // reported and the run exits 4.
+    let mut clipped_frames = 0usize;
     match selector {
         None => {
             // Clip mode creates its output directory (`create_dir_all` below),
@@ -495,6 +515,7 @@ async fn real_main() {
             } else {
                 phys_h
             };
+            refuse_oversized_canvas(phys_w, out_phys_h);
             let buffer = paint_region(&mut document, 0, 0, phys_w, out_phys_h, scale);
             write_png(
                 File::create(out_path).expect("create png"),
@@ -551,7 +572,7 @@ async fn real_main() {
                 std::process::exit(3);
             }
 
-            if use_scroll {
+            if use_per_element {
                 // One canvas per element, sized to the element, painted at zero
                 // offset with the viewport scrolled to the element's top-left.
                 //
@@ -562,10 +583,11 @@ async fn real_main() {
                 for (i, rect) in rects.iter().enumerate() {
                     let w = (((rect.width * s).round() as u32).max(1));
                     let h = (((rect.height * s).round() as u32).max(1));
+                    refuse_oversized_canvas(w, h);
                     document.set_viewport_scroll(Point { x: rect.x, y: rect.y });
                     let buffer = paint_region(&mut document, 0, 0, w, h, scale);
                     println!(
-                        "clip_{:02} css x={:.2} y={:.2} w={:.2} h={:.2}  physical {}x{} (scroll)",
+                        "clip_{:02} css x={:.2} y={:.2} w={:.2} h={:.2}  physical {}x{} (per-element)",
                         i + 1,
                         rect.x,
                         rect.y,
@@ -598,12 +620,33 @@ async fn real_main() {
                     .max()
                     .unwrap_or(phys_h)
                     .max(phys_h);
+                refuse_oversized_canvas(phys_w, doc_phys_h);
                 let canvas = paint_region(&mut document, 0, 0, phys_w, doc_phys_h, scale);
+
+                // One scratch buffer for every frame, reused across the loop.
+                // Allocating it inside the loop churned a frame-sized block per
+                // slide — 14.7 MiB at 2560x1440 scale 2 — on a deck that can
+                // hold 200 of them.
+                let mut out: Vec<u8> = Vec::new();
 
                 for (i, rect) in rects.iter().enumerate() {
                     let x = ((rect.x * s).round() as u32).min(phys_w.saturating_sub(1));
                     let y = ((rect.y * s).round() as u32).min(doc_phys_h.saturating_sub(1));
-                    let w = (((rect.width * s).round() as u32).max(1)).min(phys_w - x);
+                    // The shared canvas is only as wide as the viewport, so an
+                    // element that overflows it is cut here. Measured before this
+                    // warning existed: a 1600 px element in an 800 px viewport
+                    // produced an 800x100 PNG at rc=0, half the element missing
+                    // and nothing on stderr. `--per-element` paints the element's
+                    // own width, so it is the remedy the warning names.
+                    let want_w = ((rect.width * s).round() as u32).max(1);
+                    if x + want_w > phys_w {
+                        clipped_frames += 1;
+                        eprintln!(
+                            "warning: clip_{:02} is {want_w} px wide but the canvas is {phys_w} px; the frame is cut (--per-element keeps the full width)",
+                            i + 1
+                        );
+                    }
+                    let w = want_w.min(phys_w - x);
                     let h = (((rect.height * s).round() as u32).max(1)).min(doc_phys_h - y);
                     println!(
                         "clip_{:02} css x={:.2} y={:.2} w={:.2} h={:.2}  physical {}x{} at {},{}",
@@ -617,7 +660,12 @@ async fn real_main() {
                         x,
                         y
                     );
-                    let mut out = Vec::with_capacity((w * h * 4) as usize);
+                    // `(w * h * 4) as usize` multiplies in u32 first: past ~4.29
+                    // G pixel-bytes it wraps to a small capacity, and the buffer
+                    // silently reallocates instead. Size it in usize, and reuse
+                    // the buffer declared above the loop.
+                    out.clear();
+                    out.reserve(w as usize * h as usize * 4);
                     for row in 0..h {
                         let start = (((y + row) * phys_w + x) * 4) as usize;
                         out.extend_from_slice(&canvas[start..start + (w * 4) as usize]);
@@ -640,12 +688,52 @@ async fn real_main() {
         if as_document { "document" } else { "fragment" }
     );
 
+    // Reported after the diagnostics, so a caller still gets the timing that
+    // says how far the run got before giving up.
+    if clipped_frames > 0 {
+        eprintln!(
+            "error: exiting 4: {clipped_frames} frame(s) cut to the canvas width (see the warning above)"
+        );
+        std::process::exit(4);
+    }
+
     // After the diagnostics, so a caller still gets the timing that says how
     // far the run got before the asset deadline.
     if asset_deadline_hit {
         eprintln!("error: exiting 4: assets may be missing (see the warning above)");
         std::process::exit(4);
     }
+}
+
+/// The renderer truncates a canvas dimension through a `u16` and then panics on
+/// the resulting out-of-range index, leaving a partial dump on disk. Both
+/// limits are measured on the released binary, not derived:
+///
+///   * height 65532 renders, 65533 panics inside `vello_common` util.rs:238;
+///   * width 65408 renders, 65410 panics inside `vello_cpu` span.rs:88.
+///
+/// Refusing before painting turns "half a dump and a panic" into one documented
+/// code with nothing written.
+const MAX_CANVAS_W: u32 = 65408;
+const MAX_CANVAS_H: u32 = 65532;
+
+/// Refuse a canvas the renderer cannot paint, naming the limit and the remedy.
+///
+/// Exit 5 rather than 4: code 4 means "written, but known incomplete", and this
+/// path writes nothing at all.
+fn refuse_oversized_canvas(w: u32, h: u32) {
+    if w <= MAX_CANVAS_W && h <= MAX_CANVAS_H {
+        return;
+    }
+    eprintln!(
+        "error: canvas {w}x{h} exceeds the renderer limit ({MAX_CANVAS_W}x{MAX_CANVAS_H})"
+    );
+    if h > MAX_CANVAS_H {
+        eprintln!(
+            "hint: --per-element paints one element-sized canvas per match, so total page height stops mattering"
+        );
+    }
+    std::process::exit(5);
 }
 
 /// Paint a `w`x`h` physical-pixel region whose top-left is at (`x`, `y`) in

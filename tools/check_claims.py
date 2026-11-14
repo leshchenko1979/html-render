@@ -32,17 +32,17 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # beside it so a reader can tell a re-measurable figure from a remembered one.
 # ---------------------------------------------------------------------------
 CHROME_WALL_S = 13.36        # 12-slide 4.16 MB deck, Playwright, 12 shots, dsf=2
-SCROLL_WALL_S = 5.37         # same deck, html-render --scroll
+PER_ELEMENT_WALL_S = 5.37         # same deck, html-render --per-element
 CLIP_WALL_S = 5.72           # same deck, html-render --clip
 CHROME_RSS_MIB = 858.0       # largest single process (/usr/bin/time -f %M)
-SCROLL_RSS_MIB = 93.4        # largest single process; html-render is 1 process
+PER_ELEMENT_RSS_MIB = 93.4        # largest single process; html-render is 1 process
 CLIP_RSS_MIB = 275.2         # largest single process
 
 # assets/demo-deck.html, 2560x1440, scale 2, four runs each, tools/measure_rss.py
 TREE_RUNS = (1703.5, 1826.2)
 MAX_RUNS = (297.1, 299.2)
 
-DIFF_PIXELS = 3551           # --scroll vs --clip, 12 slides
+DIFF_PIXELS = 3551           # --per-element vs --clip, 12 slides
 TOTAL_PIXELS = 44236800      # 12 x 2560 x 1440
 
 DECK_MB = "4.16"             # the external deck the cost table was taken on
@@ -178,12 +178,12 @@ def main():
     # --- speed and memory ratios -------------------------------------------
     claim("README", readme, ratio(CHROME_WALL_S, CLIP_WALL_S), "13.36/5.72")
     claim("README", readme, ratio(CHROME_RSS_MIB, CLIP_RSS_MIB), "858/275.2")
-    claim("README", readme, ratio(CHROME_WALL_S, SCROLL_WALL_S), "13.36/5.37")
-    claim("README", readme, ratio(CHROME_RSS_MIB, SCROLL_RSS_MIB), "858/93.4")
+    claim("README", readme, ratio(CHROME_WALL_S, PER_ELEMENT_WALL_S), "13.36/5.37")
+    claim("README", readme, ratio(CHROME_RSS_MIB, PER_ELEMENT_RSS_MIB), "858/93.4")
     # The same speed ratio with the harness's own settle sleep taken out, which
     # the README states beside the raw one. Memory is unaffected: sleeping
     # allocates nothing, so there is no equivalent correction on that row.
-    claim("README", readme, ratio(CHROME_WALL_S - SETTLE_S, SCROLL_WALL_S),
+    claim("README", readme, ratio(CHROME_WALL_S - SETTLE_S, PER_ELEMENT_WALL_S),
           "(13.36 - settle)/5.37")
 
     # The single-process undercount, quoted as a range by README, GATES and the
@@ -195,7 +195,7 @@ def main():
     claim("release body", release, "%s-%s" % (lo, hi), "tree/max range")
 
     # html-render against itself: the 3x is a per-process comparison and holds.
-    claim("GATES", gates, "%d×" % round(CLIP_RSS_MIB / SCROLL_RSS_MIB),
+    claim("GATES", gates, "%d×" % round(CLIP_RSS_MIB / PER_ELEMENT_RSS_MIB),
           "275.2/93.4 rounds to 3")
 
     # --- pixel counts ------------------------------------------------------

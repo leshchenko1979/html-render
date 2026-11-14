@@ -85,7 +85,7 @@ slides, 4 MB — is not in this repo, so these rows are history, not a gate:
 | engine | wall | peak RSS (largest process) |
 |---|---|---|
 | Chromium 151, Playwright, 12 element screenshots at dsf=2 (includes 2.94 s of settle sleeps) | 13.36 s | 858.4 MiB |
-| `--scroll` | **5.37 s** | **93.4 MiB** |
+| `--per-element` | **5.37 s** | **93.4 MiB** |
 | `--clip` (one full-height canvas, cropped) | 5.72 s | 275.2 MiB |
 
 That method is not comparable between the two engines, and the size of the error
@@ -99,11 +99,11 @@ command once it is at hand:
 
     python3 tools/measure_rss.py --rss-mode tree -- <engine command>
 
-`--scroll` paints one element-sized canvas per region instead of one
+`--per-element` paints one element-sized canvas per region instead of one
 full-height canvas, which is where the 3× memory difference comes from — that
 comparison is `html-render` against itself, so both sides are single-process and
 the per-process method is the right one there. It is
-lossless: `--scroll` and `--clip` differ on 3,551 of 44,236,800 pixels
+lossless: `--per-element` and `--clip` differ on 3,551 of 44,236,800 pixels
 (0.0080 %), max channel delta 2/255, which is antialiasing at fractional
 offsets.
 
@@ -133,12 +133,24 @@ Each of these cost real time, and none of them raises an error.
 3. **Never raise the viewport to document height.** A real deck resolves `vh`
    units and `height: 100%` against the viewport, so a taller viewport relayouts
    the page and the comparison becomes meaningless. Paint one tall canvas and
-   crop, or use `--scroll`.
+   crop, or use `--per-element`.
 4. **Know the document height.** A 12-slide deck with 24 px gaps is 8904 CSS px,
    not 8640. Guessing short makes the last slide read as 37.6 % wrong when the
    real figure is 1.41 %: the crop, not the renderer.
 5. **`--help` used to exit 2.** Usage went to stderr, so `set -euo pipefail` failed on a
    successful invocation. Use `|| true` in scripts.
+6. **A canvas past 65,532 px tall or 65,408 px wide panics, and leaves a dump
+   behind.** The renderer truncates the dimension through a `u16` and then indexes
+   past the buffer it actually got: a 72,000 px document produced a 6,464-row
+   buffer and died on `range end index 20688000 out of range for slice of length
+   20684800`, `rc=101`, with 34 of 80 frames already written. Both ceilings are
+   measured on a released binary, one pixel either side — 65,532 renders and
+   65,533 panics, 65,408 renders and 65,410 panics — and neither is derivable
+   from the other. `refuse_oversized_canvas` refuses with `rc=5` before painting,
+   so nothing is written. In slides: 45 at 1440p 1×, **22 at 2×, 15 at 3×**.
+   `--per-element` removes the *total page* limit (each frame gets its own
+   canvas) but not the per-canvas one: a single element taller than 65,532 px
+   still hits the same wall.
 
 ## Withdrawn claims
 

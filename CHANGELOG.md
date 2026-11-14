@@ -8,6 +8,26 @@ names may change between minor versions, and this file is where that shows up.
 
 **Fixed**
 
+- The renderer truncates a canvas dimension through a `u16`, so a document past
+  65,532 px tall — or a canvas past 65,408 px wide — panicked with an
+  out-of-range index after writing part of the dump: an 80-slide deck left 34
+  frames behind at `rc=101`, and a 72,000 px document produced a 6,464-row
+  buffer. Both ceilings are measured one pixel either side on a released
+  binary. `refuse_oversized_canvas` now exits `5` before painting, with nothing
+  written.
+- Default clip mode cut an element wider than the viewport to the canvas width
+  and reported success: a 1600 px element in an 800 px viewport became an
+  800×100 PNG at `rc=0` with half the element gone and nothing on stderr. It
+  warns per frame and the run exits `4`, the code that already means "written,
+  but known to be incomplete".
+- `Vec::with_capacity((w * h * 4) as usize)` multiplied in `u32` before the
+  cast, so past ~4.29 G pixel-bytes the capacity wrapped to a small number and
+  the buffer silently reallocated instead. Sized in `usize` now.
+- A wrapped fragment held the HTML twice: `format!` copied `source` into
+  `doc_html`, and `source` then stayed alive to the end of `main`.
+- The crop path allocated a frame-sized scratch buffer per slide — 14.7 MiB at
+  2560×1440 scale 2, on a deck that can hold 200 of them. One buffer, reused.
+
 - The corpus verdict line said `text-free (54 boxes)` while one of those 54
   entries is an absence assertion with no box at all — `run_parity.py`'s own
   comment two lines above says "there is no box to compare and the absence
@@ -36,6 +56,16 @@ names may change between minor versions, and this file is where that shows up.
 
 **Changed**
 
+- `--scroll` is now `--per-element`. The old name described the mechanism —
+  every strategy here scrolls — and named neither the choice nor its inverse;
+  `--per-element` says what it paints, one element-sized canvas per match,
+  against the default's single document-height canvas. `--scroll` stays
+  accepted as a hidden alias so no caller breaks, and stays out of `--help`: a
+  documented alias is a second name to keep true.
+- `--help` said `--clip` paints "one canvas per matching element", which is
+  what `--scroll` does. The default paints one document-height canvas and cuts
+  every frame out of it. `--full` moved from `FLAGS` to `MODES` for the same
+  reason: it is a mode, not a modifier.
 - README rewritten from scratch against a researched structure rather than
   edited in place: 522 lines to 164, one screen per section. Every figure the
   CI guard checks is still present, so `check_claims.py` reads 37 claims PASS
