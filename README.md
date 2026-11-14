@@ -65,7 +65,8 @@ Both encoders are lossless: `--scroll` and `--clip` differ on 3,551 of 44,236,80
 pixels (0.0080 %, max channel delta 2/255) — the same renderer twice, not a
 comparison. Against Chromium the same deck differs on **4.13 %** of pixels by more
 than 16 levels (per slide 0.88 – 11.67 %), which is antialiasing and image
-resampling rather than layout; the cost table below breaks it down. Output is byte-for-byte deterministic,
+resampling rather than layout; [GATES.md](GATES.md#fidelity) breaks that down
+region by region. Output is byte-for-byte deterministic,
 which a browser is not: ten renders of the same input produce one checksum, so
 output can be diffed in CI. That holds for a document whose resources are local
 or `data:` URIs. A remote image is fetched at render time and painted as
@@ -91,7 +92,7 @@ exit code:** check the magic bytes and the IHDR dimensions against
 `width × scale`, and diff against a golden render, which determinism makes exact.
 
 The deck is not part of this repo (4.16 MB, embedded JPEGs, four `@font-face`
-faces), so the headline cost table below is **history, not a gate**: nobody
+faces), so the headline cost table above is **history, not a gate**: nobody
 outside this project can re-run it, because the input is not here. What
 `python3 tools/gates.py --deck <path>` reproduces is the *method* — fidelity,
 determinism and dimensions on **your** document — and a different deck gives
@@ -249,13 +250,10 @@ docker run --rm --user "$(id -u):$(id -g)" \
 The image is built from the same commit as the release tarball, on the same tag
 push, and its own CI proves it renders: `ldd` resolves the full closure with
 none `not found`, `fc-match "DejaVu Sans"` returns DejaVu, and a shipped asset
-renders inside it at the right dimensions with glyphs painted. The closure is
-asserted as *no library missing* plus a floor on the count, not as an exact
-number: the same source links 12 libraries on bookworm and 13 on jammy, because
-those freetype builds differ, and a gate pinned to one distro's transitive graph
-reports a defect every time the base image is rebuilt. The gate therefore asserts
-the closure **of the image it just built**, not a number copied from a release
-log.
+renders inside it at the right dimensions with glyphs painted. It asserts the
+closure **of the image it just built**, not a number copied from a release log —
+why that distinction matters is in
+[CONTRIBUTING.md](CONTRIBUTING.md#building).
 
 ## Usage
 
@@ -360,20 +358,12 @@ against the binary built from the same commit:
 rather than the argument you got wrong, so read the argument before the file.
 
 **`v0.3.0-beta.6` is the first release that satisfies this table.** Earlier ones
-do not, and the numbers below are what `tools/test_exit_codes.py` prints against
-each artefact — not a hand-written summary:
-
-| Published asset | Contract | Because |
-|---|---|---|
-| `v0.3.0-beta.6` | **all 21 legs hold** | cut from the commit this page documents |
-| `v0.3.0-beta.5` | 8 failed assertions | `--help` only at `argv[1]`; `-V` panics (`rc=101`); no code `4`; `--scroll` silently ignored; stale frames kept; `--full` unknown |
-| `v0.3.0-beta.4-r2` | 22 failed assertions | all of the above plus `--help` exits `2`, `--version` exits `2`, and a single image into a missing directory panics |
-
-A release older than this page is not a scandal — the page moves and artefacts
-don't. What would be a scandal is the page claiming otherwise, which is why the
-published-artefact step in CI is now a **hard gate**: when `Cargo.toml` and the
-release tag name the same version, a failing leg fails the build. A tag that
-predates `main` only warns, so red still means something.
+do not. A release older than this page is not a scandal — the page moves and
+artefacts don't — which is why the published-artefact step in CI is a **hard
+gate**: when `Cargo.toml` and the release tag name the same version, a failing
+leg fails the build, and a tag that predates `main` only warns, so red still
+means something. What each published binary actually did is measured rather than
+summarised, in [GATES.md](GATES.md#published-artefacts).
 
 **The failure with no exit code is the one to watch.** Unsupported CSS is
 ignored, not rejected: an unimplemented property or value falls back to its
@@ -385,99 +375,22 @@ class: the asset deadline exits `4`.)
 
 ## Fidelity
 
-Measured against Chromium 151 on the same document, same viewport, same scale —
-both PNGs read by one instrument, so a difference in the table is a difference
-between two engines rather than between two rulers.
+Measured against Chromium 151 on the same document, same viewport, same scale:
+**4.13 %** of pixels differ by more than 16 levels (per slide 0.88 – 11.67 %),
+and that residual is antialiasing and image resampling rather than layout — wrap
+points match, boxes sit at Chromium's coordinates, and every photo region sits at
+a **0 px** integer shift. Against *itself* the renderer is exact, which is the
+property a CI gate actually needs.
 
-| Deck, scale 2, per slide vs `element.screenshot()` | |
-|---|---|
-| size | 12/12 at 2560×1440 |
-| pixels off by >16 | **4.13 %** (per slide 0.88 – 11.67 %) |
-| photo regions | 0.31 – 3.92 % |
-| best integer shift on every photo region | **0 px** |
-
-The residual is antialiasing, not layout: wrap points match, boxes sit at
-Chromium's coordinates, and images are sampled at zero offset. Vello's
-glyph AA is slightly softer than Skia's, so **you cannot diff html-render
-against Chromium at 99 %** — and you don't need to, because against *itself* it
-is exact.
-
-`display: table` used to be the biggest hole here, and it is now measured rather
-than absent. Fixture 32 (`table-collapse`) puts `border-collapse`, `colgroup`,
-`rowspan`, `colspan` and `border-spacing` in front of both engines, and **all
-seven of its boxes diverge**: the table comes out **18px shorter** than Chromium
-paints it, one cell is **12px tall where Chromium paints 28**, and the other six are
-off by 2-16px. Those seven are pinned in `tools/parity_baseline.json` with that
-reason written down, so a *further* regression still fails the build while the
-current defect stays visible instead of being forgotten.
+Both instruments and their measurements are in [GATES.md](GATES.md#fidelity):
+the per-region breakdown, the determinism table, and the CSS audit that answers
+*which declarations did it drop* by deleting one declaration at a time and
+diffing the PNG instead of trusting a list of "supported properties".
 
 The remaining hole: **no fixture exercises non-Latin text shaping or
 right-to-left scripts**, and text-dependent rows are confounded by font
 availability, so they are a lower bound and not a verdict. If your document is
 CJK, RTL, or table-heavy, render one page and look at it.
-
-Determinism is a first-class property, not a side effect. Both rows are a
-document with local resources only — the scope above:
-
-| | |
-|---|---|
-| 10 renders, scale 2, one checksum | `1dffe1ae…` |
-| two separate builds of one commit | different binary md5s, **identical pixels** (12/12 slides) |
-
-[`tools/deck_check.py`](tools/deck_check.py) is the loop behind those numbers: it
-renders one document with both engines at the same viewport, times each over
-`--repeats` runs, and compares the two PNGs — ink coverage, mean channel
-difference and the share of near-identical pixels.
-
-```bash
-python3 tools/deck_check.py --html your-deck.html --chrome "$(which google-chrome)"
-```
-
-It needs Chromium (`--chrome`, auto-detected if omitted) and a built binary
-(`--blitz`, default `target/release/render`), so it is a local instrument rather
-than a CI gate; the corpus gate that does run in CI is
-[`tools/run_parity.py`](tools/run_parity.py), which compares per-element boxes
-across 32 fixtures instead of whole pages.
-
-### Which declarations did it drop?
-
-[`tools/css_audit.py`](tools/css_audit.py) answers that by measurement, not from
-a list of "supported properties": such a list rots the moment Blitz updates, and
-a stale list reports a dropped declaration as fine. It renders the file once,
-then re-renders once per declaration with exactly that declaration removed, and
-diffs the PNGs.
-
-```bash
-python3 tools/css_audit.py --bin target/release/render your-card.html \
-    --width 794 --height 1123 --scale 3.123
-```
-
-A declaration whose removal changes no pixel is **inert**: either the renderer
-dropped it, or something else already sets that value. The report says "no pixel
-effect" and never "unsupported", because a pixel diff cannot tell those two
-apart — a `color` whose text all lives inside a child that overrides it is
-honoured and still invisible.
-
-Cost is one render plus one PNG decode per declaration, and both halves are
-measured: a render is **0.23-0.28 s**, and decoding a 2560x1440 PNG is
-**0.13-0.21 s** with Pillow or **3.0-3.7 s** through the stdlib reader
-(`tools/measure.py`, which has no third-party imports). A declaration whose
-removal produces a byte-identical PNG is never decoded, so inert ones are nearly
-free: 48 of the 76 declarations in `assets/demo-deck.html` skip that step.
-
-The whole audit, 76 declarations at 1280x720 scale 2 across 4 parallel renders
-(`--jobs`, one per core by default):
-
-| Decoder | Wall clock |
-|---|---|
-| Pillow | **11.4 s** |
-| stdlib only | **100.5 s** |
-
-Same verdicts either way, so Pillow is a speed knob, not a correctness one.
-Install it before auditing anything large: an A4 card at scale 3.123 is 8.7
-megapixels, where the stdlib reader costs about 7 s per changed declaration.
-Audit at the size you ship, too — a declaration inert at 1280x720 can be
-load-bearing at 794x1123.
 
 ## What it does
 
@@ -557,33 +470,22 @@ the six text-dependent boxes that are reported separately, every leg
 `run_parity.py` exits `1` on, and `tools/test_parity_gate.py`, which proves each
 one fires without needing a browser.
 
-## Building
+## Contributing
 
-The build is a GitHub Actions job, because the host this was written on forbids
-local Rust compilation. Five workflows:
+Local Rust compilation is forbidden on the machine this was written on, so **CI
+is the only build gate** — the five workflows, what each one asserts, the pinned
+runner and the two requirements that are not optional are all in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
-| Workflow | Trigger | Output |
-|---|---|---|
-| `parity.yml` | push touching `src/`, `Cargo.*`, `assets/`, `fixtures/`, `tools/`, `.github/workflows/**` or `.github/dependabot.yml`; or manual | builds, runs the clip, exit-code, redirect, full-page, document-root, CSS-audit, corpus-gate and undefined-name tests, runs the exit-code contract against the **published tarball**, **measures the corpus and fails on a new divergence**, uploads results |
-| `drain-probe.yml` | manual dispatch only | builds, measures the image drain loop under each `BLITZ_DRAIN` mode, uploads the report |
-| `release.yml` | push a `v*` tag, or manual | builds, packages, publishes, **then verifies the published asset** |
-| `container.yml` | push a `v*` tag, a push to `main` touching `src/`, `Cargo.*`, `Dockerfile`, `assets/` or the workflow (publishes the moving `latest` tag), or manual | builds the image, asserts the library closure is complete (`ldd` reports nothing `not found`, plus a floor on the count — a floor, not an exact number: the same source links 12 libraries on bookworm and 13 on jammy) and that the font resolves, renders an asset inside it, pushes to GHCR |
-| `lockfile.yml` | push touching `Cargo.toml`, or manual | resolves `Cargo.lock` and commits it back if it moved |
+Two rules that bite before you open a pull request:
 
-Two hard requirements, both learned the hard way:
-
-- **`runs-on: ubuntu-22.04`, never `ubuntu-latest`.** The `latest` image produced
-  a `GLIBC_2.43` binary that would not start on a glibc 2.39 host. The runner is
-  pinned, and a guard fails the build if any `GLIBC_*` symbol exceeds 2.35 —
-  otherwise a future image bump silently raises the floor again.
-- **`libfontconfig1-dev`** is needed to build Stylo.
-
-Locally, where Rust is allowed:
-
-```bash
-cargo build --release
-python3 tools/run_parity.py --blitz target/release/render
-```
+- **`assets/hero.png` and `assets/og.png` are command output, not images to
+  hand-edit.** `tools/check_claims.py` re-renders both and asserts the committed
+  bytes, and the README states their real dimensions.
+- **After touching any prose number, run `python3 tools/check_claims.py`.** It
+  recomputes every derived figure from the inputs at the top of that file and
+  fails when the page disagrees. `--selftest` proves the spelled-count guard
+  fires.
 
 ## Licence
 

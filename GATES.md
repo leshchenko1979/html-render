@@ -172,3 +172,113 @@ field it now checks — and on a baseline entry that stopped diverging, so a fix
 cannot leave a stale tolerance behind that later hides the same box regressing.
 `python3 tools/test_parity_gate.py` proves each of those legs fails, without
 needing a browser.
+
+## Fidelity
+
+Measured against Chromium 151 on the same document, same viewport, same scale —
+both PNGs read by one instrument, so a difference in the table is a difference
+between two engines rather than between two rulers.
+
+| Deck, scale 2, per slide vs `element.screenshot()` | |
+|---|---|
+| size | 12/12 at 2560×1440 |
+| pixels off by >16 | **4.13 %** (per slide 0.88 – 11.67 %) |
+| photo regions | 0.31 – 3.92 % |
+| best integer shift on every photo region | **0 px** |
+
+The residual is antialiasing, not layout: wrap points match, boxes sit at
+Chromium's coordinates, and images are sampled at zero offset. Vello's
+glyph AA is slightly softer than Skia's, so **you cannot diff html-render
+against Chromium at 99 %** — and you don't need to, because against *itself* it
+is exact.
+
+`display: table` used to be the biggest hole here, and it is now measured rather
+than absent. Fixture 32 (`table-collapse`) puts `border-collapse`, `colgroup`,
+`rowspan`, `colspan` and `border-spacing` in front of both engines, and **all
+seven of its boxes diverge**: the table comes out **18px shorter** than Chromium
+paints it, one cell is **12px tall where Chromium paints 28**, and the other six are
+off by 2-16px. Those seven are pinned in `tools/parity_baseline.json` with that
+reason written down, so a *further* regression still fails the build while the
+current defect stays visible instead of being forgotten.
+
+Determinism is a first-class property, not a side effect. Both rows are a
+document with local resources only — the scope above:
+
+| | |
+|---|---|
+| 10 renders, scale 2, one checksum | `1dffe1ae…` |
+| two separate builds of one commit | different binary md5s, **identical pixels** (12/12 slides) |
+
+[`tools/deck_check.py`](tools/deck_check.py) is the loop behind those numbers: it
+renders one document with both engines at the same viewport, times each over
+`--repeats` runs, and compares the two PNGs — ink coverage, mean channel
+difference and the share of near-identical pixels.
+
+```bash
+python3 tools/deck_check.py --html your-deck.html --chrome "$(which google-chrome)"
+```
+
+It needs Chromium (`--chrome`, auto-detected if omitted) and a built binary
+(`--blitz`, default `target/release/render`), so it is a local instrument rather
+than a CI gate; the corpus gate that does run in CI is
+[`tools/run_parity.py`](tools/run_parity.py), which compares per-element boxes
+across 32 fixtures instead of whole pages.
+
+## CSS audit
+
+**Which declarations did the renderer drop?**
+[`tools/css_audit.py`](tools/css_audit.py) answers that by measurement, not from
+a list of "supported properties": such a list rots the moment Blitz updates, and
+a stale list reports a dropped declaration as fine. It renders the file once,
+then re-renders once per declaration with exactly that declaration removed, and
+diffs the PNGs.
+
+```bash
+python3 tools/css_audit.py --bin target/release/render your-card.html \
+    --width 794 --height 1123 --scale 3.123
+```
+
+A declaration whose removal changes no pixel is **inert**: either the renderer
+dropped it, or something else already sets that value. The report says "no pixel
+effect" and never "unsupported", because a pixel diff cannot tell those two
+apart — a `color` whose text all lives inside a child that overrides it is
+honoured and still invisible.
+
+Cost is one render plus one PNG decode per declaration, and both halves are
+measured: a render is **0.23-0.28 s**, and decoding a 2560x1440 PNG is
+**0.13-0.21 s** with Pillow or **3.0-3.7 s** through the stdlib reader
+(`tools/measure.py`, which has no third-party imports). A declaration whose
+removal produces a byte-identical PNG is never decoded, so inert ones are nearly
+free: 48 of the 76 declarations in `assets/demo-deck.html` skip that step.
+
+The whole audit, 76 declarations at 1280x720 scale 2 across 4 parallel renders
+(`--jobs`, one per core by default):
+
+| Decoder | Wall clock |
+|---|---|
+| Pillow | **11.4 s** |
+| stdlib only | **100.5 s** |
+
+Same verdicts either way, so Pillow is a speed knob, not a correctness one.
+Install it before auditing anything large: an A4 card at scale 3.123 is 8.7
+megapixels, where the stdlib reader costs about 7 s per changed declaration.
+Audit at the size you ship, too — a declaration inert at 1280x720 can be
+load-bearing at 794x1123.
+
+## Published artefacts
+
+`tools/test_exit_codes.py` runs the exit-code contract against a binary and
+prints what it found. These are those runs against each published artefact, not
+a hand-written summary:
+
+| Published asset | Contract | Because |
+|---|---|---|
+| `v0.3.0-beta.6` | **all 21 legs hold** | cut from the commit the README documents |
+| `v0.3.0-beta.5` | 8 failed assertions | `--help` only at `argv[1]`; `-V` panics (`rc=101`); no code `4`; `--scroll` silently ignored; stale frames kept; `--full` unknown |
+| `v0.3.0-beta.4-r2` | 22 failed assertions | all of the above plus `--help` exits `2`, `--version` exits `2`, and a single image into a missing directory panics |
+
+A release older than the page is not a scandal — the page moves and artefacts
+don't. What would be a scandal is the page claiming otherwise, which is why the
+published-artefact step in CI is a **hard gate**: when `Cargo.toml` and the
+release tag name the same version, a failing leg fails the build. A tag that
+predates `main` only warns, so red still means something.
