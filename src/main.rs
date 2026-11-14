@@ -76,17 +76,28 @@ fn help_text() -> String {
          \x20 html-render <html> <out.png> <width> <height> [scale] [--document] [--fragment] [--full]\n\
          \x20 html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--scroll]\n\
          \n\
+         MODES:\n\
+         \x20 (default)     one PNG of the viewport\n\
+         \x20 --full        one PNG, canvas as tall as the whole document\n\
+         \x20 --clip        one PNG per selector match, written as clip_NN.png, by\n\
+         \x20               one of two strategies:\n\
+         \x20                 (no flag)   paint ONE document-height canvas, then cut each\n\
+         \x20                             frame out of it. Peak memory grows with page\n\
+         \x20                             height; a canvas 65535 px tall or taller fails.\n\
+         \x20                 --scroll    paint each frame on its OWN element-sized canvas,\n\
+         \x20                             viewport scrolled to it. Peak memory stays flat\n\
+         \x20                             and total page height stops mattering, though\n\
+         \x20                             one element past 65535 px still hits the same\n\
+         \x20                             canvas limit.\n\
+         \n\
          ARGS:\n\
          \x20 <width> <height>   viewport in CSS pixels (scale multiplies the output)\n\
          \x20 <scale>            device pixels per CSS pixel; 1 is 1:1\n\
-         \x20 <selector>         CSS selector; each match becomes clip_NN.png\n\
+         \x20 <selector>         CSS selector; one PNG per match\n\
          \n\
          FLAGS:\n\
-         \x20 --clip        paint one canvas per matching element\n\
          \x20 --document    treat the file as a full document (default: auto-detected)\n\
          \x20 --fragment    treat the file as a fragment and wrap it\n\
-         \x20 --scroll      clip mode: scroll to each element instead of cropping\n\
-         \x20 --full        single image: canvas height = the document, not <height>\n\
          \x20 -h, --help    print this text and exit 0\n\
          \x20 -V, --version print the version and exit 0\n\
          \n\
