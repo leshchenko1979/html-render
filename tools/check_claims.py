@@ -49,6 +49,12 @@ DECK_MB = "4.16"             # the external deck the cost table was taken on
 DECK_SLIDES = 12
 FIDELITY_PCT = "4.13"        # whole deck, pixels off by >16, from tools/gates.py
 
+# tools/gates.py pads the browser's side of the clock: one 1.5 s settle wait
+# plus 120 ms per element screenshot. html-render is synchronous and waits for
+# nothing, so a ratio computed on raw wall clock credits us with the harness's
+# own sleep. 22 % of Chromium's 13.36 s is not rendering.
+SETTLE_S = 1.5 + DECK_SLIDES * 0.120
+
 ASSETS = {
     # html, width, height, scale, committed png
     "hero": ("assets/hero.html", 1600, 900, 2, "assets/hero.png"),
@@ -105,6 +111,11 @@ def main():
     claim("README", readme, ratio(CHROME_RSS_MIB, CLIP_RSS_MIB), "858/275.2")
     claim("README", readme, ratio(CHROME_WALL_S, SCROLL_WALL_S), "13.36/5.37")
     claim("README", readme, ratio(CHROME_RSS_MIB, SCROLL_RSS_MIB), "858/93.4")
+    # The same speed ratio with the harness's own settle sleep taken out, which
+    # the README states beside the raw one. Memory is unaffected: sleeping
+    # allocates nothing, so there is no equivalent correction on that row.
+    claim("README", readme, ratio(CHROME_WALL_S - SETTLE_S, SCROLL_WALL_S),
+          "(13.36 - settle)/5.37")
 
     # The single-process undercount, quoted as a range by README, GATES and the
     # release body. Both ends come from the same four runs.

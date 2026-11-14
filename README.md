@@ -43,6 +43,15 @@ is not in this table.
 with `--scroll`**, which paints one element-sized canvas per slide instead of one
 full-height canvas that is cropped afterwards.
 
+One asymmetry is baked into those ratios and it favours us. The Chromium side
+sleeps **2.94 s** by construction — `tools/gates.py` waits 1.5 s for the page to
+settle plus 120 ms per element screenshot — while html-render is synchronous and
+waits for nothing. That is 22 % of Chromium's wall clock. Subtract it and the
+`--scroll` speed ratio is **1.94×**, not 2.49×; the memory ratio is untouched
+(sleeping allocates nothing). Both numbers are true: 2.49× is what a pipeline
+pays end to end, 1.94× is what the two engines cost once the harness stops
+padding the browser's side.
+
 Those RSS figures are the largest single process, which is the wrong unit for one
 of the two engines: Chromium is a tree of renderers and helpers. Measured on the
 deck in this repo (`assets/demo-deck.html`, 2560×1440, scale 2), its tree peaks at

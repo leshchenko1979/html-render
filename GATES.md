@@ -84,7 +84,7 @@ slides, 4 MB — is not in this repo, so these rows are history, not a gate:
 
 | engine | wall | peak RSS (largest process) |
 |---|---|---|
-| Chromium 151, Playwright, 12 element screenshots at dsf=2 | 13.36 s | 858.4 MiB |
+| Chromium 151, Playwright, 12 element screenshots at dsf=2 (includes 2.94 s of settle sleeps) | 13.36 s | 858.4 MiB |
 | `--scroll` | **5.37 s** | **93.4 MiB** |
 | `--clip` (one full-height canvas, cropped) | 5.72 s | 275.2 MiB |
 
