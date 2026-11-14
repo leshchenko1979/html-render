@@ -125,10 +125,6 @@ jobs:
         # actually downloads. That gap is how README and v0.3.0-beta.5 drifted
         # apart: the page documented five exit codes while the released binary
         # failed 8 of the 21 legs, and both were "verified".
-        # Soft for now, and deliberately: the published asset is stale by design
-        # until a release is cut from main, and a job that is red every push
-        # teaches people to ignore red. Flip to a hard gate with that release.
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -138,7 +134,28 @@ jobs:
             -p 'html-render_*.tar.gz' -p checksums.txt -D .
           sha256sum -c checksums.txt
           tar xzf html-render_*.tar.gz
-          python3 ../tools/test_exit_codes.py --bin ./html-render
+
+          # Hard gate when the tarball claims to BE the version this tree
+          # documents. Same version number means the page and the artefact are
+          # describing the same object, so a failed leg is a defect rather than
+          # lag. When main has bumped past the release the tarball is
+          # legitimately older and this only warns — a job that is red on every
+          # push teaches people to ignore red, and ignored red is how the last
+          # drift survived. Versions come from Cargo.toml and the release tag,
+          # not from the binary: `--version` is itself one of the contract legs,
+          # so a binary that cannot answer it would erase the comparison.
+          main_ver=$(sed -n 's/^version = "\(.*\)"/\1/p' ../Cargo.toml | head -1)
+          rel_ver=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          rel_ver=${rel_ver#v}
+
+          if python3 ../tools/test_exit_codes.py --bin ./html-render; then
+            echo "published $rel_ver satisfies the contract this tree documents"
+          elif [ "$main_ver" = "$rel_ver" ]; then
+            echo "::error::published $rel_ver IS the version this tree documents ($main_ver) and it fails the contract"
+            exit 1
+          else
+            echo "::warning::published $rel_ver predates main ($main_ver) and fails the contract; cut a release to close the gap"
+          fi
 
       - name: Test document-root detection
         # A file that declares its own document root must be rendered verbatim.
