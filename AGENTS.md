@@ -117,7 +117,7 @@ File a defect with the measurement that exposes it, not with an adjective.
 
 | Path | Holds |
 |---|---|
-| `README.md` | the first five minutes: what it is, install, usage, limits, where the detail lives — 164 lines, one screen per section |
+| `README.md` | the first five minutes: what it is, install, usage, limits, where the detail lives — one screen per section, under 200 lines |
 | `GATES.md` | the measurements — determinism, scale, clip, corpus, fidelity, CSS audit, published artefacts |
 | `CONTRIBUTING.md` | build requirements, the five workflows, the rules that bite |
 | `SECURITY.md` | threat model, measured egress proof, reporting |

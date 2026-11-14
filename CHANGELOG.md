@@ -4,7 +4,14 @@ Newest first. Every entry names its commit range, so it can be re-derived with
 `git log --oneline <prev>..<tag>` rather than trusted. Pre-1.0: flags and output
 names may change between minor versions, and this file is where that shows up.
 
-## Unreleased
+## v0.3.0-beta.7 — 2026-11-14
+
+Raw list: `git log --oneline v0.3.0-beta.6..v0.3.0-beta.7`. This cut exists
+because `beta.6` is the artefact that fails the contract this tree now
+documents: on it a document past the canvas ceiling panics at `rc=101` after
+writing part of the output, and an element wider than the viewport is cut
+silently at `rc=0`. Both are refusals with a named exit code here, so the
+published tarball and the page describe the same object again.
 
 **Fixed**
 
