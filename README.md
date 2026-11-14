@@ -146,11 +146,9 @@ Per-box record: [GATES.md](GATES.md#corpus).
 - **Untrusted input is not sandboxed.** Sub-resources are fetched at render time with no allowlist
   and `file://` is readable ([SECURITY.md](SECURITY.md#what-rendering-does-to-the-machine)).
 - **Peak memory is per process.** Counted across the whole process tree the advantage narrows to 5.7–6.1×.
-- **A tall document is cut silently**, exit `0` ([#10](https://github.com/leshchenko1979/html-render/issues/10)).
-- **A failed sub-resource still writes a PNG and exits `0`** ([#11](https://github.com/leshchenko1979/html-render/issues/11)).
-- **A missing font is substituted without a word** — check with `fc-match` first ([#12](https://github.com/leshchenko1979/html-render/issues/12)).
-- **Releases are unsigned**: no signature, no provenance, no SBOM ([#13](https://github.com/leshchenko1979/html-render/issues/13)).
-- **Non-Latin shaping and RTL are unmeasured** — no fixture contains a non-ASCII byte ([#14](https://github.com/leshchenko1979/html-render/issues/14)).
+- **Seven known defects are tracked, not described here.** They share one shape: output that is
+  wrong while the exit code says success. [Read them](https://github.com/leshchenko1979/html-render/issues?q=is%3Aissue+is%3Aopen)
+  before putting a render in a pipeline.
 
 ## Where the detail lives
 
