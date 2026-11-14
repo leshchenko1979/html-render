@@ -5,7 +5,7 @@
 **HTML + CSS → PNG, with no browser.**
 
 **Linux x86_64, glibc ≥ 2.35.** No macOS, no Windows. A container image carries
-the 13 shared libraries and the font for you — [skip the host
+the shared libraries and the font for you — [skip the host
 entirely](#or-skip-the-host-entirely).
 
 ```bash
@@ -20,9 +20,10 @@ Vello pipeline. No Chromium, no JavaScript engine, one process.
 ## Status
 
 `0.3.0-beta.5`, one maintainer. No API promise: flags and output
-names may change between minor versions. Linux only. One known layout defect —
-four corpus boxes, consecutive `<br>` runs in a `font-size:0` inline-block
-context (see [Corpus](#corpus)).
+names may change between minor versions. Linux only. Two known layout defects,
+eleven corpus boxes: consecutive `<br>` runs in a `font-size:0` inline-block
+context (4 boxes) and table layout, up to 18 px short (7 boxes, issue #9). See
+[Corpus](#corpus).
 
 It exists to answer a concrete question: can a 25 MB binary replace a 500 MB
 browser for server-side rendering? On a real 12-slide, 4 MB deck, yes
@@ -51,14 +52,33 @@ so its two readings agree (81.2 vs 81.0 MiB). The memory ratios above therefore
 *understate* the difference; the wall ratios do not depend on the method.
 `python3 tools/measure_rss.py --rss-mode tree -- <command>` reproduces either.
 
-Both encoders are lossless, and on the same document the two engines agree on all
-but 3,551 of 44,236,800 pixels (0.0080 %, max channel delta 2/255) — antialiasing
-at fractional offsets, not layout. Output is byte-for-byte deterministic,
+Both encoders are lossless: `--scroll` and `--clip` differ on 3,551 of 44,236,800
+pixels (0.0080 %, max channel delta 2/255) — the same renderer twice, not a
+comparison. Against Chromium the same deck differs on **4.13 %** of pixels by more
+than 16 levels (per slide 0.88 – 11.67 %), which is antialiasing and image
+resampling rather than layout; the cost table below breaks it down. Output is byte-for-byte deterministic,
 which a browser is not: ten renders of the same input produce one checksum, so
 output can be diffed in CI. That holds for a document whose resources are local
 or `data:` URIs. A remote image is fetched at render time and painted as
 **absent** if it misses `BLITZ_DEADLINE_SECS` (default 120 s), so a slow origin
 changes the picture without changing the input.
+
+### Remote assets fail silently, and the failure looks like success
+
+Measured on beta.5, every one of these writes a PNG, prints nothing beyond
+`TIMING`, and exits `0`:
+
+| Case | What you get |
+|---|---|
+| `302` / `301` / `307` redirect | both hops are fetched (the server log shows them), the image is **not painted** — a 759-byte blank PNG. Any CDN or signed-URL origin hits this |
+| `404`, or a `200` with a body that is not an image | blank box, no diagnostic |
+| a 197 KB image that decodes to 522 MB of pixels | no cap on decoded size: RSS follows the image, not the document |
+| decode OOM under `ulimit -v` | the panic is swallowed and a blank PNG is written with `rc=0` |
+
+So the pipeline this README recommends — commit the PNG, diff the PNG, fail the
+build — is the only thing that catches a dropped asset. **Verify the PNG, not the
+exit code:** check the magic bytes and the IHDR dimensions against
+`width × scale`, and diff against a golden render, which determinism makes exact.
 
 The deck is not part of this repo (4.16 MB, embedded JPEGs, four `@font-face`
 faces). Every figure here and in [GATES.md](GATES.md) is reproduced from your own
@@ -117,6 +137,14 @@ tarball back over HTTPS, checks `checksums.txt`, byte-compares it with the build
 renders a PNG and asserts its dimensions. A release serving the wrong file fails
 its own run.
 
+**What that does not prove.** The check runs in the same job, with
+`contents: write`, immediately after the build that produced the bytes, and
+`checksums.txt` is fetched from the same release over the same TLS. It catches a
+corrupted download, not a compromised one: there is no signature, no provenance
+attestation and no SBOM — `cosign`, `sigstore`, `attest`, `sbom`, `cargo audit`
+and `cargo deny` appear nowhere in this tree. For that guarantee, pin the sha256
+from a channel you trust, or build from source at a commit you have reviewed.
+
 ### What it needs on the host
 
 `ldd` on the shipped binary lists **15** entries — **13** shared libraries plus
@@ -128,13 +156,14 @@ them — the binary will not start:
 | glibc | **2.35+** (`libc.so.6`, `libm.so.6`, `libgcc_s.so.1`) |
 | TLS | `libssl.so.3`, `libcrypto.so.3` (Debian 12+ / Ubuntu 22.04+) |
 | fonts | `libfontconfig.so.1`, `libfreetype.so.6`, `libexpat.so.1` |
+| TLS trust store | `/etc/ssl/certs/ca-certificates.crt` — opened at startup; without it every `https://` image is silently dropped |
 | images | `libpng16.so.16`, `libbz2.so.1.0`, `libbrotlicommon.so.1`, `libbrotlidec.so.1` |
 | misc | `libz.so.1`, `ld-linux-x86-64.so.2`, `linux-vdso.so.1` |
 
 On Debian/Ubuntu the non-base half is one line:
 
 ```bash
-apt-get install -y libssl3 libfontconfig1 libfreetype6 libpng16-16 libbz2-1.0 libbrotli1
+apt-get install -y libssl3 libfontconfig1 libfreetype6 libpng16-16 libbz2-1.0 libbrotli1 ca-certificates
 ```
 
 `libexpat.so.1`, `libz.so.1` and `libgcc_s.so.1` are absent from that line on
@@ -291,8 +320,8 @@ nothing.
 
 ### Exit codes
 
-Four codes, and every one is asserted by `tools/test_exit_codes.py`, which runs
-in CI against the binary built from the same commit:
+Five codes. `tools/test_exit_codes.py` asserts every one of them, and runs in CI
+against the binary built from the same commit:
 
 | Code | Means |
 |---|---|
@@ -305,15 +334,25 @@ in CI against the binary built from the same commit:
 `101` is a panic, not a diagnosis: the message names a line in `src/main.rs`
 rather than the argument you got wrong, so read the argument before the file.
 
-**This table describes the published binary.** `v0.3.0-beta.5` was cut from
-`main` specifically to close the gap where the tarball and this page disagreed:
-`tools/test_exit_codes.py` passes all twenty legs against the released asset,
-`--help` exits `0` and prints the flag list, an unknown flag exits `2`, and
-single-image mode creates its output directory. Earlier releases
-(`v0.3.0-beta.4-r2` and before) predate those fixes: 21 failed assertions across
-14 legs, including `--help`, `--version` and the outdir panic. The legs added
-for codes `4` and the `--scroll` rule are not in beta.5 either: they land after
-it, so a beta.5 binary fails those two.
+**This table describes `main`, not every release.** `v0.3.0-beta.5` was cut to
+close most of the gap between the tarball and this page, and it is a real
+improvement on `v0.3.0-beta.4-r2` — but it is not this table. Measured on the
+published beta.5 asset, `tools/test_exit_codes.py` **passes 13 of its 20 legs**
+and fails seven:
+
+| Fails on beta.5 | Because |
+|---|---|
+| `--help` after another argument | beta.5 only honours it at `argv[1]`: `rc=2`, "unknown flag" |
+| `-V` after another argument | beta.5 tries to parse it as the scale and panics: `rc=101` |
+| `--help` text mentions code `4` | the code landed after beta.5 |
+| `--scroll` outside `--clip` | beta.5 exits `0` and silently ignores it |
+| stale `clip_NN.png` swept | beta.5 leaves frames from a previous run in place |
+| stale sweep leaves only the new frames | same |
+| code `4` on an asset deadline | beta.5 prints "painting anyway" and exits `0` |
+
+`v0.3.0-beta.4-r2` and before fail 21 assertions across 14 legs, including
+`--help`, `--version` and the outdir panic. A release cut from this commit
+closes the rest.
 
 **The failure with no exit code is the one to watch.** Unsupported CSS is
 ignored, not rejected: an unimplemented property or value falls back to its
@@ -474,11 +513,15 @@ the markup. `tools/run_parity.py` renders every fixture through Blitz and throug
 Chromium and reports per-box deltas:
 
 ```
-VERDICT  text-free (47 boxes): 42 exact, 0 within 1px, 4 divergent, 0 missing, 1 absence
+VERDICT  text-free (54 boxes): 42 exact, 0 within 1px, 11 divergent, 0 missing, 1 absence
 ```
 
-The 4 divergent boxes are one open defect: consecutive `<br>` runs in a
-`font-size:0` inline-block context, where the deltas grow 16 px per extra break.
+The 11 divergent boxes are two open defects: four from consecutive `<br>` runs in
+a `font-size:0` inline-block context, where the deltas grow 16 px per extra break,
+and seven from table layout — every box in `table-collapse.html` diverges, the
+table landing 18 px shorter than Chromium's and two cells at half height
+(issue #9). `tools/parity_baseline.json` pins all eleven, so a *new* divergence
+still fails the build.
 Six further boxes involve text and are reported separately, because without an
 identical embedded font they measure font availability rather than layout.
 
@@ -506,7 +549,7 @@ local Rust compilation. Five workflows:
 | `parity.yml` | push touching `src/`, `Cargo.*`, `fixtures/`, `tools/`, `assets/` or the workflow itself; or manual | builds, runs the clip, exit-code, document-root, CSS-audit and corpus-gate tests, **measures the corpus and fails on a new divergence**, uploads results |
 | `drain-probe.yml` | manual dispatch only | builds, measures the image drain loop under each `BLITZ_DRAIN` mode, uploads the report |
 | `release.yml` | push a `v*` tag, or manual | builds, packages, publishes, **then verifies the published asset** |
-| `container.yml` | push a `v*` tag, or manual | builds the image, asserts the library closure is complete (`ldd` reports nothing `not found`, plus a floor on the count — a floor, not an exact number: the same source links 12 libraries on bookworm and 13 on jammy) and that the font resolves, renders an asset inside it, pushes to GHCR |
+| `container.yml` | push a `v*` tag, a push to `main` touching `src/`, `Cargo.*`, `Dockerfile`, `assets/` or the workflow (publishes the moving `latest` tag), or manual | builds the image, asserts the library closure is complete (`ldd` reports nothing `not found`, plus a floor on the count — a floor, not an exact number: the same source links 12 libraries on bookworm and 13 on jammy) and that the font resolves, renders an asset inside it, pushes to GHCR |
 | `lockfile.yml` | push touching `Cargo.toml`, or manual | resolves `Cargo.lock` and commits it back if it moved |
 
 Two hard requirements, both learned the hard way:

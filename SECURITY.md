@@ -9,15 +9,29 @@ the largest attack surface a headless browser has.
 **No-JS is not the same thing as a sandbox.** Two things happen while rendering:
 
 1. **`http(s)://` sub-resources are fetched at render time, with no allowlist.**
-   An `<img>`, a `background-image`, a `@font-face` or a CSS `url()` in the
-   document becomes an outbound request from the machine running the renderer.
+   An `<img>`, a `background-image`, a `@font-face`, a CSS `url()` or a
+   `<link rel="stylesheet">` in the document becomes an outbound request from the
+   machine running the renderer. The stylesheet is the widest of these: it hands
+   the request to the CSS parser (Stylo), not the image decoder.
    Measured: a document referencing `http://127.0.0.1:8765/red.png` produced one
    `GET` in that server's access log and a painted `(200,0,0)` block in the
    output. So a document you did not write can make the renderer reach hosts
    *you* can reach — loopback, link-local, private networks, cloud metadata
    endpoints. If you render untrusted HTML, do it where that reachability is
    intended: a network-namespaced container, a throwaway VM, or behind an egress
-   proxy that filters by destination.
+   proxy that filters by destination. The proxy does see the traffic — the
+   request honours `http_proxy` (measured: the proxy logged
+   `GET http://example.invalid/x.png`) — but **do not key an allowlist on the
+   `User-Agent`**: it identifies as a desktop browser
+   (`Mozilla/5.0 … Firefox/81.0`), so a UA-based rule will not tell a render
+   apart from a person.
+
+   Three failure modes here are silent by design and worth knowing before you
+   trust an exit code: an HTTP redirect fetches both hops and paints **nothing**;
+   a `404` or a non-image body paints nothing; and there is no cap on decoded
+   pixel count, so a small image can expand to hundreds of megabytes of RSS. All
+   four cases (those three plus a missed deadline) write a PNG and exit `0`.
+   Verify the artefact, not the status code.
 2. **`file://` is readable.** The document's base URL is `file://` of its own
    path, so relative resources resolve on disk, and an absolute `file://` URL in
    the markup is fetched the same way. A document can pull local files into the
