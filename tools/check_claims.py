@@ -184,6 +184,28 @@ def main():
         if hits:
             fails.append("retired claim %r survives in %s" % (retired, ", ".join(hits)))
 
+    # --- the corpus verdict ------------------------------------------------
+    # These numbers drifted once already: README said "47 boxes ... 4 divergent"
+    # while the baseline pinned 54 and 11, and both were "measured". They are
+    # derived here from the same file the gate reads, so prose and gate cannot
+    # disagree without this failing. Note the absence: it is a CATEGORY, not a
+    # box, which is why 42 + 11 + 1 sums to the 54 the line quotes.
+    import json as _json
+    baseline = _json.load(open(os.path.join(ROOT, "tools", "parity_baseline.json"),
+                               encoding="utf-8"))
+    boxes = baseline["text_free_boxes"]
+    divergent = len(baseline["divergent"])
+    absences = len(baseline["absence"])
+    exact = boxes - divergent - absences
+    claim("README", readme, "text-free (%d boxes): %d exact, 0 within 1px, "
+          "%d divergent, 0 missing, %d absence" % (boxes, exact, divergent, absences),
+          "tools/parity_baseline.json")
+    claim("README", readme, "%d divergent boxes are two open defects" % divergent,
+          "baseline divergence count")
+    # The baseline pins a fixture count too; a fixture added without the prose
+    # following leaves a page describing a corpus it no longer runs.
+    claim("README", readme, str(baseline["fixtures"]), "baseline fixture count")
+
     # --- optional: re-render the assets and compare -------------------------
     if args.bin:
         for name, (html, w, h, scale, png) in ASSETS.items():

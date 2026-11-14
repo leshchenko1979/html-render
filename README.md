@@ -575,7 +575,7 @@ local Rust compilation. Five workflows:
 
 | Workflow | Trigger | Output |
 |---|---|---|
-| `parity.yml` | push touching `src/`, `Cargo.*`, `fixtures/`, `tools/`, `assets/` or the workflow itself; or manual | builds, runs the clip, exit-code, document-root, CSS-audit and corpus-gate tests, **measures the corpus and fails on a new divergence**, uploads results |
+| `parity.yml` | push touching `src/`, `Cargo.*`, `assets/`, `fixtures/`, `tools/`, `.github/workflows/**` or `.github/dependabot.yml`; or manual | builds, runs the clip, exit-code, redirect, full-page, document-root, CSS-audit, corpus-gate and undefined-name tests, runs the exit-code contract against the **published tarball**, **measures the corpus and fails on a new divergence**, uploads results |
 | `drain-probe.yml` | manual dispatch only | builds, measures the image drain loop under each `BLITZ_DRAIN` mode, uploads the report |
 | `release.yml` | push a `v*` tag, or manual | builds, packages, publishes, **then verifies the published asset** |
 | `container.yml` | push a `v*` tag, a push to `main` touching `src/`, `Cargo.*`, `Dockerfile`, `assets/` or the workflow (publishes the moving `latest` tag), or manual | builds the image, asserts the library closure is complete (`ldd` reports nothing `not found`, plus a floor on the count — a floor, not an exact number: the same source links 12 libraries on bookworm and 13 on jammy) and that the font resolves, renders an asset inside it, pushes to GHCR |
