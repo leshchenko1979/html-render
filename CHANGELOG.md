@@ -37,14 +37,14 @@ names may change between minor versions, and this file is where that shows up.
 **Changed**
 
 - README rewritten from scratch against a researched structure rather than
-  edited in place: 522 lines to 172, one screen per section. Every figure the
+  edited in place: 522 lines to 170, one screen per section. Every figure the
   CI guard checks is still present, so `check_claims.py` reads 36 claims PASS
   and `--selftest` 5/5 — but they now sit where a cold visitor meets them
   instead of inside the methodology that derived them.
 - The seven open defects left the README as prose and became issues #9-#15,
-  each filed with the measurement that exposes it. The README keeps one line
-  per defect and the issue number; the repro, the deltas and the dates live on
-  the tracker.
+  each filed with the measurement that exposes it. The README keeps a single
+  pointer to the tracker and no per-defect prose: the repro, the deltas and
+  the dates live on the issues.
 - `GATES.md` was referenced by five workflows and the guard but linked from
   nowhere in the README — the measurement document was orphaned while the page
   carried its contents. It is linked now, under "Where the detail lives".
