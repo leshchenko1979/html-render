@@ -35,6 +35,7 @@ use blitz_dom::{util::Color, Document as _, DocumentConfig, Point};
 use blitz_html::HtmlDocument;
 use blitz_net::Provider;
 use blitz_paint::paint_scene;
+use blitz_traits::net::{Bytes, NetHandler, NetProvider, Request};
 use blitz_traits::shell::{ColorScheme, Viewport};
 use peniko::kurbo::Rect;
 use peniko::Fill;
@@ -96,6 +97,60 @@ fn help_text() -> String {
          \x20 101  a panic: an unparsable number, an invalid selector, an unreadable input\n",
         version = env!("CARGO_PKG_VERSION")
     )
+}
+
+/// Restore the REQUESTED url on every resource response.
+///
+/// `blitz_net::Provider::fetch` reports the url a response ended at, i.e. the
+/// FINAL url after any HTTP redirects. `Document::load_resource` then keys its
+/// image cache on that string — but `Document::pending_images`, the registry of
+/// nodes waiting for a picture, is keyed by the url the element ASKED for. On a
+/// redirect the two disagree, `pending_images.remove(final_url)` returns an
+/// empty list, and the bytes are dropped after decoding successfully: a blank
+/// box, exit code 0, nothing on stderr. Measured against a local server that
+/// answers `302` with a real PNG — 795 bytes of all-white output, and both hops
+/// in the server log.
+///
+/// Rewriting the url back to the requested one before the handler sees it makes
+/// both sides of that map agree, and needs no fork of the dependency.
+struct RequestedUrlProvider {
+    inner: Arc<dyn NetProvider>,
+}
+
+impl RequestedUrlProvider {
+    fn new(inner: Arc<dyn NetProvider>) -> Self {
+        Self { inner }
+    }
+}
+
+impl NetProvider for RequestedUrlProvider {
+    fn fetch(&self, doc_id: usize, request: Request, handler: Box<dyn NetHandler>) {
+        let requested = request.url.to_string();
+        self.inner.fetch(
+            doc_id,
+            request,
+            Box::new(RequestedUrlHandler {
+                requested,
+                inner: handler,
+            }),
+        );
+    }
+
+    fn is_noop(&self) -> bool {
+        self.inner.is_noop()
+    }
+}
+
+struct RequestedUrlHandler {
+    requested: String,
+    inner: Box<dyn NetHandler>,
+}
+
+impl NetHandler for RequestedUrlHandler {
+    fn bytes(self: Box<Self>, _resolved_url: String, bytes: Bytes) {
+        let Self { requested, inner } = *self;
+        inner.bytes(requested, bytes);
+    }
 }
 
 /// Remove `clip_NN.png` files left in `dir` by an earlier, longer run.
@@ -272,7 +327,9 @@ async fn real_main() {
     let phys_w = (width as f32 * scale).round() as u32;
     let phys_h = (height as f32 * scale).round() as u32;
 
-    let net = Arc::new(Provider::new(None));
+    // Wrap the stock provider so a redirected resource still reaches the
+    // node that asked for it; see `RequestedUrlProvider`.
+    let net = Arc::new(RequestedUrlProvider::new(Arc::new(Provider::new(None))));
     let mut document = HtmlDocument::from_html(
         &doc_html,
         DocumentConfig {

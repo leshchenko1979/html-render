@@ -104,6 +104,14 @@ jobs:
         # wrong picture with nothing on stderr.
         run: python3 tools/test_exit_codes.py --bin target/release/render
 
+      - name: Test redirected sub-resources
+        # Blitz reports the FINAL url after a redirect while the document keys
+        # its waiting nodes on the REQUESTED one, so a redirected image used to
+        # decode successfully and then be dropped: blank box, exit 0, nothing on
+        # stderr. The direct-URL leg is the control that proves this harness can
+        # paint at all; the 404 leg pins the other silent failure.
+        run: python3 tools/test_redirect.py --bin target/release/render
+
       - name: Test document-root detection
         # A file that declares its own document root must be rendered verbatim.
         # Wrapping it hands the canvas to the wrapper's `html{background:#fff}`
