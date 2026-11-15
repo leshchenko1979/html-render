@@ -127,6 +127,13 @@ git -c user.name="Alexey Leshchenko" \
   the docs quote); the guard asserts the median is the median of its own repeats
   and that `peak_tree_mib` never exceeds `peak_tree_mib_max`. Both legs exist
   because perturbing `wall_s` alone once left the guard green.
+- **A stale receipt fails the build, by design.** `tools/bench_drift.py` compares
+  every CI run's fresh receipt against the committed one and fails past 35 % on
+  wall time, 20 % on memory or 15 % on fidelity. So a change that makes the
+  renderer slower cannot land while the README still advertises the old speed:
+  either the code goes back or the receipt and the prose move together in one
+  commit. A FAIL there is never "the runner was slow" — the bands are two to
+  three times the measured run-to-run spread.
 - **A receipt produced on a dev box is not a receipt.** `bench/results.json` must
   come from CI, where Chromium runs; a local run on a host with no usable GPU
   records `chromium: unavailable` and the guard then refuses to back a single
