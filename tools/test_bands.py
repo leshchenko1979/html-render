@@ -2,9 +2,9 @@
 """Banding is a memory optimisation, not a rendering change.
 
 `--clip` without `--per-element` paints the document in row bands sized from
-`BLITZ_BAND_MIB` (default 16 MiB), so peak memory is one band rather than the
+`BLITZ_BAND_MIB` (default 4 MiB), so peak memory is one band rather than the
 whole page. That is only safe if the rendering is untouched, so this test pins
-five things:
+six things:
 
   1. THE DEFAULT MODE IS UNTOUCHED — every fixture in `fixtures.json` renders
      byte-identically with the knob at 1 MiB and at 0. This is a NEGATIVE
@@ -30,6 +30,12 @@ five things:
      This leg exists because that claim lived in `GATES.md` as prose no test
      read, and banding falsified it (11 of 12 frames differ by 1/255) without
      anything going red.
+
+  6. THE DEFAULT BUDGET IS THE ONE THE SOURCE CLAIMS — the plan is read off a
+     trace line, not inferred from peak RSS. Peak RSS can say "something was
+     small"; it cannot say the budget was 4 MiB. On this deck 50 bands is unique
+     to 4 MiB (1 MiB gives 100, 16 gives 13, off gives 1), so a default that
+     drifts fails here instead of in a comment nobody re-derives.
 
     python3 tools/test_bands.py --bin target/release/render
 
@@ -123,17 +129,22 @@ def max_channel_delta(p, q):
     return max((abs(x - y) for x, y in zip(pa, pb)), default=0)
 
 
-def run(binary, html, outdir, width, height, band_mib=None, clip=True):
+def run(binary, html, outdir, width, height, band_mib=None, clip=True, trace=False):
     """Render; return (rc, stdout, stderr, peak MiB)."""
     if clip:
         cmd = [binary, "--clip", html, outdir, str(width), str(height),
                str(SCALE), SEL, "--document"]
     else:
         cmd = [binary, html, outdir, str(width), str(height)]
+    env = []
     if band_mib is not None:
+        env.append("BLITZ_BAND_MIB=%s" % band_mib)
+    if trace:
+        env.append("BLITZ_TRACE=1")
+    if env:
         # measure_rss takes no env kwarg, and `env` execs into the binary, so the
         # sampled process tree is the renderer's own.
-        cmd = ["env", "BLITZ_BAND_MIB=%s" % band_mib] + cmd
+        cmd = ["env"] + env + cmd
     rc, out, err, _wall, kib = measure_rss.run_measured(cmd)
     return rc, out, err, kib / 1024.0
 
@@ -184,16 +195,19 @@ def main():
         )
 
     # ---- leg 2: a multi-band document renders the same geometry ------------
-    # 100 slides x 300 CSS x scale 2 = 60,000 rows. The default 16 MiB budget is
-    # 16*1024*1024/(400*2*4) = 5,242 rows, so this spans ~12 bands while still
-    # fitting under MAX_CANVAS_H (65,532), so both paths can be compared.
+    # 100 slides x 300 CSS x scale 2 = 60,000 rows. The default 4 MiB budget is
+    # 4*1024*1024/(400*2*4) = 1,310 rows, which the plan turns into 50 bands of
+    # 1,200 rows: a band grows only while it still fits, and two slides are 1,200
+    # rows against 1,310 while three would be 1,800. Still under MAX_CANVAS_H
+    # (65,532), so both paths can be compared.
     a_html = os.path.join(tmp, "a.html")
     with open(a_html, "w", encoding="utf-8") as fh:
         fh.write(deck(N_SLIDES, CSS_H))
     a_band = os.path.join(tmp, "a_band")
     a_one = os.path.join(tmp, "a_one")
-    rc_b, out_b, err_b, rss_b = run(binary, a_html, a_band, CSS_W, CSS_H)
-    rc_o, out_o, err_o, rss_o = run(binary, a_html, a_one, CSS_W, CSS_H, band_mib=0)
+    rc_b, out_b, err_b, rss_b = run(binary, a_html, a_band, CSS_W, CSS_H, trace=True)
+    rc_o, out_o, err_o, rss_o = run(binary, a_html, a_one, CSS_W, CSS_H,
+                                    band_mib=0, trace=True)
 
     if rc_b != 0:
         fails.append("[banded] rc=%d (want 0)\n%s" % (rc_b, err_b[-600:]))
@@ -239,6 +253,24 @@ def main():
         fails.append("[banded] clip report differs from the single canvas")
     if len(lb) != N_SLIDES:
         fails.append("[banded] %d clip line(s), want %d" % (len(lb), N_SLIDES))
+
+    # The budget is invisible from outside: peak RSS says "something was small",
+    # never "the budget was 4 MiB". So the DEFAULT is asserted from the traced
+    # plan rather than trusted from a doc comment. 50 bands is unique to 4 MiB on
+    # this deck (see the leg-2 comment), which is what makes this pin able to fail.
+    def plan_of(err):
+        m = re.search(r"trace: clip bands=(\d+) band_rows=(\d+) frames=(\d+)", err or "")
+        return tuple(int(g) for g in m.groups()) if m else None
+
+    want_plan = (50, 1310, N_SLIDES)
+    got_plan = plan_of(err_b)
+    if got_plan != want_plan:
+        fails.append("[default] traced plan %r, want %r as (bands, band_rows, frames) "
+                     "at the 4 MiB default" % (got_plan, want_plan))
+    got_off = plan_of(err_o)
+    if got_off != (1, 4294967295, N_SLIDES):
+        fails.append("[single canvas] traced plan %r, want one canvas (band_rows "
+                     "u32::MAX) of %d rows" % (got_off, N_SLIDES * CSS_H * SCALE))
 
     # The saving is the whole point, so it is measured rather than claimed.
     # The claim is not "smaller", it is "does not hold the page". So the yardstick
@@ -369,6 +401,8 @@ def main():
           "max channel delta %d on the same %d"
           % (len(fb), "identical" if not geo_diff else "DIFFERS", len(sampled),
              worst, len(sampled)))
+    print("  leg 2  traced plan: default %s bands, banding off %s bands"
+          % (got_plan[0] if got_plan else "n/a", got_off[0] if got_off else "n/a"))
     print("  leg 2  peak rss: banded %.1f MiB, single canvas %.1f MiB, canvas %.1f MiB"
           % (rss_b, rss_o, canvas_mib))
     print("  leg 4  gate C structural check: %d frames vs crops of the --full render, max channel delta %s"

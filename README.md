@@ -97,7 +97,7 @@ Exit codes are a contract, tested in CI against a real binary:
 
 `html-render --help` is the only maintained list of flags.
 Five optional environment variables exist for diagnostics —
-`BLITZ_BAND_MIB` (`16`), `BLITZ_DEADLINE_SECS` (`120`), `BLITZ_DRAIN` (`quiet`),
+`BLITZ_BAND_MIB` (`4`), `BLITZ_DEADLINE_SECS` (`120`), `BLITZ_DRAIN` (`quiet`),
 `BLITZ_RUNTIME` (current-thread), `BLITZ_TRACE` (unset) —
 and stay out of that text because it is tested against the argument parser.
 

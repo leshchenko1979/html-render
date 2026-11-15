@@ -84,7 +84,7 @@ fn help_text() -> String {
          \x20                 (no flag)      paint the document in row bands, then cut\n\
          \x20                                each frame out of the band that holds it.\n\
          \x20                                Peak memory is one band, not the page\n\
-         \x20                                (BLITZ_BAND_MIB, default 16).\n\
+         \x20                                (BLITZ_BAND_MIB, default 4).\n\
          \x20                 --per-element  paint each frame on its OWN element-sized\n\
          \x20                                canvas, viewport scrolled to it. Peak memory\n\
          \x20                                stays flat and total page height stops\n\
@@ -645,6 +645,18 @@ async fn real_main() {
                     })
                     .collect();
                 let (bands, band_of) = plan_bands(&extents, band_rows);
+                // The plan is otherwise invisible from outside: peak RSS says
+                // "something was small", never "the budget was 4 MiB". Trace is
+                // opt-in, so naming it here costs a quiet run nothing and lets a
+                // test assert the default instead of trusting a comment.
+                if trace {
+                    eprintln!(
+                        "trace: clip bands={} band_rows={} frames={}",
+                        bands.len(),
+                        band_rows,
+                        rects.len()
+                    );
+                }
                 // Refused before anything is painted, so a limit breach writes nothing.
                 for (_, band_h) in &bands {
                     refuse_oversized_canvas(phys_w, *band_h);
@@ -745,7 +757,17 @@ const MAX_CANVAS_H: u32 = 65532;
 
 /// Byte budget for one banded canvas, in MiB. `BLITZ_BAND_MIB=0` disables
 /// banding, which reproduces the single-canvas behaviour including its ceiling.
-const BAND_BUDGET_MIB_DEFAULT: usize = 16;
+///
+/// 4 rather than 64 or 16: on a deck whose band plans actually differ
+/// (400 frames x 100 px, 1280 wide) the median of nine interleaved runs is
+/// 1 MiB / 200 bands / 31.1 MiB / 2.01 s, 4 MiB / 50 / 37.3 / 1.77,
+/// 16 MiB / 13 / 61.0 / 1.78. A smaller budget buys 6 MiB of peak and pays
+/// 0.24 s for 150 extra repaints, so 4 is the knee, not 1.
+/// A deck where every frame is taller than the budget cannot tell these apart
+/// at all: `plan_bands` gives such a frame a band of its own, so 1, 4 and 16
+/// produce one identical plan. That is why an earlier measurement ranked them
+/// and was wrong.
+const BAND_BUDGET_MIB_DEFAULT: usize = 4;
 
 /// Refuse a canvas the renderer cannot paint, naming the limit and the remedy.
 ///
@@ -767,7 +789,7 @@ fn refuse_oversized_canvas(w: u32, h: u32) {
 }
 
 /// Rows per band, derived from a byte budget so peak memory stays flat at any
-/// scale: at 2560 px wide a 16 MiB band is 1638 rows, and the same budget at
+/// scale: at 2560 px wide a 4 MiB band is 409 rows, and the same budget at
 /// scale 2 buys half as many rows instead of twice the memory. The budget is a
 /// target, not a cap: a single frame taller than one band gets a band of its
 /// own, so peak memory is the larger of one band and the tallest frame.

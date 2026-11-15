@@ -43,17 +43,19 @@ Raw list: `git log --oneline v0.3.0-beta.7..main`.
   check that at least one frame was painted at a non-zero scroll offset: without
   it, a fixture whose glyphs are too small to shift passes the leg while never
   reaching the path the leg exists to guard (it did, at 16 px text).
-- The band budget defaults to **16 MiB**, not the 64 first shipped, because
-  peak memory is flat below it and linear above it. On a 40-slide deck
-  (48,000 rows) the median of five runs per budget: 1 MiB / 471 bands /
-  61.3 MiB / 2.86 s, 4 MiB / 118 / 61.4 / 3.04, **16 MiB / 30 / 61.5 /
-  3.12**, 32 MiB / 15 / 85.0 / 3.17, 64 MiB / 8 / 155.6 / 2.88, 256 MiB /
-  2 / 509.9 / 2.91, off / 1 / 515.0 / 3.27. From 1 to 16 MiB the floor is
-  DOM and layout, so a smaller budget buys nothing and costs more bands;
-  above it every doubling adds its bytes to peak. Wall time shows no trend
-  (a 150-slide deck reads 11.60 / 11.21 / 10.83 / 11.26 s at 16 / 32 / 64 /
-  128 MiB), so 16 MiB is the frontier point: a quarter of the old peak at
-  the same speed.
+- The band budget defaults to **4 MiB**. The budget only matters when frames
+  are short relative to it: `plan_bands` gives a frame taller than the budget a
+  band of its own, so on a deck of tall slides 1, 4 and 16 MiB produce one
+  identical plan. An earlier version of this entry ranked the budgets on exactly
+  such a deck (1 MiB / 471 bands, 4 / 118, 16 / 30) — that column was arithmetic
+  never observed, and it is withdrawn. On a deck that can tell them apart
+  (400 frames x 100 CSS px, 1280 phys wide, medians of nine interleaved runs):
+  1 MiB / 200 bands / 31.1 MiB / 2.01 s, **4 MiB / 50 / 37.3 / 1.77**,
+  16 MiB / 13 / 61.0 / 1.78, 64 MiB / 4 bands, off / one 515 MiB canvas. A
+  smaller budget buys 6 MiB of peak and pays 0.24 s for 150 extra repaints, so
+  4 MiB is the knee, not 1. `tools/test_bands.py` asserts the default's plan
+  from a `BLITZ_TRACE=1` line (50 bands, 1,310 rows/band on a 100-slide deck),
+  because peak RSS can say "something was small" but never which budget ran.
 
 ## v0.3.0-beta.7 — 2026-11-14
 
