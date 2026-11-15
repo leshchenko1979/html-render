@@ -154,13 +154,17 @@ The divergence is concentrated, not spread: **7 rows are one table** (#9) and
 - **Untrusted input is not sandboxed.** Sub-resources are fetched at render time with no allowlist
   and `file://` is readable ([SECURITY.md](SECURITY.md#what-rendering-does-to-the-machine)).
 - **Peak memory is per process.** Counted across the whole process tree the advantage narrows to 5.7–6.1×.
-- **Four known defects produce wrong output with exit 0**, measured on `0.3.0-beta.8`:
-  a truncated `--document` render (#10), table layout
+- **Three known defects produce wrong output with exit 0**, measured on `0.3.0-beta.8`:
+  table layout
   off by up to 18px (#9), `<br>` runs shifting content 16px per break (#15), and a `200`
   whose body is not an image — that one fails to decode inside Blitz, after the bytes
   were delivered, so nothing upstream of the decoder can see it. [Read them](https://github.com/leshchenko1979/html-render/issues?q=is%3Aissue+is%3Aopen)
   before putting a render in a pipeline. #9 and #15 are pinned in the corpus gate;
-  **#10 and the non-image `200` have no test at all**.
+  **the non-image `200` has no test at all**.
+- **A document taller than the canvas is cut, and now says so** (#10). The PNG is still
+  `<width> x <height>` at exit `0`, because every golden depends on that default, but the
+  `TIMING` line carries `content_h=<document px> canvas_h=<canvas px>` and stderr names how
+  many rows were lost. Pass `--full` to paint the whole document.
 - **A font the host does not have is reported** (#12). fontconfig always resolves
   something, so a document naming a family that is not installed is rendered in
   whatever the substitution picked — at exit `0`, with a layout that still looks

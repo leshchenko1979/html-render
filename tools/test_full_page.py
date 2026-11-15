@@ -2,21 +2,29 @@
 """Contract test: a tall document must be reachable, and the default must not lie.
 
 Single-image mode paints exactly `<width> x <height>` device pixels. A document
-taller than that is CUT -- the PNG is valid, the exit code is 0, and nothing on
-stderr says a third of the page is missing. The README recommends that mode for
-"one-pagers and dashboards", which are precisely the documents that are taller
-than a viewport.
+taller than that is CUT -- the PNG is valid, the exit code is 0, and before the
+`content_h` field nothing on stderr said a third of the page was missing. The
+README recommends that mode for "one-pagers and dashboards", which are precisely
+the documents that are taller than a viewport.
 
 `--full` asks for the document's own scroll height as the canvas. The default
 stays the viewport so existing goldens do not move, which is why leg (a) is a
 test and not an assumption: it pins the trap so a future change that silently
 "fixes" it is visible.
 
-Three legs:
+Seven legs:
 
   a  default      2200px doc @ 600  -> 800x600, marker ABSENT   (the trap, pinned)
   b  --full       2200px doc @ 600  -> 800x2200, marker PRESENT (the escape hatch)
   c  --full       400px doc  @ 600  -> 800x600                  (never shrinks)
+  d  --full       2200px doc        -> banded == single canvas  (streaming is not lossy)
+  e  --full       position:fixed    -> warns, falls back        (cannot be banded)
+  f  default      2200px doc @ 600  -> content_h=2200 named     (the cut is loud)
+  g  default      400px doc  @ 600  -> content_h ABSENT         (the control for f)
+
+Leg (g) is what makes (f) mean something: a substring check on a line the binary
+always prints would pass on any document, so the shorter-than-canvas case proves
+the field is conditional rather than constant.
 
 Usage:
     python3 tools/test_full_page.py --bin /path/to/html-render
@@ -169,6 +177,53 @@ def main():
         "e-fixed",
         pa.returncode == 0 and po.returncode == 0 and warned and fell_back,
         f"rc={pa.returncode} warned={warned} fell_back={fell_back}",
+    ))
+
+    # f — the cut must be LOUD. A tall document at the default canvas is still cut
+    # and still exits 0 (leg a pins that), but the timing line now carries the
+    # document's own height and stderr names the missing rows. Before this leg,
+    # the only observable difference between a whole render and the top third of
+    # one was the PNG's dimensions.
+    f_html = os.path.join(tmp, "f.html")
+    with open(f_html, "w", encoding="utf-8") as fh:
+        fh.write(tall_document(TALL))
+    f_out = os.path.join(tmp, "f.png")
+    pf = render(f_html, f_out, [])
+    f_has_h = f"content_h={TALL}" in pf.stderr
+    f_has_c = f"canvas_h={VIEW_H}" in pf.stderr
+    f_has_rows = str(TALL - VIEW_H) in pf.stderr
+    f_ok = (
+        pf.returncode == 0
+        and f_has_h
+        and f_has_c
+        and "were cut" in pf.stderr
+        and f_has_rows
+    )
+    legs.append((
+        "f-signal",
+        f_ok,
+        f"rc={pf.returncode} content_h={f_has_h} canvas_h={f_has_c} "
+        f"rows={f_has_rows}",
+    ))
+
+    # g — the control for f. A document SHORTER than the canvas is not cut, so the
+    # same strings must be absent. Without this leg, `in stderr` on a string that
+    # is always printed would pass and f would be decoration.
+    g_html = os.path.join(tmp, "g.html")
+    with open(g_html, "w", encoding="utf-8") as fh:
+        fh.write(tall_document(SHORT))
+    g_out = os.path.join(tmp, "g.png")
+    pg = render(g_html, g_out, [])
+    g_ok = (
+        pg.returncode == 0
+        and "content_h=" not in pg.stderr
+        and "were cut" not in pg.stderr
+    )
+    legs.append((
+        "g-nosignal",
+        g_ok,
+        f"rc={pg.returncode} content_h={'content_h=' in pg.stderr} "
+        f"warned={'were cut' in pg.stderr}",
     ))
 
     failed = 0

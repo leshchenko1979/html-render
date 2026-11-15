@@ -805,6 +805,10 @@ async fn real_main() {
     // the element with rc=0 — the class this CLI keeps closing — so the count is
     // reported and the run exits 4.
     let mut clipped_frames = 0usize;
+    // A document taller than the canvas is CUT: a valid PNG of the top of the
+    // page, and `--full` is the documented escape. The cut used to be silent, so
+    // this records the document's own height to report it after the fact.
+    let mut cut_content_h: Option<u32> = None;
     match selector {
         None => {
             // Clip mode creates its output directory (`create_dir_all` below),
@@ -816,17 +820,21 @@ async fn real_main() {
                     std::fs::create_dir_all(parent).expect("create outdir");
                 }
             }
-            // Without `--full` the canvas is exactly the requested viewport,
-            // so a document taller than `height` is CUT with rc=0 — a plausible
-            // PNG of the top of the page and nothing on stderr. `--full` asks
-            // for the document's own scroll height instead; the default stays
-            // the viewport so existing goldens do not move.
-            let out_phys_h = if full_page {
-                let css_h = document.root_element().scroll_height();
-                ((css_h * scale).round() as u32).max(phys_h)
-            } else {
-                phys_h
-            };
+            // Without `--full` the canvas is exactly the requested viewport, so a
+            // document taller than `height` is CUT: a plausible PNG of the top of
+            // the page. `--full` asks for the document's own scroll height
+            // instead. The default stays the viewport so existing goldens do not
+            // move, but the cut is no longer silent — the document's height is
+            // measured either way, reported as `content_h` on the timing line,
+            // and named in a warning. The exit code stays 0: whether a knowingly
+            // partial render should be fatal is caller policy (#10), the same
+            // question #17 asks about a cut width.
+            let content_h =
+                ((document.root_element().scroll_height() * scale).round() as u32).max(phys_h);
+            if !full_page && content_h > phys_h {
+                cut_content_h = Some(content_h);
+            }
+            let out_phys_h = if full_page { content_h } else { phys_h };
             if full_page {
                 // Banded + streamed: the canvas is never materialised whole, so
                 // the document height stops being a memory limit or a ceiling.
@@ -1049,15 +1057,32 @@ async fn real_main() {
     }
     let painted = paint_started.elapsed();
 
+    // `content_h` appears only when the document was taller than the canvas, so a
+    // log reader sees the truncation without parsing the warning text below.
+    let cut_field = match cut_content_h {
+        Some(h) => format!(" content_h={h} canvas_h={phys_h}"),
+        None => String::new(),
+    };
     eprintln!(
-        "TIMING parse_ms={} layout_ms={} paint_ms={} total_ms={} scale={} mode={}",
+        "TIMING parse_ms={} layout_ms={} paint_ms={} total_ms={} scale={} mode={}{}",
         parsed.as_millis(),
         laid_out.as_millis(),
         painted.as_millis(),
         started.elapsed().as_millis(),
         scale,
-        if as_document { "document" } else { "fragment" }
+        if as_document { "document" } else { "fragment" },
+        cut_field
     );
+
+    // The document is taller than the canvas: the PNG is valid, the exit code is
+    // 0, and without this line nothing says the bottom of the page is missing.
+    if let Some(h) = cut_content_h {
+        eprintln!(
+            "warning: document is {h}px tall but the canvas is {phys_h}px: \
+             the bottom {}px were cut (pass --full to paint the whole document)",
+            h - phys_h
+        );
+    }
 
     // A sub-resource that never arrived used to leave a blank box and exit 0:
     // a valid PNG of the wrong thing, indistinguishable from a render where the
