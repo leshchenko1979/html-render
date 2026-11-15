@@ -79,7 +79,12 @@ fn help_text() -> String {
          \n\
          MODES:\n\
          \x20 (default)     one PNG of the viewport\n\
-         \x20 --full        one PNG, canvas as tall as the whole document\n\
+         \x20 --full        one PNG, canvas as tall as the whole document, painted\n\
+         \x20               in row bands and streamed straight into the encoder, so\n\
+         \x20               total page height has no ceiling (BLITZ_BAND_MIB,\n\
+         \x20               default 4). A document holding a position:fixed element\n\
+         \x20               is painted as ONE canvas instead, because a banded paint\n\
+         \x20               would repeat that element down the image.\n\
          \x20 --clip        one PNG per selector match, written as clip_NN.png, by\n\
          \x20               one of two strategies:\n\
          \x20                 (no flag)      paint the document in row bands, then cut\n\
