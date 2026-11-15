@@ -22,24 +22,28 @@ therefore set from the measured run-to-run spread of the probe itself, and they
 are deliberately loose, because a gate that fires on a quiet machine's noise
 gets disabled by whoever has to babysit it.
 
-Measured spread across two CI runs on the same runner image (18:08Z and 18:28Z,
-same commit class, `--repeats 3`):
+**Absolute wall clock is not compared at all.** Two runs on the same runner
+(`runnervmy75tu`, 4 vCPU, 15,989 MiB, same deck `b77aac2d`, same binary) read
+Chromium 1.604 s then 3.120 s and html-render 1.011 s then 1.689 s: both engines
+roughly doubled while memory moved 0.2-0.4 % and the ratios moved 16 %. The
+machine was busy; the program was not slower. Gating an absolute second on a
+shared runner gates the neighbour's load, and a check that fails for reasons
+outside the repo is a check that gets switched off.
 
-| quantity | run A | run B | spread |
+So the gate compares quantities that are properties of (renderer x document):
+
+| quantity | kind | tolerance | largest spread seen |
 |---|---|---|---|
-| Chromium wall | 3.186 s | 3.774 s | 18.5 % |
-| html-render wall | 2.240 s | 2.352 s | 5.0 % |
-| Chromium peak tree RSS | 2336.1 MiB | 2452.6 MiB | 5.0 % |
-| html-render peak tree RSS | 37.9 MiB | 37.7 MiB | 0.5 % |
-| wall ratio | 1.422 | 1.605 | 12.8 % |
-| memory ratio | 61.64 | 65.06 | 5.5 % |
+| peak tree RSS, four shapes | absolute | 20 % | 5.0 % |
+| fidelity, pixels off by >16 | absolute | 15 % | 0.0 % |
+| wall ratio, three shapes | ratio | 35 % | 16.8 % |
+| memory ratio, three shapes | ratio | 20 % | 5.5 % |
 
-So: **35 % on wall time, 20 % on memory, 15 % on fidelity** — each roughly two
-to three times the largest spread observed, and far below the doubling this
-exists to catch. Chromium's own wall time is the noisiest quantity on the board
-at 18.5 %, which is why the wall tolerance is the widest: the browser is a
-multi-process program whose startup cost varies with the page cache, and
-pretending otherwise would make the gate about the runner rather than the code.
+A ratio survives a busy machine because both engines are measured in the same
+window: a machine-wide slowdown cancels, a renderer-only regression does not.
+The self-test pins that pair — `machine_slowdown_passes` and
+`renderer_only_regression_fails` — because it is the distinction the gate exists
+to draw.
 
 Usage:
 
@@ -48,6 +52,8 @@ Usage:
 """
 
 import argparse
+import contextlib
+import io
 import json
 import sys
 
@@ -129,15 +135,15 @@ def compare(committed, fresh):
     # version of this file checked only `engines.*`, while the docs advertise six
     # rows: a three-fold regression in the `--clip` or `--per-element` path would
     # have moved four published numbers and left this gate green.
+    # Absolute RSS only. The matching `wall_median_s` rows were here until a
+    # run on the same host, deck and binary read 1.604 s where the previous one
+    # read 3.120 s for Chromium and 1.011 s where it read 1.689 s for ours:
+    # both engines doubled, so that row was measuring the runner's load. Wall
+    # clock stays in the receipt and stays gated as a RATIO, below.
     plan = [
-        ("chromium wall", "engines.chromium.wall_median_s", WALL_TOL),
         ("chromium peak tree RSS", "engines.chromium.peak_tree_mib", MEM_TOL),
-        ("--full wall", "engines.html-render.wall_median_s", WALL_TOL),
         ("--full peak tree RSS", "engines.html-render.peak_tree_mib", MEM_TOL),
-        ("--clip wall", "shapes.slides.html-render-clip.wall_median_s", WALL_TOL),
         ("--clip peak tree RSS", "shapes.slides.html-render-clip.peak_tree_mib", MEM_TOL),
-        ("--per-element wall",
-         "shapes.slides.html-render-per-element.wall_median_s", WALL_TOL),
         ("--per-element peak tree RSS",
          "shapes.slides.html-render-per-element.peak_tree_mib", MEM_TOL),
         ("fidelity, pixels off by >16", "fidelity.over16_pct", FIDELITY_TOL),
@@ -214,13 +220,17 @@ def _md5(deck):
         return "<none>"
     return str(deck.get("html_md5"))[:8]
 
-def report(rows, fails, deck=None):
-    if deck:
-        old, new = deck
-        same = "same" if deck_delta(old or {}, new or {}) == [] else "DIFFERENT"
-        print("deck  committed %s  fresh %s  (%s)"
-              % (_md5(old), _md5(new), same))
-        print()
+def report(rows, fails, committed, fresh):
+    # `deck_delta` reads `receipt["deck"]` itself, so it takes the RECEIPTS.
+    # Handing it the two deck blocks made its own `get("deck")` return None on
+    # both sides, and this line printed DIFFERENT on every run — a header that
+    # contradicted the FAIL list underneath it, which is the fastest way to
+    # teach a reader to skip the header.
+    old, new = committed.get("deck"), fresh.get("deck")
+    same = "same" if not deck_delta(committed, fresh) else "DIFFERENT"
+    print("deck  committed %s  fresh %s  (%s)"
+          % (_md5(old), _md5(new), same))
+    print()
     print("%-30s %12s %12s %8s %7s" % ("quantity", "committed", "fresh", "delta", "band"))
     for label, old, new, delta, tol, ok in rows:
         print("%-30s %12.4g %12.4g %+7.1f%% %6.0f%% %s"
@@ -311,7 +321,13 @@ def self_test():
     leg("chromium_wall_noise_passes", _receipt(wall_c=3.774 * 1.18), 0)
     leg("wall_ratio_12pct_passes", _receipt(wall_c=3.774 * 1.13), 0)
     leg("memory_doubled_fails", _receipt(peak_h=37.7 * 2), 1)
-    leg("wall_doubled_fails", _receipt(wall_h=2.352 * 2), 1)
+    leg("renderer_only_regression_fails", _receipt(wall_h=2.352 * 2), 1)
+    # The pair the gate exists to draw: a busy machine slows BOTH engines, so
+    # every ratio holds and nothing has regressed. Before absolute wall clock
+    # was dropped, this leg failed — which is what a noisy runner looked like.
+    leg("machine_slowdown_passes",
+        _receipt(wall_c=3.774 * 1.9, wall_h=2.352 * 1.9,
+                 clip_wall=2.386 * 1.9, pe_wall=2.349 * 1.9), 0)
     leg("fidelity_doubled_fails", _receipt(fid=4.5462 * 2), 1)
     # The four rows the first version of this file did not read at all.
     leg("clip_wall_doubled_fails", _receipt(clip_wall=2.386 * 2), 1)
@@ -342,6 +358,22 @@ def self_test():
     zero["engines"]["html-render"]["peak_tree_mib"] = 0
     leg("zero_denominator_fails", zero, 1)
 
+    # The header must agree with the verdict. It printed DIFFERENT on two
+    # identical decks, because `deck_delta` reads `receipt["deck"]` and was
+    # handed the blocks instead of the receipts.
+    def report_leg(name, committed, fresh, needle):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            report([], [], committed, fresh)
+        text = buf.getvalue()
+        ok = needle in text
+        legs.append((name, ok, 0 if ok else 1, 0,
+                     [] if ok else [text.strip()]))
+
+    report_leg("report_header_same", _receipt(), _receipt(), "(same)")
+    report_leg("report_header_different", _receipt(),
+               _receipt(deck={**DECK_BASE, "html_md5": "0" * 32}), "(DIFFERENT)")
+
     bad = [l for l in legs if not l[1]]
     for name, ok, rc, want, fails in legs:
         print("%-4s %-28s rc=%d want=%d" % ("ok" if ok else "FAIL", name, rc, want))
@@ -369,7 +401,7 @@ def main():
         ap.error("--committed and --fresh are both required (or --self-test)")
     committed, fresh = load(args.committed), load(args.fresh)
     rows, fails = compare(committed, fresh)
-    return report(rows, fails, (committed.get("deck"), fresh.get("deck")))
+    return report(rows, fails, committed, fresh)
 
 
 if __name__ == "__main__":
