@@ -108,6 +108,19 @@ jobs:
         # the 65,532-row ceiling renders where it used to exit 5.
         run: python3 tools/test_bands.py --bin target/release/render
 
+      - name: Test the memory gate
+        # Every other step here asserts behaviour; none asserted what it costs in
+        # memory, so a change that doubled a shape's footprint passed green. Four
+        # shapes, two banding reaches and two it structurally cannot (a single
+        # oversized element gets its own band, so the band IS the frame). Pins are
+        # absolute because the dominant term is geometry, not work done, and the
+        # unbanded pair proves the instrument can still tell the shapes apart.
+        # The self-test runs first: it proves the gate can say no at all, which is
+        # the thing a green run is otherwise unable to demonstrate.
+        run: |
+          python3 tools/test_memory.py --self-test
+          python3 tools/test_memory.py --bin target/release/render
+
       - name: Test the exit-code contract
         # The README documents 0/2/3/101, so every one is asserted here. An
         # unknown flag used to exit 0 and render anyway: a typo produced the

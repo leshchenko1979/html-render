@@ -1,0 +1,9 @@
+{
+  "note": "Peak RSS of the renderer's process tree, sampled every 25 ms by tools/measure_rss.py (mode=tree), for the four shapes in tools/test_memory.py. Measured on x86_64 Linux against a 1280x720 viewport at scale 2. The dominant term is geometry, not work done (a canvas is w*h*4), which is why absolute pins are meaningful: over seven to eight runs of each shape the widest spread was 1.8%. Tolerances are NOT stored here on purpose - they live in the test's source, so --update-baseline cannot widen the gate it is meant to enforce.",
+  "peak_mib": {
+    "clip_multiband": 68.1,
+    "clip_multiband_unbanded": 325.0,
+    "clip_oversized_frame": 809.5,
+    "full_streamed": 28.5
+  }
+}

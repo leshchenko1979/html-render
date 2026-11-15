@@ -114,6 +114,27 @@ lossless: `--per-element` and `--clip` differ on 3,551 of 44,236,800 pixels
 (0.0080 %), max channel delta 2/255, which is antialiasing at fractional
 offsets.
 
+### What is actually gated
+
+The rows above are history. What is a gate is `tools/test_memory.py`, which pins
+absolute peak RSS for four shapes against `tools/memory_baseline.json`:
+
+| shape | why it is in the set |
+|---|---|
+| `full_streamed` | `--full` on a 20,000 px document: peak is one band, not the canvas |
+| `clip_oversized_frame` | one 20,000 px element: `plan_bands` gives it its own band, so banding is a no-op by construction and the band IS the frame |
+| `clip_multiband` | a 20-slide deck, where banding does its job |
+| `clip_multiband_unbanded` | the same deck at `BLITZ_BAND_MIB=0`: the control that proves the instrument still resolves the difference banding makes |
+
+It fails three ways, the same three the corpus gate uses: a shape with no pin, a
+shape that grew past its pin, and a shape that dropped far below its pin — a
+baseline nobody updates rots in the silent direction, leaving a tolerance that no
+longer describes the tree.
+
+The pins are that file's numbers and are not repeated here: a second copy is a
+copy that drifts. This section carries its own proof of that — its rows were
+labelled history while `README.md` still advertised the same figures as current.
+
 ## Traps
 
 Each of these cost real time, and none of them raises an error.
