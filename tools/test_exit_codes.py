@@ -234,7 +234,7 @@ def main():
         tall_off = os.path.join(tmp, "tall-off.png")
         check("5 canvas too tall (--full, banding off)",
               [tall, tall_off, "120", "60", "1", "--full"], 5,
-              want_err="banding lifts this", env={"BLITZ_BAND_MIB": "0"})
+              want_err="set BLITZ_BAND_MIB above 0", env={"BLITZ_BAND_MIB": "0"})
         if os.path.exists(tall_off):
             fails.append("5 canvas too tall (--full, banding off) wrote a file before refusing")
             print("FAIL 5 canvas too tall (--full, banding off) wrote a file before refusing")
