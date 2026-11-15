@@ -27,7 +27,8 @@ use std::env;
 use std::fs::File;
 use std::io::Write as _;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use anyrender::{render_to_buffer, ImageRenderer as _, PaintScene as _};
@@ -36,7 +37,7 @@ use blitz_dom::{util::Color, Document as _, DocumentConfig, Point};
 use blitz_html::HtmlDocument;
 use blitz_net::Provider;
 use blitz_paint::paint_scene;
-use blitz_traits::net::{Bytes, NetHandler, NetProvider, Request};
+use blitz_traits::net::{NetHandler, NetProvider, Request};
 use blitz_traits::shell::{ColorScheme, Viewport};
 use peniko::kurbo::Rect;
 use peniko::Fill;
@@ -115,8 +116,9 @@ fn help_text() -> String {
          \x20 2    wrong argument count, an unknown flag, --clip not first, --per-element\n\
          \x20      outside --clip, or --full with --clip\n\
          \x20 3    the selector matched nothing, or every match had no layout box\n\
-         \x20 4    the output was written but is known to be incomplete: an asset fetch\n\
-         \x20      hit the deadline, or a frame was cut to the canvas width\n\
+         \x20 4    the output was written but is known to be incomplete: a sub-resource\n\
+         \x20      failed to fetch or was refused as too large, an asset fetch hit the\n\
+         \x20      deadline, or a frame was cut to the canvas width\n\
          \x20 5    the canvas would exceed the renderer limit (65408 wide, 65532 tall);\n\
          \x20      nothing was written\n\
          \x20 101  a panic: an unparsable number, an invalid selector, an unreadable input\n",
@@ -124,7 +126,8 @@ fn help_text() -> String {
     )
 }
 
-/// Restore the REQUESTED url on every resource response.
+/// Restore the REQUESTED url on every resource response, and make a failed
+/// fetch observable at all.
 ///
 /// `blitz_net::Provider::fetch` reports the url a response ended at, i.e. the
 /// FINAL url after any HTTP redirects. `Document::load_resource` then keys its
@@ -134,41 +137,93 @@ fn help_text() -> String {
 /// empty list, and the bytes are dropped after decoding successfully: a blank
 /// box, exit code 0, nothing on stderr. Measured against a local server that
 /// answers `302` with a real PNG — 795 bytes of all-white output, and both hops
-/// in the server log.
+/// in the server log. Rewriting the url back to the requested one before the
+/// handler sees it makes both sides of that map agree, and needs no fork.
 ///
-/// Rewriting the url back to the requested one before the handler sees it makes
-/// both sides of that map agree, and needs no fork of the dependency.
+/// The same wrapper is where a failed fetch becomes visible. `Provider::fetch`
+/// swallows the error: it reports it through `tracing` (compiled out here) and
+/// never calls the handler, so a `404` leaves the node pending, the box blank
+/// and the exit code 0 — a valid PNG of the wrong thing. Its public
+/// `fetch_with_callback` hands back the `Result`, which is the only place the
+/// failure is observable without forking the dependency.
+///
+/// It also owns the in-flight count. `Provider::count` derives it from the
+/// refcount of its waker `Arc`, which `fetch` clones for the life of a request;
+/// `fetch_with_callback` does not clone it, so forwarding that count would
+/// report an empty queue while fetches were still running. The drain loop reads
+/// this counter, so the counter has to be ours.
 struct RequestedUrlProvider {
     inner: Arc<Provider>,
+    inflight: Arc<AtomicUsize>,
+    failed: Arc<Mutex<Vec<String>>>,
+    max_image_px: u64,
 }
 
 impl RequestedUrlProvider {
     fn new(inner: Arc<Provider>) -> Self {
-        Self { inner }
+        Self {
+            inner,
+            inflight: Arc::new(AtomicUsize::new(0)),
+            failed: Arc::new(Mutex::new(Vec::new())),
+            max_image_px: max_image_px(),
+        }
     }
 
-    /// In-flight request count. `Provider` exposes this as an inherent method
-    /// derived from its waker's refcount (`count`, `is_empty`), not through the
-    /// `NetProvider` trait, so a wrapper has to forward them by hand or the
-    /// drain loop loses the only signal that tells it the fetches are done.
+    /// In-flight request count, read by the drain loop in `real_main`.
     fn count(&self) -> usize {
-        self.inner.count()
+        self.inflight.load(Ordering::SeqCst)
     }
 
     fn is_empty(&self) -> bool {
-        self.inner.is_empty()
+        self.count() == 0
+    }
+
+    /// One line per sub-resource that failed or was refused, in completion
+    /// order. Read after painting, where a non-empty list decides exit code 4.
+    fn failures(&self) -> Vec<String> {
+        self.failed.lock().map(|v| v.clone()).unwrap_or_default()
     }
 }
 
 impl NetProvider for RequestedUrlProvider {
-    fn fetch(&self, doc_id: usize, request: Request, handler: Box<dyn NetHandler>) {
+    fn fetch(&self, _doc_id: usize, request: Request, handler: Box<dyn NetHandler>) {
         let requested = request.url.to_string();
-        self.inner.fetch(
-            doc_id,
+        let inflight = Arc::clone(&self.inflight);
+        let failed = Arc::clone(&self.failed);
+        let max_image_px = self.max_image_px;
+        // Counted before the task is spawned, so the drain loop can never see
+        // an empty queue between this call and the spawned task starting.
+        inflight.fetch_add(1, Ordering::SeqCst);
+        self.inner.fetch_with_callback(
             request,
-            Box::new(RequestedUrlHandler {
-                requested,
-                inner: handler,
+            Box::new(move |result| {
+                match result {
+                    Ok((_final_url, bytes)) => match image_pixels(&bytes) {
+                        // Dropping the bytes leaves the node pending, which
+                        // paints the same blank box a failed fetch does — but
+                        // now the run says so and exits 4 instead of 0.
+                        Some((w, h))
+                            if max_image_px > 0
+                                && u64::from(w) * u64::from(h) > max_image_px =>
+                        {
+                            if let Ok(mut v) = failed.lock() {
+                                v.push(format!(
+                                    "{requested}: {w}x{h} image is {:.1} MP, above the {} MP cap \
+                                     (BLITZ_MAX_IMAGE_MP=0 disables it)",
+                                    (u64::from(w) * u64::from(h)) as f64 / 1_000_000.0,
+                                    max_image_px / 1_000_000,
+                                ));
+                            }
+                        }
+                        _ => handler.bytes(requested, bytes),
+                    },
+                    Err(e) => {
+                        if let Ok(mut v) = failed.lock() {
+                            v.push(format!("{requested}: {e}"));
+                        }
+                    }
+                }
+                inflight.fetch_sub(1, Ordering::SeqCst);
             }),
         );
     }
@@ -178,16 +233,109 @@ impl NetProvider for RequestedUrlProvider {
     }
 }
 
-struct RequestedUrlHandler {
-    requested: String,
-    inner: Box<dyn NetHandler>,
+/// Decoded-pixel cap for one sub-resource image, in pixels. Read from
+/// `BLITZ_MAX_IMAGE_MP` (megapixels, `0` disables the cap).
+///
+/// 128 MP is ~512 MiB of RGBA. Above what a document plausibly embeds — a
+/// 9000x9000 PNG is 81 MP and renders in 2.4 s on the released binary — and far
+/// below what a tiny file can demand: a 60-byte PNG header claiming 30000x30000
+/// allocates 3.6 GB before a single pixel is decoded, and on a host without the
+/// headroom that allocation aborts the process with 134, which is
+/// indistinguishable from a segfault and names no file.
+const MAX_IMAGE_MP_DEFAULT: u64 = 128;
+
+fn max_image_px() -> u64 {
+    let mp: u64 = std::env::var("BLITZ_MAX_IMAGE_MP")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(MAX_IMAGE_MP_DEFAULT);
+    mp.saturating_mul(1_000_000)
 }
 
-impl NetHandler for RequestedUrlHandler {
-    fn bytes(self: Box<Self>, _resolved_url: String, bytes: Bytes) {
-        let Self { requested, inner } = *self;
-        inner.bytes(requested, bytes);
+/// Pixel dimensions from an image header, without decoding one pixel.
+///
+/// Only the four formats the renderer actually decodes are recognised. That set
+/// is measured, not assumed: rendering one file of each on the released binary
+/// paints PNG, JPEG, GIF and WebP, while BMP and TIFF paint nothing, so those
+/// two cannot allocate a buffer however large their header claims.
+///
+/// Anything unrecognised returns `None` and is passed through uncapped. A cap
+/// that guesses is worse than no cap: refusing a document that renders today is
+/// a regression, while an uncapped format is the behaviour it already had.
+fn image_pixels(bytes: &[u8]) -> Option<(u32, u32)> {
+    if bytes.len() >= 24 && bytes.starts_with(b"\x89PNG\r\n\x1a\n") && bytes[12..].starts_with(b"IHDR")
+    {
+        let w = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
+        let h = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
+        return Some((w, h));
     }
+    if bytes.len() >= 10 && (bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a")) {
+        let w = u16::from_le_bytes([bytes[6], bytes[7]]) as u32;
+        let h = u16::from_le_bytes([bytes[8], bytes[9]]) as u32;
+        return Some((w, h));
+    }
+    if bytes.len() >= 30 && bytes.starts_with(b"RIFF") && bytes[8..].starts_with(b"WEBP") {
+        // Extended format: canvas size is 24-bit, stored minus one.
+        if bytes[12..].starts_with(b"VP8X") {
+            let w = 1 + u32::from_le_bytes([bytes[24], bytes[25], bytes[26], 0]);
+            let h = 1 + u32::from_le_bytes([bytes[27], bytes[28], bytes[29], 0]);
+            return Some((w, h));
+        }
+        // Lossy: the frame header carries two 14-bit dimensions.
+        if bytes[12..].starts_with(b"VP8 ") {
+            let w = (u16::from_le_bytes([bytes[26], bytes[27]]) & 0x3FFF) as u32;
+            let h = (u16::from_le_bytes([bytes[28], bytes[29]]) & 0x3FFF) as u32;
+            return Some((w, h));
+        }
+        // Lossless: one little-endian word holds (w-1) then (h-1), 14 bits each.
+        if bytes[12..].starts_with(b"VP8L") {
+            let bits = u32::from_le_bytes([bytes[21], bytes[22], bytes[23], bytes[24]]);
+            return Some((1 + (bits & 0x3FFF), 1 + ((bits >> 14) & 0x3FFF)));
+        }
+        return None;
+    }
+    jpeg_pixels(bytes)
+}
+
+/// Walk JPEG markers to the frame header, which is the only place the
+/// dimensions appear.
+fn jpeg_pixels(bytes: &[u8]) -> Option<(u32, u32)> {
+    if bytes.len() < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8 {
+        return None;
+    }
+    let mut i = 2usize;
+    while i + 9 <= bytes.len() {
+        if bytes[i] != 0xFF {
+            i += 1;
+            continue;
+        }
+        let marker = bytes[i + 1];
+        // Standalone markers carry no length field.
+        if marker == 0xD8 || marker == 0x01 || (0xD0..=0xD7).contains(&marker) {
+            i += 2;
+            continue;
+        }
+        // Fill bytes: 0xFF may repeat before the marker itself.
+        if marker == 0xFF {
+            i += 1;
+            continue;
+        }
+        let is_sof = matches!(
+            marker,
+            0xC0 | 0xC1 | 0xC2 | 0xC3 | 0xC5 | 0xC6 | 0xC7 | 0xC9 | 0xCA | 0xCB | 0xCD | 0xCE | 0xCF
+        );
+        if is_sof {
+            let h = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]) as u32;
+            let w = u16::from_be_bytes([bytes[i + 7], bytes[i + 8]]) as u32;
+            return Some((w, h));
+        }
+        let seglen = u16::from_be_bytes([bytes[i + 2], bytes[i + 3]]) as usize;
+        if seglen < 2 {
+            return None;
+        }
+        i += 2 + seglen;
+    }
+    None
 }
 
 /// Remove `clip_NN.png` files left in `dir` by an earlier, longer run.
@@ -483,9 +631,11 @@ async fn real_main() {
     //
     // resolve() is the only thing that drains the document's resource channel:
     // it starts with handle_messages(), which try_recv()s the loaded asset and
-    // applies it. is_empty() reports the PROVIDER's waker Arc count, a different
-    // queue, so the loop can break with the image fetched and delivered but not
-    // yet ingested. Both upstream examples do this (screenshot.rs:98,
+    // applies it. is_empty() reports the provider's in-flight request count — now
+    // our own counter, not the waker Arc refcount — which is a different queue
+    // from the document's channel, so the loop can break with the image fetched
+    // and delivered but not yet ingested. Both upstream examples do this
+    // (screenshot.rs:98,
     // paint_bench.rs:111) — measured, not assumed.
     //
     // `naive` and `yield` deliberately stay unpatched so tools/drain_probe.py
@@ -753,6 +903,22 @@ async fn real_main() {
         scale,
         if as_document { "document" } else { "fragment" }
     );
+
+    // A sub-resource that never arrived used to leave a blank box and exit 0:
+    // a valid PNG of the wrong thing, indistinguishable from a render where the
+    // image loaded. Refused-by-cap and failed-to-fetch land in the same list,
+    // because to the caller they are the same fact — the picture is incomplete.
+    let failed_assets = net.failures();
+    if !failed_assets.is_empty() {
+        for line in &failed_assets {
+            eprintln!("warning: sub-resource failed: {line}");
+        }
+        eprintln!(
+            "error: exiting 4: {} sub-resource(s) missing or refused (see the warnings above)",
+            failed_assets.len()
+        );
+        std::process::exit(4);
+    }
 
     // Reported after the diagnostics, so a caller still gets the timing that
     // says how far the run got before giving up.

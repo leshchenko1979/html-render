@@ -95,14 +95,14 @@ Exit codes are a contract, tested in CI against a real binary:
 | `0` | PNG written, or `--help` / `--version` printed |
 | `2` | bad arguments: unknown flag, `--clip` not first, `--per-element` outside `--clip`, `--full` with `--clip`, `--document` with `--fragment` |
 | `3` | the selector matched nothing |
-| `4` | output written but known to be incomplete: a fetch hit `BLITZ_DEADLINE_SECS`, or a frame was cut to the canvas width |
+| `4` | output written but known to be incomplete: a sub-resource failed to fetch (`404`, DNS, connection refused) or was refused as too large, a fetch hit `BLITZ_DEADLINE_SECS`, or a frame was cut to the canvas width |
 | `5` | a single canvas would exceed the renderer limit (65408 wide, 65532 tall): nothing written. `--clip` and `--full` band the page, so this now means one *band* or one element is too large, or banding was disabled with `BLITZ_BAND_MIB=0` |
 | `101` | panic: unparsable number, invalid selector, unreadable input |
 
 `html-render --help` is the only maintained list of flags.
-Five optional environment variables exist for diagnostics —
+Six optional environment variables exist for diagnostics —
 `BLITZ_BAND_MIB` (`4`), `BLITZ_DEADLINE_SECS` (`120`), `BLITZ_DRAIN` (`quiet`),
-`BLITZ_RUNTIME` (current-thread), `BLITZ_TRACE` (unset) —
+`BLITZ_MAX_IMAGE_MP` (`128`), `BLITZ_RUNTIME` (current-thread), `BLITZ_TRACE` (unset) —
 and stay out of that text because it is tested against the argument parser.
 
 ## Performance
@@ -155,12 +155,16 @@ The divergence is concentrated, not spread: **7 rows are one table** (#9) and
   and `file://` is readable ([SECURITY.md](SECURITY.md#what-rendering-does-to-the-machine)).
 - **Peak memory is per process.** Counted across the whole process tree the advantage narrows to 5.7–6.1×.
 - **Five known defects produce wrong output with exit 0**, measured on `0.3.0-beta.8`:
-  a truncated `--document` render (#10), a failed sub-resource that paints an empty box (#11),
-  a silently substituted font (#12), table layout off by up to 18px (#9), and `<br>` runs
-  shifting content 16px per break (#15). [Read them](https://github.com/leshchenko1979/html-render/issues?q=is%3Aissue+is%3Aopen)
+  a truncated `--document` render (#10), a silently substituted font (#12), table layout
+  off by up to 18px (#9), `<br>` runs shifting content 16px per break (#15), and a `200`
+  whose body is not an image — that one fails to decode inside Blitz, after the bytes
+  were delivered, so nothing upstream of the decoder can see it. [Read them](https://github.com/leshchenko1979/html-render/issues?q=is%3Aissue+is%3Aopen)
   before putting a render in a pipeline. #9 and #15 are pinned in the corpus gate;
-  #11's blank output is pinned as documented behaviour in `tools/test_redirect.py`;
-  **#10 and #12 have no test at all**.
+  **#10, #12 and the non-image `200` have no test at all**.
+- **A sub-resource that fails to fetch, or is refused for size, exits `4`** (#11).
+  A `404`, a DNS failure, a connection refused, or an image whose decoded size exceeds
+  `BLITZ_MAX_IMAGE_MP` writes the partial PNG and names the resource on stderr. Before
+  this, all four produced a valid PNG of an empty box with exit `0`.
 
 ## Where the detail lives
 

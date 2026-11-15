@@ -12,11 +12,11 @@ Three legs:
 
   a  direct 200  -> paints           (control: the pipeline works)
   b  302 -> 200  -> paints           (the fix; fails on any earlier binary)
-  c  404         -> blank, exit 0    (documented, not a regression)
+  c  404         -> blank, exit 4    (a failed fetch is reported, #11)
 
 Usage:
     python3 tools/test_redirect.py --bin /path/to/html-render
-    python3 tools/test_redirect.py --bin /path/to/old-binary   # a and c pass, b fails
+    python3 tools/test_redirect.py --bin /path/to/old-binary   # a passes, b and c fail
 """
 
 import argparse
@@ -107,7 +107,7 @@ def main():
     tmp = tempfile.mkdtemp(prefix="redirect-")
     legs = []
 
-    def leg(name, src, want_painted):
+    def leg(name, src, want_painted, want_rc=0):
         html = os.path.join(tmp, f"{name}.html")
         out = os.path.join(tmp, f"{name}.png")
         with open(html, "w", encoding="utf-8") as fh:
@@ -125,18 +125,20 @@ def main():
             legs.append((name, False, f"no output file (rc={proc.returncode})"))
             return
         got = painted(out)
-        ok = got == want_painted
+        ok = got == want_painted and proc.returncode == want_rc
         legs.append(
             (
                 name,
                 ok,
-                f"painted={got} wanted={want_painted} rc={proc.returncode}",
+                f"painted={got} wanted={want_painted} rc={proc.returncode} wanted={want_rc}",
             )
         )
 
     leg("a-direct", f"http://127.0.0.1:{port}/real.png", True)
     leg("b-redirect", f"http://127.0.0.1:{port}/redir.png", True)
-    leg("c-404", f"http://127.0.0.1:{port}/missing.png", False)
+    # A 404 is a failed sub-resource, and a failed sub-resource exits 4 (#11).
+    # It used to exit 0 with a blank box: a valid PNG of the wrong thing.
+    leg("c-404", f"http://127.0.0.1:{port}/missing.png", False, want_rc=4)
 
     server.shutdown()
 
