@@ -353,8 +353,18 @@ algorithm because of the characters themselves, so their geometry is unchanged
 when `direction` is removed or flipped. Only LTR text in an RTL container can
 show whether the CSS property is honoured, and on `0.3.0-beta.8` the line
 right-aligns while the span order stays LTR: `Alpha` at x=168, `Beta` at x=259.
-That is reported by the harness as a text row, not gated, because gating it
-would pin whichever behaviour the engine currently has.
+
+**Measured against Chromium, all four land where it puts them.** Per-box deltas
+from the run that added them: `arabic-joining` **0 px on both boxes**,
+`hebrew-rtl` 0 and 1 px, `direction-rtl-latin` 1 px on both, `combining-marks`
+1 px on the marked glyph and **2 px on the plain one** — the only new divergence,
+and the reason the text-dependent bucket reads 6 exact / 4 within 1px / 4
+divergent across its 14 rows. So the RTL ordering is agreement rather than a
+defect: Chromium also leaves `Alpha` left of `Beta` there, which is why that
+fixture is reported and not gated on a hand-written expectation. The one thing
+the corpus now says is wrong is a 2 px advance on a bare `e` beside combining
+marks, and 2 px is not worth a defect of its own until something else points at
+the same code.
 
 **CJK is deliberately absent.** No font on the runner covers it, and a character
 with no covering font renders as a tofu box: measured here, `日`, `本` and `語` at
