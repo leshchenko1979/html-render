@@ -634,7 +634,11 @@ async fn real_main() {
                 //     viewport lost them. Scrolling the viewport and painting at 0,0
                 //     is a DIFFERENT mechanism and is safe: measured byte-identical
                 //     to the single-canvas crop on 30/30 frames whose photos sit up
-                //     to 17,400 px below the first viewport.
+                //     to 17,400 px below the first viewport. Byte-identity there is
+                //     a property of THAT deck, not of the mechanism: on a
+                //     glyph-dense document (40 lines of 64 px bold) the same
+                //     comparison differs by up to 1 level on 426-433 px at scale 2,
+                //     and by up to 1 level on a handful of pixels at scale 1.
                 //
                 // Peak memory is the canvas: width x height x 4, so painting a whole
                 // document at scale 2 on a 20-slide deck asked for 1.1 GiB. Bands keep
@@ -942,11 +946,23 @@ fn has_viewport_anchored(document: &HtmlDocument) -> bool {
 /// rather than rebuilt per band, so allocation stops being per-band work.
 ///
 /// Correctness note: each band is painted at a non-zero scroll offset, so glyph
-/// edges land on a slightly different subpixel grid than in the single-canvas
-/// render. Measured on the `--clip` equivalent: max channel delta 1/255. That is
-/// the same tolerance `tools/test_bands.py` asserts, and it is why banding
-/// refuses outright on documents with a `position:fixed` element rather than
-/// accepting a seam.
+/// coverage is evaluated at a different coordinate magnitude than in the
+/// single-canvas render. The measured effect is bounded, and it is NOT a seam:
+///
+///   * **max channel delta 1**, never more, at scales 1, 2 and 3;
+///   * **100 %** of the differing pixels sit on rows that carry ink;
+///   * the count of them within two rows of a band boundary matches the count
+///     boundary rows would claim by area alone — scale 3, 1 MiB: **37 observed,
+///     37.7 expected** — so they are not concentrated at the seams;
+///   * a glyph cut exactly by a band boundary reassembles with **0 differing
+///     pixels** at all three scales. That is the direct test of the seam
+///     question, and it is why overlapping the bands would buy nothing.
+///
+/// The residual is 8-bit coverage rounding at glyph edges, two orders below the
+/// gate's tolerance of 8, and it is the tolerance `tools/test_bands.py` asserts.
+/// A `position:fixed` element is different in kind rather than degree: it would
+/// be repainted at every band's top, so banding refuses instead of accepting
+/// that.
 fn write_full_banded(
     document: &mut HtmlDocument,
     out_path: &str,

@@ -168,11 +168,31 @@ Each of these cost real time, and none of them raises an error.
 
    **Banding costs one level of antialiasing, and only where it bands.** The
    banded path scrolls the viewport (`set_viewport_scroll`) instead of offsetting
-   the paint origin, which moves the subpixel AA phase: on a 48,000-row deck 32
-   of 40 frames differed from the single canvas by **max channel delta 1**, two
-   to ten pixels each, inside the glyphs. That is not clipping — a clipped frame
-   loses whole regions, not single levels — and it is two orders below the gate's
-   tolerance of 8. What protects the 54-row corpus verdict is not pixel identity
+   the paint origin: on a 48,000-row deck 32 of 40 frames differed from the
+   single canvas by **max channel delta 1**, two to ten pixels each, inside the
+   glyphs. That is not clipping — a clipped frame loses whole regions, not
+   single levels — and it is two orders below the gate's tolerance of 8.
+
+   **It is rounding, not a seam**, and "moves the subpixel AA phase" — this
+   file's earlier wording, and the `beta.7` changelog entry's — named the wrong
+   mechanism. Measured on a glyph-dense document (40 lines of 64 px bold) at
+   scales 1, 2 and 3:
+
+   - a glyph cut exactly by a band boundary reassembles with **0 differing
+     pixels**. That is the direct test of the seam question, and it passes;
+   - **100 %** of differing pixels sit on rows that carry ink;
+   - their proximity to boundaries is what the boundaries' own row share
+     predicts: at scale 3 with a 1 MiB budget, **37 observed against 37.7
+     expected** if the same pixels were spread uniformly;
+   - banded renders agree with *each other* far better than with the single
+     canvas — scale 2: **12-64 px** between two band budgets, **426-433 px**
+     against the single canvas. The reference is the outlier, which locates the
+     cause in painting at a non-zero offset rather than in band layout.
+
+   So overlapping the bands would not reduce the residual: there is nothing at
+   the seam to repair, and a fifth grid only re-rolls which glyph edges round.
+
+   What protects the 54-row corpus verdict is not pixel identity
    but that **banding never runs on that path**: `run_parity.py` renders fixtures
    with no `--clip`, and `--clip` is the only mode that bands, so the verdict
    cannot see the change at all. The banded path's real check is Gate C, which
@@ -180,12 +200,34 @@ Each of these cost real time, and none of them raises an error.
    dimensions. `tools/test_bands.py` covers the rest: leg 1 is a **negative
    control** — the single-PNG path renders identically at 1 MiB and 0, which
    catches banding leaking into a mode that must not have it — and leg 2 asserts
-   the geometry identity on a multi-band deck. Two earlier claims were wrong and
-   the gate caught the first: byte-identity on *every* frame was false, and
-   describing leg 1 as the leg that protects the corpus verdict was wrong too,
-   since it passes because banding does not run there.
+   the geometry identity on a multi-band deck, while leg 5 pins the no-seam
+   property above so this paragraph cannot rot back into the phase story. Three
+   earlier claims were wrong: byte-identity on *every* frame was false,
+   describing leg 1 as the leg that protects the corpus verdict was wrong too
+   (it passes because banding does not run there), and the AA-phase mechanism
+   was wrong in the way set out above.
 
 ## Withdrawn claims
+
+**"Scrolling the viewport shifts the subpixel AA phase."** Wrong as a mechanism,
+though the delta it was attached to is real. It implies a phase discontinuity at
+the band edges — exactly the thing a reader would try to fix by overlapping the
+bands — and there is none. A glyph cut exactly by a band boundary reassembles
+with **0 differing pixels** at scales 1, 2 and 3; **100 %** of differing pixels
+sit on ink rows; and their proximity to boundaries matches the boundaries' own
+row share (scale 3, 1 MiB: **37 observed, 37.7 expected**). What is happening is
+8-bit coverage rounding at glyph edges when a glyph is painted at a different
+offset: bounded at **1 level**, never more, at every scale measured. Banded
+renders agree with each other to 12-64 px while all sit 426-433 px from the
+single canvas at scale 2, so the reference is the outlier and a fifth grid would
+not be closer.
+
+A second explanation is also withdrawn: that the `<=1` tolerance in
+`test_bands.py` leg 4 was merely an artefact of comparing a 1 MiB `--clip` render
+against a default-budget `--full` render, so that "the same budget gives 0 px".
+It does not hold in general — the same budget gave **0 px at 1 MiB / scale 1**
+but **3, 4 and 10 px** at the other three combinations measured. The tolerance
+is right; the reason first offered for it was not.
 
 **"Blitz makes N line boxes where Chromium makes N−1."** Filed as
 [DioxusLabs/blitz#1391](https://github.com/DioxusLabs/blitz/pull/1391) and

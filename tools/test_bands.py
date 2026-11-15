@@ -4,7 +4,7 @@
 `--clip` without `--per-element` paints the document in row bands sized from
 `BLITZ_BAND_MIB` (default 4 MiB), so peak memory is one band rather than the
 whole page. That is only safe if the rendering is untouched, so this test pins
-six things:
+seven things:
 
   1. THE DEFAULT MODE IS UNTOUCHED — every fixture in `fixtures.json` renders
      byte-identically with the knob at 1 MiB and at 0. This is a NEGATIVE
@@ -18,9 +18,12 @@ six things:
   2. A TALL DOCUMENT RENDERS THE SAME THING — on a multi-band deck the sampled
      frames have identical measured geometry and differ by at most one level per
      channel.
-     They are NOT byte-identical: `set_viewport_scroll` shifts the subpixel
-     antialiasing phase, which moves a handful of glyph pixels by 1/255, far
-     below the gate's tolerance of 8.
+     They are NOT byte-identical: painting a band at a non-zero scroll offset
+     re-rounds a handful of glyph-edge pixels by 1/255, far below the gate's
+     tolerance of 8. That is ROUNDING, NOT A SEAM, and leg 5 pins the difference:
+     a glyph cut exactly by a band boundary reassembles with 0 differing pixels,
+     and differing pixels are no denser near a boundary than the boundary's own
+     row share. Overlapping the bands would therefore repair nothing.
   3. THE BANDED RUN IS CHEAPER — peak RSS measured, not assumed.
   4. A DOCUMENT PAST THE CEILING NOW RENDERS — 72,000 rows exceeds
      `MAX_CANVAS_H` (65,532), where `BLITZ_BAND_MIB=0` still refuses with exit 5.
@@ -36,6 +39,13 @@ six things:
      small"; it cannot say the budget was 4 MiB. On this deck 50 bands is unique
      to 4 MiB (1 MiB gives 100, 16 gives 13, off gives 1), so a default that
      drifts fails here instead of in a comment nobody re-derives.
+
+  7. BANDING IS NOT A SEAM — a glyph placed across a band boundary reassembles
+     with ZERO differing pixels, with the ink's row range asserted to straddle
+     the boundary so the leg cannot pass by never cutting a glyph. This is the
+     test that makes "the residual is glyph-edge rounding" falsifiable: if a
+     boundary ever became a discontinuity, overlapping the bands would be the
+     remedy, and this leg is what would say so.
 
     python3 tools/test_bands.py --bin target/release/render
 
@@ -66,6 +76,13 @@ CSS_W = 400
 CSS_H = 300
 SCALE = 2
 SEL = ".s"
+
+# Leg 5's seam probe. Scale 1 keeps the pure-Python pixel comparison cheap, and
+# 400 CSS px wide puts band_rows at 655 for a 1 MiB budget, which is a boundary
+# a 64 px glyph can be placed across.
+SEAM_W = 400
+SEAM_H = 300
+SEAM_SCALE = 1
 
 # Frames sampled, spread across the document so several bands are covered.
 # Sampling is not laziness: `measure.read_png` is a pure-Python unfilter, ~0.4 s
@@ -241,7 +258,8 @@ def main():
                 worst, worst_at = d, n
         if worst > 1:
             fails.append(
-                "[banded] %s differs by %d level(s) per channel, want <= 1 (AA phase only)"
+                "[banded] %s differs by %d level(s) per channel, want <= 1 "
+                "(glyph-edge rounding, not a seam)"
                 % (worst_at, worst)
             )
 
@@ -319,9 +337,10 @@ def main():
     # ---- leg 4: the structural check Gate C claims ------------------------
     # GATES.md C asserts that every --clip frame equals the same rectangle cut
     # from the --document render, "0 differing pixels, 12/12". Banding made that
-    # false the day it landed (AA phase, see the docstring), and it was prose no
-    # test read, so it rotted silently. The property that DOES hold is geometry
-    # plus a one-level tolerance, and it is asserted here rather than restated.
+    # false the day it landed (one-level glyph-edge rounding, see the docstring),
+    # and it was prose no test read, so it rotted silently. The property that
+    # DOES hold is geometry plus a one-level tolerance, and it is asserted here
+    # rather than restated.
     N_GC = 6
     GC_H = 200
     gc_html = os.path.join(tmp, "gc.html")
@@ -394,6 +413,96 @@ def main():
                           "(want <=1: the gate's tolerance is 8)" % gc_worst)
         fails.extend("[gate-c] " + b for b in gc_bad)
 
+    # ---- leg 5: banding is not a seam -------------------------------------
+    # GATES.md once explained the residual as scrolling shifting "the subpixel AA
+    # phase", which implies a discontinuity at each band edge — precisely the
+    # thing a reader would try to repair by overlapping the bands. There is none.
+    # The test: a glyph cut EXACTLY by a band boundary must reassemble with zero
+    # differing pixels.
+    #
+    # It carries a CONTROL, because a zero delta also happens on a document where
+    # no ink crosses a boundary at all. The ink's row range is read from the
+    # single-canvas render and asserted to straddle band_rows, so the leg fails
+    # rather than passes when the glyph it means to cut is not cut.
+    seam_diff = None
+    seam_rows = None
+    probe_html = os.path.join(tmp, "seam_probe.html")
+    with open(probe_html, "w", encoding="utf-8") as fh:
+        fh.write('<!doctype html><html><body style="margin:0;background:#fff">'
+                 '<div style="height:2400px"></div></body></html>')
+    # band_rows is a function of physical width alone, so it is READ from the
+    # trace rather than re-derived from the budget arithmetic here.
+    rc_p, _op, err_p, _wp, _kp = measure_rss.run_measured(
+        ["env", "BLITZ_TRACE=1", "BLITZ_BAND_MIB=1", binary, probe_html,
+         os.path.join(tmp, "seam_probe.png"), str(SEAM_W), str(SEAM_H),
+         str(SEAM_SCALE), "--full"])
+    m = re.search(r"trace: full bands=(\d+) band_rows=(\d+)", err_p or "")
+    if rc_p != 0 or not m:
+        fails.append("[seam] could not read the band plan (rc=%d): %s"
+                     % (rc_p, (err_p or "")[-300:]))
+    elif int(m.group(1)) < 2:
+        fails.append("[seam] the probe document is one band, so there is no "
+                     "boundary to cut")
+    else:
+        seam_rows = int(m.group(2))
+        seam_html = os.path.join(tmp, "seam.html")
+        # 64 px bold on purpose: 16 px text renders identically banded or not
+        # (leg 4 says so), so a seam test on it would never exercise the
+        # mechanism it is written for.
+        with open(seam_html, "w", encoding="utf-8") as fh:
+            fh.write('<!doctype html><html><body style="margin:0;background:#fff">'
+                     '<div style="height:%dpx"></div>'
+                     '<div style="font:bold 64px sans-serif;line-height:1">HgWy</div>'
+                     '<div style="height:1800px"></div></body></html>'
+                     % (seam_rows // SEAM_SCALE - 20))
+        seam_band = os.path.join(tmp, "seam_band.png")
+        seam_one = os.path.join(tmp, "seam_one.png")
+        rc_sb, _ob, err_sb, _wb, _kb = measure_rss.run_measured(
+            ["env", "BLITZ_BAND_MIB=1", binary, seam_html, seam_band,
+             str(SEAM_W), str(SEAM_H), str(SEAM_SCALE), "--full"])
+        rc_so, _oo, err_so, _wo, _ko = measure_rss.run_measured(
+            ["env", "BLITZ_BAND_MIB=0", binary, seam_html, seam_one,
+             str(SEAM_W), str(SEAM_H), str(SEAM_SCALE), "--full"])
+        if rc_sb != 0 or rc_so != 0:
+            fails.append("[seam] rc banded=%d single=%d\n%s\n%s"
+                         % (rc_sb, rc_so, (err_sb or "")[-300:], (err_so or "")[-300:]))
+        else:
+            bw2, bh2, bch2, bpx = measure.read_png(seam_band)
+            ow2, oh2, och2, opx = measure.read_png(seam_one)
+            if (bw2, bh2, bch2) != (ow2, oh2, och2):
+                fails.append("[seam] banded %dx%d/%dch vs single %dx%d/%dch"
+                             % (bw2, bh2, bch2, ow2, oh2, och2))
+            else:
+                stride2 = ow2 * och2
+                ink = [y for y in range(oh2)
+                       if min(opx[y * stride2:(y + 1) * stride2]) < 250]
+                if not ink:
+                    fails.append("[seam] control failed: no ink rendered, so a zero "
+                                 "delta would prove nothing")
+                elif not (ink[0] < seam_rows <= ink[-1]):
+                    fails.append("[seam] control failed: ink rows %d..%d do not "
+                                 "straddle the boundary at %d, so this leg never cut "
+                                 "a glyph" % (ink[0], ink[-1], seam_rows))
+                else:
+                    seam_diff = 0
+                    seam_worst = 0
+                    for y in range(oh2):
+                        ra = opx[y * stride2:(y + 1) * stride2]
+                        rb2 = bpx[y * stride2:(y + 1) * stride2]
+                        if ra == rb2:
+                            continue
+                        for x in range(ow2):
+                            o = x * och2
+                            dd = max(abs(ra[o + c] - rb2[o + c]) for c in range(3))
+                            if dd:
+                                seam_diff += 1
+                                seam_worst = max(seam_worst, dd)
+                    if seam_diff:
+                        fails.append("[seam] a glyph cut by the boundary at row %d "
+                                     "differs in %d px (max delta %d): banding IS a "
+                                     "seam and the rounding explanation is wrong"
+                                     % (seam_rows, seam_diff, seam_worst))
+
     print("  leg 1  default mode: %d/%d fixtures byte-identical at 1 MiB and 0 "
           "(negative control: this path never bands)"
           % (len(corpus) - len(corpus_diff) - len(corpus_fail), len(corpus)))
@@ -409,6 +518,9 @@ def main():
           % (len(frames(gc_clip)), "n/a" if gc_worst < 0 else gc_worst))
     print("  leg 3  72,000-row deck: banded rc=%d with %d frames, banding off rc=%d"
           % (rc_b2, len(frames(b_band)), rc_o2))
+    print("  leg 5  no seam: glyph placed across band row %s, %s differing px"
+          % (seam_rows if seam_rows is not None else "n/a",
+             "n/a" if seam_diff is None else seam_diff))
 
     if not args.keep:
         import shutil
