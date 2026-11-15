@@ -293,9 +293,11 @@ is exact.
 `display: table` used to be the biggest hole here, and it is now measured rather
 than absent. Fixture 32 (`table-collapse`) puts `border-collapse`, `colgroup`,
 `rowspan`, `colspan` and `border-spacing` in front of both engines, and **all
-seven of its boxes diverge**: the table comes out **18px shorter** than Chromium
-paints it, one cell is **12px tall where Chromium paints 28**, and the other six are
-off by 2-16px. Those seven are pinned in `tools/parity_baseline.json` with that
+seven of its boxes diverge**: the table comes out **18px taller** than Chromium
+paints it (104 px against 86), one cell is **28 px tall where Chromium paints 12**, and
+the other six are off by 2-16px. Both directions were stated backwards here until
+2026-11-15: the run's `chromium` column is printed first and the `blitz` column
+second (`tools/run_parity.py:157`), so the divergence is Blitz over-tall, not under. Those seven are pinned in `tools/parity_baseline.json` with that
 reason written down, so a *further* regression still fails the build while the
 current defect stays visible instead of being forgotten.
 

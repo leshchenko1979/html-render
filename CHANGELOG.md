@@ -4,6 +4,39 @@ Newest first. Every entry names its commit range, so it can be re-derived with
 `git log --oneline <prev>..<tag>` rather than trusted. Pre-1.0: flags and output
 names may change between minor versions, and this file is where that shows up.
 
+## Unreleased
+
+### Corrected
+
+- **The table divergence was stated backwards, in three places.** `v0.3.0-beta.5`
+  below says the `table-collapse` table is "18px shorter than Chromium's" and one
+  cell is "12px tall where Chromium paints 28". Both are inverted: the parity run
+  prints the `chromium` column first and `blitz` second (`tools/run_parity.py:157`),
+  so Blitz paints the table **18px taller** (104 against 86) and that cell **28px
+  tall where Chromium paints 12**. The same inversion was in `GATES.md` and in
+  #9's table. Corrected in both living documents; this released entry is left as
+  written, because a changelog records what was believed at the time.
+- **The advertised fidelity figure is not reproducible from this repo.** The
+  `4.13 %` pixel difference and the performance rows come from a 12-slide deck
+  that is not here, which `GATES.md` already said ("history, not a gate") and
+  `README.md` did not. The README now says so, and names the corpus as the
+  reproducible number.
+- **`README.md` said "seven known defects".** There are five that produce wrong
+  output with exit 0, and three of those are now measured on `0.3.0-beta.8`:
+  #16 and #17 no longer reproduce as filed (see below).
+
+### Fixed since `v0.3.0-beta.8`, issues not yet closed
+
+- **#16 no longer reproduces.** A 70,000 px document under `--full` exits `0` and
+  writes a correct `800x70000` PNG, measured on the released binary; the `u16`
+  ceiling is gone from the banded path and still refuses with exit `5` under
+  `BLITZ_BAND_MIB=0`, which `tools/test_exit_codes.py` pins in both directions.
+- **#17 is no longer silent.** An element wider than the viewport now exits `4`
+  with `1 frame(s) cut to the canvas width` instead of exiting `0`. The truncation
+  itself remains (`--per-element` renders it at its full 1600x100, measured on the
+  same document), but a pipeline can now see it. #17's body still says `--scroll`,
+  a flag renamed to `--per-element` before this release.
+
 ## v0.3.0-beta.8 — 2026-11-15
 
 Raw list: `git log --oneline v0.3.0-beta.7..v0.3.0-beta.8`. This cut exists

@@ -26,7 +26,9 @@ and a cold start before the first pixel exists.
 
 This reads a file and writes a PNG.
 On a 12-slide deck it is **2.34× faster and 3.12× lighter** than headless Chromium
-([the measurements](#performance)),
+([the measurements](#performance)).
+That deck is not in this repo, so those figures are history, not a benchmark you can re-run;
+[GATES.md](GATES.md#cost) records the method and the runs behind them.
 and there is no language runtime to install first.
 
 Decks, social cards, report one-pagers, CI visual diffs — if the input is HTML plus CSS and the output is an image, that is the entire job.
@@ -128,11 +130,18 @@ Diffed pixel for pixel against Chromium at the same viewport and scale, a
 12-slide deck comes out **4.13 % of pixels differing by more than 16 levels** —
 antialiasing and glyph rasterisation, not layout: wrap points match, boxes sit at
 Chromium's coordinates, and every photo region lands at a 0 px shift.
+That figure comes from the same external deck as the performance rows, so it is
+history too: it needs a browser to reproduce and the document is not here.
 
-Geometry is measured separately over 32 fixtures: 42 of the 54 text-free rows
-land exactly where Chromium puts them. The divergent ones are open defects,
-tracked rather than described here — per-box record in
-[GATES.md](GATES.md#corpus).
+**The reproducible fidelity number is the corpus**, not the deck. Geometry is
+measured over 32 fixtures, every run, against Chromium at the same viewport:
+**42 of the 54 text-free rows land exactly** where Chromium puts them, 11
+diverge and 1 asserts a shared absence. The 11 are pinned per box in
+`tools/parity_baseline.json`, so a further regression fails the build while the
+current defects stay visible.
+The divergence is concentrated, not spread: **7 rows are one table** (#9) and
+**4 are one `<br>` run** (#15). Nothing else in the corpus diverges by more than
+1px.
 
 ## Limits
 
@@ -145,9 +154,13 @@ tracked rather than described here — per-box record in
 - **Untrusted input is not sandboxed.** Sub-resources are fetched at render time with no allowlist
   and `file://` is readable ([SECURITY.md](SECURITY.md#what-rendering-does-to-the-machine)).
 - **Peak memory is per process.** Counted across the whole process tree the advantage narrows to 5.7–6.1×.
-- **Seven known defects are tracked, not described here.** They share one shape: output that is
-  wrong while the exit code says success. [Read them](https://github.com/leshchenko1979/html-render/issues?q=is%3Aissue+is%3Aopen)
-  before putting a render in a pipeline.
+- **Five known defects produce wrong output with exit 0**, measured on `0.3.0-beta.8`:
+  a truncated `--document` render (#10), a failed sub-resource that paints an empty box (#11),
+  a silently substituted font (#12), table layout off by up to 18px (#9), and `<br>` runs
+  shifting content 16px per break (#15). [Read them](https://github.com/leshchenko1979/html-render/issues?q=is%3Aissue+is%3Aopen)
+  before putting a render in a pipeline. #9 and #15 are pinned in the corpus gate;
+  #11's blank output is pinned as documented behaviour in `tools/test_redirect.py`;
+  **#10 and #12 have no test at all**.
 
 ## Where the detail lives
 
