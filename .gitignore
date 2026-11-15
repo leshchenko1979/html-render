@@ -6,3 +6,6 @@ fixtures/deck.html
 bin/
 __pycache__/
 *.pyc
+
+# Generated benchmark deck (tools/bench_deck.py rebuilds it from the seed).
+bench/deck/
