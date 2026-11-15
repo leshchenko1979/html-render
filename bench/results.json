@@ -22,38 +22,58 @@
   },
   "engines": {
     "chromium": {
-      "command": "/root/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome --headless --incognito --disable-gpu --no-sandbox --hide-scrollbars --force-device-scale-factor=2 --window-size=1280,5760 --screenshot=chromium.png file:///tmp/bench-run/deck.html",
-      "reason": "run 1 exited -6: 5 r14: 0000000000000016 r15: 00007fff8243f918\n  di: 0000000000087e54  si: 0000000000087e54  bp: 00007fff8243f290  bx: 0000000000087e54\n  dx: 0000000000000006  ax: 0000000000000000  cx: 00007dc17f49eb2c  sp: 00007fff8243f250\n  ip: 00007dc17f49eb2c efl: 0000000000000246 cgf: 002b000000000033 erf: 0000000000000000\n trp: 0000000000000000 msk: 0000000000000000 cr2: 0000000000000000\n[end of stack trace]",
-      "status": "unavailable"
-    },
-    "html-render": {
-      "command": "/tmp/hr-ci/render deck.html blitz.png 1280 5760 2 --full",
-      "peak_tree_mib": 40.3,
-      "peak_tree_mib_max": 40.5,
-      "png": "/tmp/bench-run/blitz.png",
+      "command": "/usr/bin/google-chrome --headless --incognito --disable-gpu --no-sandbox --hide-scrollbars --force-device-scale-factor=2 --window-size=1280,5760 --screenshot=chromium.png file:///home/runner/work/html-render/html-render/bench/deck/deck.html",
+      "peak_tree_mib": 2336.1,
+      "peak_tree_mib_max": 2432.6,
+      "png": "bench/deck/chromium.png",
       "repeats": 3,
       "status": "measured",
-      "wall_median_s": 4.306,
+      "version": "Google Chrome 157.0.8103.78",
+      "wall_median_s": 3.186,
       "wall_s": [
-        4.306,
-        4.655,
-        3.962
+        3.219,
+        3.179,
+        3.186
+      ]
+    },
+    "html-render": {
+      "command": "/home/runner/work/html-render/html-render/target/release/render deck.html blitz.png 1280 5760 2 --full",
+      "peak_tree_mib": 37.9,
+      "peak_tree_mib_max": 37.9,
+      "png": "bench/deck/blitz.png",
+      "repeats": 3,
+      "status": "measured",
+      "wall_median_s": 2.24,
+      "wall_s": [
+        2.247,
+        2.211,
+        2.24
       ]
     }
   },
-  "generated_at": "2026-11-15T18:04:19Z",
+  "fidelity": {
+    "decoder": "pillow",
+    "height": 11520,
+    "ink_engine_pct": 19.4399,
+    "ink_ref_pct": 19.1282,
+    "mean_diff": 7.115,
+    "over16_pct": 4.5462,
+    "pixels": 29491200,
+    "width": 2560
+  },
+  "generated_at": "2026-11-15T18:08:34Z",
   "host": {
     "cpu_count": 4,
-    "glibc": "ldd (Ubuntu GLIBC 2.39-0ubuntu8.7) 2.39",
-    "hostname": "VM-400234",
-    "mem_total_mib": 3921,
-    "platform": "Linux-6.8.0-100-generic-x86_64-with-glibc2.39",
-    "python": "3.14.6"
+    "glibc": "ldd (Ubuntu GLIBC 2.35-0ubuntu3.15) 2.35",
+    "hostname": "runnervmy75tu",
+    "mem_total_mib": 15988,
+    "platform": "Linux-6.8.0-1070-azure-x86_64-with-glibc2.35",
+    "python": "3.10.12"
   },
   "probe": {
-    "path": "/tmp/hr-ci/render",
-    "sha256": "19d7fbb64493ebba1e37a7e1a60d1dce870780bdbdb091b914bef7cf00a088ef",
-    "version": "html-render 0.3.0-beta.8"
+    "path": "/home/runner/work/html-render/html-render/target/release/render",
+    "sha256": "de69ad53a09c9088dae15179e5def2b15eae36fb169015dfcae3eb8541c25405",
+    "version": "html-render 0.3.0-beta.10"
   },
   "schema": 1
 }
