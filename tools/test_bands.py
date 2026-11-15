@@ -11,8 +11,9 @@ four things:
      parity gate: Gate C measures these exact renders, so identical bytes cannot
      move a verdict. On the shipped corpus one band covers the whole document,
      which is why the gate is safe — asserted here, not assumed.
-  2. A TALL DOCUMENT RENDERS THE SAME THING — on a two-band deck the frames have
-     identical measured geometry and differ by at most one level per channel.
+  2. A TALL DOCUMENT RENDERS THE SAME THING — on a multi-band deck the sampled
+     frames have identical measured geometry and differ by at most one level per
+     channel.
      They are NOT byte-identical: `set_viewport_scroll` shifts the subpixel
      antialiasing phase, which moves a handful of glyph pixels by 1/255, far
      below the gate's tolerance of 8.
@@ -49,9 +50,11 @@ CSS_H = 300
 SCALE = 2
 SEL = ".s"
 
-# Frames sampled for the geometry read, spread across the document so every band
-# is covered. The channel-delta check runs on every frame (PIL is fast).
-GEO_SAMPLE = 6
+# Frames sampled, spread across the document so several bands are covered.
+# Sampling is not laziness: `measure.read_png` is a pure-Python unfilter, ~0.4 s
+# per 800x600 frame, so decoding all 100 twice would cost ~80 s of CI for a
+# property already established on the sample.
+GEO_SAMPLE = 8
 
 # Leg 2 wants MANY bands, or "cheaper" measures nothing: at 100 slides the deck is
 # 60,000 rows against a 20,971-row band, so the single canvas holds ~3 bands' worth
@@ -96,15 +99,17 @@ def geometry_differs(p, q):
 
 
 def max_channel_delta(p, q):
-    """Largest per-channel difference between two same-sized PNGs."""
-    from PIL import Image, ImageChops
+    """Largest per-channel difference between two same-sized PNGs.
 
-    with Image.open(p) as im1, Image.open(q) as im2:
-        a = im1.convert("RGBA")
-        b = im2.convert("RGBA")
-        if a.size != b.size:
-            return 255
-        return max(band.getextrema()[1] for band in ImageChops.difference(a, b).split())
+    Decoded with `measure.read_png`, not Pillow: CI has no Pillow, so an import
+    here would make this leg fail exactly where it runs (it did, once) while
+    passing on a dev box that happens to have it installed.
+    """
+    wa, ha, ca, pa = measure.read_png(p)
+    wb, hb, cb, pb = measure.read_png(q)
+    if (wa, ha, ca) != (wb, hb, cb):
+        return 255
+    return max((abs(x - y) for x, y in zip(pa, pb)), default=0)
 
 
 def run(binary, html, outdir, width, height, band_mib=None, clip=True):
@@ -205,7 +210,7 @@ def main():
                 "[banded] %d/%d sampled frame(s) have different GEOMETRY: %s"
                 % (len(geo_diff), len(sampled), ", ".join(geo_diff[:5]))
             )
-        for n in fb:
+        for n in sampled:
             d = max_channel_delta(os.path.join(a_band, n), os.path.join(a_one, n))
             if d > worst:
                 worst, worst_at = d, n
@@ -271,8 +276,9 @@ def main():
     print("  leg 1  corpus: %d/%d fixtures byte-identical with banding on and off"
           % (len(corpus) - len(corpus_diff) - len(corpus_fail), len(corpus)))
     print("  leg 2  multi-band deck: %d frames, geometry %s on %d sampled, "
-          "max channel delta %d"
-          % (len(fb), "identical" if not geo_diff else "DIFFERS", len(sampled), worst))
+          "max channel delta %d on the same %d"
+          % (len(fb), "identical" if not geo_diff else "DIFFERS", len(sampled),
+             worst, len(sampled)))
     print("  leg 2  peak rss: banded %.1f MiB, single canvas %.1f MiB, canvas %.1f MiB"
           % (rss_b, rss_o, canvas_mib))
     print("  leg 3  72,000-row deck: banded rc=%d with %d frames, banding off rc=%d"
