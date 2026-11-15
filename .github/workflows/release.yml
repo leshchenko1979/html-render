@@ -26,6 +26,11 @@ concurrency:
 
 permissions:
   contents: write # gh release create
+  # Sigstore keyless signing: the workflow's own OIDC identity is the signer, so
+  # there is no private key to leak, rotate or lose. `attestations: write` is
+  # where the provenance record lands; it is public and tied to the digest.
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -101,6 +106,18 @@ jobs:
           # Read from the artefact rather than typed into the body: a hardcoded
           # size goes stale on the first dependency bump and nobody notices.
           echo "size=$(du -h dist/html-render | cut -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Attest the release artefacts
+        # Signed by the workflow's OIDC identity, not by a key in a secret: the
+        # provenance says which repo, commit and workflow produced these bytes,
+        # and `gh attestation verify` checks that chain against GitHub's own
+        # issuer. A checksum published beside the file by the same job proves the
+        # download was not corrupted; this proves who made it.
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/checksums.txt
 
       - name: Publish
         env:
@@ -201,3 +218,10 @@ jobs:
           # Assert the IHDR dimensions, not a file-size floor: a 20x10 solid
           # colour legitimately compresses to 93 bytes.
           python3 -c "import struct;d=open('t.png','rb').read();assert d[:8]==b'\x89PNG\r\n\x1a\n','not a PNG';w,h=struct.unpack('>II',d[16:24]);assert (w,h)==(20,10),(w,h);print('renders: ok',w,'x',h,len(d),'bytes')"
+          # Provenance, not just corruption. `sha256sum -c` above proves the file
+          # arrived intact; this proves which commit and workflow produced it,
+          # by checking the Sigstore bundle against GitHub's OIDC issuer. It
+          # runs on the DOWNLOADED file, so a release published without an
+          # attestation fails here rather than shipping silently.
+          gh attestation verify "${NAME}.tar.gz" --repo "$GITHUB_REPOSITORY"
+          gh attestation verify checksums.txt --repo "$GITHUB_REPOSITORY"

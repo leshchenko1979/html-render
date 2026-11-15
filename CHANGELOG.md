@@ -4,7 +4,14 @@ Newest first. Every entry names its commit range, so it can be re-derived with
 `git log --oneline <prev>..<tag>` rather than trusted. Pre-1.0: flags and output
 names may change between minor versions, and this file is where that shows up.
 
-## Unreleased
+## v0.3.0-beta.9 — 2026-11-15
+
+Raw list: `git log --oneline v0.3.0-beta.8..v0.3.0-beta.9`. This cut closes the
+silent-wrong-output class the previous one started on: four issues that each
+produced a valid PNG of the wrong thing at exit `0` now either say what went
+wrong or refuse. It also makes the published tarball verifiable — provenance
+attestations are signed by this workflow's own OIDC identity, so the artefact can
+be traced to a commit without trusting a checksum file that ships beside it.
 
 ### Corrected
 
@@ -25,7 +32,7 @@ names may change between minor versions, and this file is where that shows up.
   output with exit 0, and three of those are now measured on `0.3.0-beta.8`:
   #16 and #17 no longer reproduce as filed (see below).
 
-### Fixed since `v0.3.0-beta.8`, issues not yet closed
+### Fixed
 
 - **#11: a sub-resource that fails now exits `4`.** `blitz_net::Provider::fetch`
   reported a failed fetch through `tracing` (compiled out) and never called the
@@ -56,6 +63,35 @@ names may change between minor versions, and this file is where that shows up.
   itself remains (`--per-element` renders it at its full 1600x100, measured on the
   same document), but a pipeline can now see it. #17's body still says `--scroll`,
   a flag renamed to `--per-element` before this release.
+- **#10: a document taller than the canvas says how much it lost.** `--clip` and
+  `--document` both paint a fixed canvas, so a page past that height was cut with
+  nothing on stderr and exit `0` — the PNG was valid, complete-looking, and short.
+  Both modes now measure the laid-out content height, print
+  `content_h=`/`canvas_h=` on the `TIMING` line, and warn
+  `document is {h}px tall but the canvas is {phys_h}px: the bottom {h-phys_h}px
+  were cut (pass --full to paint the whole document)`. The exit code stays `0`:
+  the render succeeded at the size it was asked for, and `--full` is the fix.
+  `tools/test_full_page.py` pins the warning (`f-signal`) and its absence on a
+  document that fits (`g-nosignal`), so a renderer that always warns fails too.
+- **#14: the corpus had no non-ASCII byte in it.** 32 fixtures, every one Latin-1,
+  so shaping, bidi and combining marks were unmeasured while the page quoted a
+  fidelity number. Four fixtures added (`arabic-joining`, `hebrew-rtl`,
+  `combining-marks`, `direction-rtl-latin`), corpus now **36**, and
+  `tools/test_scripts.py` gates five legs. Two things the fixtures taught, both
+  recorded in `GATES.md`: CSS `direction` does **not** drive RTL ordering — the
+  bidi algorithm does, and flipping the property leaves geometry byte-identical,
+  so only `direction-rtl-latin` isolates it — and CJK cannot be measured here at
+  all, because the runner has no CJK font and `日`/`本`/`語` render as
+  byte-identical tofu. A test that passes on tofu is a test that proves nothing.
+- **#13: the release is now attestable, not just checksummed.** `release.yml`
+  gained `id-token: write` and `attestations: write`, and a step using
+  `actions/attest-build-provenance` (`4d101475…`, `v4.2.2`) runs before Publish,
+  signing `dist/*.tar.gz` and `dist/checksums.txt`. The publish step now verifies
+  both with `gh attestation verify` against the downloaded files, and the README
+  says which guarantee is which: the checksum proves the download is intact, the
+  attestation proves this repository, commit and workflow built it. Signing the
+  assets is not a substitute for a signature on the *binary* — that gap is #13's
+  other half and is not closed here.
 
 ## v0.3.0-beta.8 — 2026-11-15
 

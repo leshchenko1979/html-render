@@ -3,7 +3,7 @@
 HTML and CSS in, PNG out, on a machine with no browser anywhere in the loop.
 Rust, one process, one binary.
 
-`0.3.0-beta.8`, one maintainer. Linux x86_64, glibc ≥ 2.35; no macOS, no Windows.
+`0.3.0-beta.9`, one maintainer. Linux x86_64, glibc ≥ 2.35; no macOS, no Windows.
 
 ![A 3200×1800 rendering of a slide headed "HTML + CSS → PNG, with no browser", with bar charts of wall time and peak memory against Chromium](assets/hero.png)
 
@@ -39,13 +39,28 @@ Linux x86_64, glibc ≥ 2.35 — Ubuntu 22.04+, Debian 12+, or a current Fedora.
 Anything else wants the container below.
 
 ```bash
-V=v0.3.0-beta.8
-N=html-render_0.3.0-beta.8_linux_amd64
+V=v0.3.0-beta.9
+N=html-render_0.3.0-beta.9_linux_amd64
 BASE="https://github.com/leshchenko1979/html-render/releases/download/$V"
 curl -fsSL -O "$BASE/$N.tar.gz" -O "$BASE/checksums.txt"
 sha256sum -c checksums.txt && tar xzf "$N.tar.gz"
 install -m755 html-render /usr/local/bin/ && html-render --version
 ```
+
+Every release asset from `v0.3.0-beta.9` onward carries a **build provenance
+attestation**, signed by the release workflow's own OIDC identity — there is no
+key to fetch or trust, and GitHub is the issuer. The checksum above proves the
+download arrived intact; the attestation proves which repository, commit and
+workflow produced it:
+
+```bash
+gh attestation verify "$N.tar.gz" --repo leshchenko1979/html-render
+gh attestation verify checksums.txt --repo leshchenko1979/html-render
+```
+
+That needs the `gh` CLI, and it is the check worth running if the tarball goes
+into a build pipeline. The release job runs both itself against the **downloaded**
+file, so a release published without one fails its own verification.
 
 That is a ~25 MB binary, dynamically linked against 13 shared libraries — glibc,
 OpenSSL 3, fontconfig, freetype, expat, libpng, bzip2, brotli, zlib. On a slim
@@ -64,7 +79,7 @@ docker run --rm --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-
 ```
 
 `--user` is required, not decorative: the image runs as uid 10001 and exits `101` without it.
-Tags are `latest` and `v0.3.0-beta.8`; pin a digest for reproducibility.
+Tags are `latest` and `v0.3.0-beta.9`; pin a digest for reproducibility.
 Building from source: [CONTRIBUTING.md](CONTRIBUTING.md#building).
 
 ## Usage
