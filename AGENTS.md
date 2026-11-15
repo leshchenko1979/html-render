@@ -110,6 +110,26 @@ git -c user.name="Alexey Leshchenko" \
 - The asset is `html-render_<version>_linux_amd64.tar.gz` — **no `v` prefix** on the
   version — and `parity.yml` asserts the README's install snippet names exactly that file.
 - Never retag a published version. Publish a new one; a downloaded asset cannot be recalled.
+- **A release re-measures the Chromium comparison and lands the numbers on every
+  surface that states them, in one commit.** Three files carry the same facts and
+  only one is prose: README `## Performance` (the ratios, the seconds, the MiB)
+  and `## Fidelity against Chromium` (the 4.13 %), `assets/hero.html` (the
+  `2.49x` tile, the `5.37 s vs 13.36 s` caption, the two bar widths that encode
+  the same ratios as pixels, the version kicker) and `assets/og.html` (the same
+  tiles). A measurement change moves all of them plus the regenerated PNGs: an
+  image whose caption disagrees with the table beside it is a picture of a claim
+  the repo no longer makes. `tools/check_claims.py` is the enforcement — it
+  derives every figure from the constants at its top and reads it out of all
+  three files, so a forgotten surface fails the guard instead of shipping. The
+  kickers were the live proof of why this is a rule: both assets read
+  `v0.3.0-beta.6` for four releases with every gate green, because the guard
+  re-rendered each PNG and compared bytes to its HTML but never read the figures
+  inside the HTML.
+- **The cost figures are not re-derivable from this repo.** `13.36 s`, `5.37 s`,
+  `858 MiB`, `93.4 MiB` and `4.13 %` come from a 12-slide 4.16 MB deck that is
+  not committed; `GATES.md` calls those rows history, not a gate. "Re-measure"
+  therefore means with that deck in hand — without it, do not restate the
+  numbers, and never move a constant to make the guard pass.
 
 ## Issues
 

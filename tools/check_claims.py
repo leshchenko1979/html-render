@@ -271,6 +271,44 @@ def main():
         claim("README", readme, "N=html-render_%s_linux_amd64" % version,
               "Cargo.toml version, asset name")
 
+        # --- the asset HTML bakes the same measurements by hand -------------
+        # The PNG checks further up prove each committed image is its HTML's
+        # output, and nothing more. Both asset HTMLs also STATE the figures by
+        # hand: the "2.49x faster" tile, its "5.37 s vs 13.36 s" caption, and a
+        # version kicker. A second copy of a fact that nothing compares is
+        # exactly the drift this file exists to kill, and this one had already
+        # drifted: both kickers read v0.3.0-beta.6 while the tree was on
+        # beta.10, with every gate green, because the PNG was compared to its
+        # HTML and the HTML was compared to nothing.
+        def num(x):
+            """858.0 -> '858', 93.4 -> '93.4': the assets drop a trailing .0."""
+            return ("%f" % x).rstrip("0").rstrip(".")
+
+        for name, (html, _w, _h, _scale, _png) in ASSETS.items():
+            text = read(html)
+            claim(html, text, "v%s" % version, "Cargo.toml version, kicker")
+            claim(html, text, ratio(CHROME_WALL_S, PER_ELEMENT_WALL_S),
+                  "13.36/5.37, faster tile")
+            claim(html, text, "%s s vs %s s" % (num(PER_ELEMENT_WALL_S),
+                                                num(CHROME_WALL_S)),
+                  "wall-time caption")
+            claim(html, text, ratio(CHROME_RSS_MIB, PER_ELEMENT_RSS_MIB),
+                  "858/93.4, memory tile")
+            claim(html, text, "%s vs %s MiB" % (num(PER_ELEMENT_RSS_MIB),
+                                                num(CHROME_RSS_MIB)),
+                  "peak-RSS caption")
+
+        # The hero's bar chart encodes those two ratios a second time, as pixel
+        # widths: a re-measured ratio that leaves the bars alone draws a picture
+        # the caption beside it contradicts. og.html has no chart.
+        hero = ASSETS["hero"][0]
+        hero_text = read(hero)
+        claim(hero, hero_text, "%.1f%%" % (100.0 * PER_ELEMENT_WALL_S / CHROME_WALL_S),
+              "bar width, 5.37/13.36")
+        claim(hero, hero_text, "%.1f%%" % (100.0 * PER_ELEMENT_RSS_MIB / CHROME_RSS_MIB),
+              "bar width, 93.4/858")
+        claim(hero, hero_text, FIDELITY_PCT, "gates.py whole-deck fidelity")
+
     # --- the corpus verdict ------------------------------------------------
     # These numbers drifted once already: README said "47 boxes ... 4 divergent"
     # while the baseline pinned 54 and 11, and both were "measured". They are

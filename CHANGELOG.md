@@ -6,9 +6,10 @@ names may change between minor versions, and this file is where that shows up.
 
 ## v0.3.0-beta.10 — 2026-11-15
 
-Raw list: `git log --oneline v0.3.0-beta.9..v0.3.0-beta.10`. This cut carries the
-one behaviour change that landed after beta.9: the default clip canvas now follows
-the widest match instead of the viewport.
+Raw list: `git log --oneline v0.3.0-beta.9..v0.3.0-beta.10`. This cut carries one
+behaviour change and one guard: the default clip canvas now follows the widest
+match instead of the viewport, and the figures baked into the advertised images
+are now read against the constants they are derived from.
 
 ### Changed
 
@@ -28,6 +29,24 @@ the widest match instead of the viewport.
   agreeing on it, and — as the control that stops a widened canvas from passing while
   blank — that the frame's right half carries the ink of a child sitting entirely past
   the viewport edge. On the released `0.3.0-beta.9` binary seven of its legs fail.
+
+### Fixed
+
+- **The hero and og images advertised `v0.3.0-beta.6` for four releases, with
+  every gate green.** `tools/check_claims.py` re-rendered each committed PNG and
+  compared its bytes to the HTML that produced it, which proves the image is the
+  source's output and nothing else: it never read the figures *inside* the HTML.
+  Both assets state the same measurements the README derives — the `2.49x` tile,
+  the `5.37 s vs 13.36 s` caption, the `93.4 vs 858 MiB` caption, two bar widths
+  that encode those ratios as pixel widths, and a version kicker — so each was a
+  second copy of a fact that nothing compared. The kicker was written correctly in
+  `814ac50` (Cargo.toml read `0.3.0-beta.6` then) and never moved again while
+  `beta.7`, `beta.8`, `beta.9` and this cut passed every gate. The guard now reads
+  all thirteen figures out of both HTMLs, and `AGENTS.md` § Releases requires a
+  release to move the README, both assets and the regenerated PNGs in one commit.
+  Falsified before trusting it: a hero ratio of `2.48` and a bar width of `40.1 %`
+  each fail by name, and the real drift failed the same way before the kickers were
+  fixed. `og.html` carries the same tiles minus the chart.
 
 ## v0.3.0-beta.9 — 2026-11-15
 
