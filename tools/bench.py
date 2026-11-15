@@ -107,6 +107,26 @@ def chrome_flags(scale):
     return flags + ["--force-device-scale-factor=%d" % scale]
 
 
+def determinism_block(full):
+    """Promote the --full engine record's repeat digests into one field.
+
+    "Byte-identical output" is a headline value claim, so it is measured: every
+    repeat is hashed, and `distinct_md5` is the number of different results. A
+    probe that rendered three different images would report 3 here, and the
+    advertised `1 md5` claim would fail against it.
+    """
+    if not full or full.get("status") != "measured":
+        return None
+    if "png_md5_distinct" not in full:
+        return None
+    return {
+        "renders": full["repeats"],
+        "distinct_md5": full["png_md5_distinct"],
+        "md5": full["png_md5"],
+        "shape": "--full",
+    }
+
+
 def run_engine(label, cmd, cwd, png, want, repeats, timeout=RUN_TIMEOUT, missing_is_unavailable=False):
     """Run `cmd` `repeats` times, returning the measured record or a refusal.
 
@@ -118,6 +138,7 @@ def run_engine(label, cmd, cwd, png, want, repeats, timeout=RUN_TIMEOUT, missing
     """
     walls = []
     peaks = []
+    digests = []
     commands = []
     for i in range(repeats):
         if os.path.exists(png):
@@ -145,12 +166,19 @@ def run_engine(label, cmd, cwd, png, want, repeats, timeout=RUN_TIMEOUT, missing
             return {"status": refusal, "reason": str(exc), "command": " ".join(cmd)}
         walls.append(round(wall, 3))
         peaks.append(round(peak_kib / 1024.0, 1))
+        # Hash every repeat. The repeats already happen for the wall median, so
+        # determinism costs nothing extra -- and "byte-identical output" is one
+        # of the value claims, so it has to be measured rather than asserted.
+        digests.append(md5(png))
 
     return {
         "status": "measured",
         "command": commands[0],
         "repeats": repeats,
         "wall_s": walls,
+        "png_md5": digests[0],
+        "png_md5_distinct": len(set(digests)),
+        "png_md5_all": digests,
         "wall_median_s": round(statistics.median(walls), 3),
         "peak_tree_mib": round(statistics.median(peaks), 1),
         "peak_tree_mib_max": max(peaks),
@@ -433,6 +461,9 @@ def probe(args):
             .run([chrome, "--version"], capture_output=True, text=True, timeout=60)
             .stdout.strip()
         )
+    block = determinism_block(results["engines"].get("html-render"))
+    if block is not None:
+        results["determinism"] = block
     return results, deckdir, html
 
 

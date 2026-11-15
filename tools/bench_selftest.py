@@ -253,6 +253,31 @@ def slides_count_caught(tmp):
 
 
 @leg
+def determinism_block(tmp):
+    """The advertised `1 md5` tile must come from the measured digests."""
+    got = bench.determinism_block(
+        {"status": "measured", "repeats": 3, "png_md5": "aa",
+         "png_md5_distinct": 1, "png_md5_all": ["aa", "aa", "aa"]}
+    )
+    if got != {"renders": 3, "distinct_md5": 1, "md5": "aa", "shape": "--full"}:
+        return "derivation is wrong: %r" % (got,)
+    # An unmeasured engine has no determinism to report.
+    if bench.determinism_block({"status": "unavailable"}) is not None:
+        return "an unavailable engine produced a determinism block"
+    return None
+
+@leg
+def nondeterminism_visible(tmp):
+    """Two different images must report 2 distinct digests, not 1."""
+    got = bench.determinism_block(
+        {"status": "measured", "repeats": 3, "png_md5": "aa",
+         "png_md5_distinct": 2, "png_md5_all": ["aa", "bb", "aa"]}
+    )
+    if got["distinct_md5"] != 2:
+        return "non-determinism was flattened to %r" % (got,)
+    return None
+
+@leg
 def median(tmp):
     if statistics.median([3.0, 1.0, 2.0]) != 2.0:
         return "median of 1,2,3 is not 2"
