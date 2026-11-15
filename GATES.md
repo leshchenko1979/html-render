@@ -143,7 +143,8 @@ channel delta 2/255 — antialiasing at fractional offsets.
 
 ### What is actually gated
 
-The rows above are history. What is a gate is `tools/test_memory.py`, which pins
+The rows above are the probe's receipt, so they are re-derivable by anyone with a
+browser. What is a *gate* is `tools/test_memory.py`, which pins
 absolute peak RSS for four shapes against `tools/memory_baseline.json`:
 
 | shape | why it is in the set |
