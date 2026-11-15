@@ -7,9 +7,12 @@ derived from a handful of measurements. Prose ratios rot silently: the source
 numbers get re-measured and the "2.49x" three paragraphs away keeps its old
 value because nothing multiplies them again.
 
-So the inputs live here as constants, every derived figure is computed from
-them, and each computed figure is asserted to appear in the file that quotes
-it. Change a measurement without changing the prose and this exits 1.
+So the inputs live in `bench/results.json` — a CI run of `tools/bench.py`,
+committed unedited — every derived figure is computed from them, and each
+computed figure is asserted to appear in the file that quotes it. Change a
+measurement without changing the prose and this exits 1. Nothing here is typed
+in by hand, so prose and gate cannot agree on a figure the receipt does not
+contain.
 
     python3 tools/check_claims.py
     python3 tools/check_claims.py --bin target/release/render   # also re-render assets
@@ -19,6 +22,7 @@ Exit 0 = every quoted number is the one the inputs produce.
 
 import argparse
 import json as _json
+import math
 import os
 import re
 import struct
@@ -218,6 +222,11 @@ def main():
         claim("bench/README.md", bench_readme,
               receipt["engines"]["chromium"]["version"],
               "the browser that was measured against")
+        if "run" in receipt:
+            claim("bench/README.md", bench_readme, receipt["run"]["id"],
+                  "the workflow run that produced this receipt")
+            claim("bench/README.md", bench_readme, receipt["run"]["sha"][:7],
+                  "the commit that run measured")
 
         # A figure about a comparison is only meaningful if the other side was
         # actually measured. This is the assertion the old constants could not
@@ -263,28 +272,117 @@ def main():
                             "receipt shapes.%s peak_tree_mib %r exceeds its own "
                             "peak_tree_mib_max %r" % (name, peak, peak_max))
 
-            for label, rec in (
-                ("document", doc),
-                ("--clip", clip),
-                ("--per-element", per_el),
-            ):
-                claim("README", readme, ratio(chrome["wall_median_s"],
-                                              rec["wall_median_s"]),
-                      "receipt wall ratio, %s" % label)
-                claim("README", readme, ratio(chrome["peak_tree_mib"],
-                                              rec["peak_tree_mib"]),
-                      "receipt tree-RSS ratio, %s" % label)
+            # Both docs print the same six ratios and six medians. GATES.md
+            # printed them unchecked: its §Cost table could have drifted for a
+            # whole release with every gate green, which is the failure this
+            # file exists to prevent.
+            #
+            # Assert whole ROWS, never bare numbers. A refreshed receipt can
+            # give two shapes the same ratio — this one reads 1.42x for both
+            # `--full` and `--per-element` — and a bare `claim("1.42")` is then
+            # satisfied by either row. Perturbing one row of the GATES table
+            # proved it: the guard stayed green while the table disagreed with
+            # itself. A row string is unique per shape, so a drift cannot hide
+            # behind its twin.
+            def readme_wall_row(label, rec):
+                return "| wall clock, `%s` | %s s | %s s | **%s\u00d7** |" % (
+                    label, num(chrome["wall_median_s"]), num(rec["wall_median_s"]),
+                    ratio(chrome["wall_median_s"], rec["wall_median_s"]))
 
-            # The wall and RSS medians themselves, which the tables print.
-            for label, rec in (("document", doc), ("--clip", clip),
+            def readme_rss_row(label, rec):
+                return "| peak RSS, `%s` | %s MiB | %s MiB | **%s\u00d7** |" % (
+                    label, num(chrome["peak_tree_mib"]), num(rec["peak_tree_mib"]),
+                    ratio(chrome["peak_tree_mib"], rec["peak_tree_mib"]))
+
+            for label, rec in (("--full", doc), ("--clip", clip),
                                ("--per-element", per_el)):
-                claim("README", readme, num(rec["wall_median_s"]),
-                      "receipt wall median, %s" % label)
-                claim("README", readme, num(rec["peak_tree_mib"]),
-                      "receipt peak tree RSS, %s" % label)
-            claim("README", readme, num(chrome["wall_median_s"]), "receipt chromium wall")
-            claim("README", readme, num(chrome["peak_tree_mib"]),
-                  "receipt chromium peak tree RSS")
+                claim("README", readme, readme_wall_row(label, rec),
+                      "cost row, %s wall" % label)
+                claim("README", readme, readme_rss_row(label, rec),
+                      "cost row, %s tree RSS" % label)
+
+            claim("GATES", gates,
+                  "| Chromium, one tall screenshot cut into eight slides | %s s | %s MiB |"
+                  % (num(chrome["wall_median_s"]), num(chrome["peak_tree_mib"])),
+                  "cost row, chromium")
+            claim("GATES", gates,
+                  "| `--full` | **%s s** | **%s MiB** |"
+                  % (num(doc["wall_median_s"]), num(doc["peak_tree_mib"])),
+                  "cost row, --full")
+            claim("GATES", gates,
+                  "| `--clip` (banded, one PNG per frame) | %s s | %s MiB |"
+                  % (num(clip["wall_median_s"]), num(clip["peak_tree_mib"])),
+                  "cost row, --clip")
+            claim("GATES", gates,
+                  "| `--clip --per-element` | %s s | %s MiB |"
+                  % (num(per_el["wall_median_s"]), num(per_el["peak_tree_mib"])),
+                  "cost row, --per-element")
+            claim("GATES", gates,
+                  "Ratios against Chromium: **%s\u00d7** wall and **%s\u00d7** memory for `--full`,"
+                  % (ratio(chrome["wall_median_s"], doc["wall_median_s"]),
+                     ratio(chrome["peak_tree_mib"], doc["peak_tree_mib"])),
+                  "cost ratio sentence, --full")
+            claim("GATES", gates,
+                  "**%s\u00d7** / **%s\u00d7** for `--clip`"
+                  % (ratio(chrome["wall_median_s"], clip["wall_median_s"]),
+                     ratio(chrome["peak_tree_mib"], clip["peak_tree_mib"])),
+                  "cost ratio sentence, --clip")
+            claim("GATES", gates,
+                  "**%s\u00d7** / **%s\u00d7** for `--per-element`"
+                  % (ratio(chrome["wall_median_s"], per_el["wall_median_s"]),
+                     ratio(chrome["peak_tree_mib"], per_el["peak_tree_mib"])),
+                  "cost ratio sentence, --per-element")
+
+            # Speed is advertised as a run-to-run RANGE, because three runs of
+            # this probe on one runner image span 1.40-1.61x: the browser's own
+            # wall clock moves 18.5% while html-render's holds to 5.0%. A point
+            # figure would be the top of that range dressed as a measurement.
+            # The endpoints are read back out of the prose and every ratio in
+            # this receipt must fall inside them, so a range the measurement has
+            # outgrown fails here instead of quietly overstating.
+            checked += 1
+            span = re.search(r"(\d+\.\d+)\s*[\u2013-]\s*(\d+\.\d+)\s*\u00d7",
+                             readme)
+            if span is None:
+                fails.append("README should state the speed claim as a range "
+                             "(e.g. 1.4\u20131.6\u00d7) and does not")
+            else:
+                lo, hi = float(span.group(1)), float(span.group(2))
+                if lo > hi:
+                    fails.append("README speed range %s\u2013%s\u00d7 is inverted"
+                                 % (span.group(1), span.group(2)))
+                # A range wide enough contains anything, so containment alone
+                # would let 1.0-9.0x pass as a "measurement". The measured
+                # spread is 14.3% wide (1.40-1.61x); 25% leaves room for a
+                # refreshed receipt and still refuses a vacuous range.
+                checked += 1
+                if (hi - lo) / lo > 0.25:
+                    fails.append("README speed range %s\u2013%s\u00d7 is too wide "
+                                 "to be a measurement (%.0f%% of the low end)"
+                                 % (span.group(1), span.group(2),
+                                    100.0 * (hi - lo) / lo))
+                for label, rec in (("document", doc), ("--clip", clip),
+                                   ("--per-element", per_el)):
+                    got = chrome["wall_median_s"] / rec["wall_median_s"]
+                    # The README states the band to one decimal, so compare at
+                    # that precision. A raw 1.6046 is "1.6x" in the prose, and
+                    # failing it would punish a measurement for rounding the
+                    # same way the sentence beside it does.
+                    if not lo <= round(got, 1) <= hi:
+                        fails.append(
+                            "README advertises %s\u2013%s\u00d7 but this receipt "
+                            "measures %s\u00d7 for %s, outside the range"
+                            % (span.group(1), span.group(2),
+                               ratio(chrome["wall_median_s"],
+                                     rec["wall_median_s"]), label))
+
+            # Memory is advertised as a FLOOR, and the floor is derived, so the
+            # prose cannot round a measurement up: it prints the integer below
+            # the measured ratio, which every run of the probe matches or beats.
+            mem_ratio = chrome["peak_tree_mib"] / per_el["peak_tree_mib"]
+            mem_floor = int(math.floor(mem_ratio))
+            claim("README", readme, "at least %d\u00d7" % mem_floor,
+                  "floor of the tree-RSS ratio")
 
             fid = receipt["fidelity"]
             claim("README", readme, num(fid["over16_pct"]), "receipt fidelity")
@@ -295,21 +393,28 @@ def main():
             claim("README", readme, "{:,}".format(fid["pixels"]),
                   "receipt fidelity pixel count")
 
-            # The asset HTMLs bake the same two ratios by hand, as a tile
-            # caption and as a bar width. Same rule: read from the receipt.
+            # The asset HTMLs bake the same two ratios by hand, as a tile and
+            # as a bar width. Same rule: derive from the receipt — but print the
+            # FLOOR, not the ratio. The tile is the one surface with no room to
+            # say "1.4-1.6x", and a tile showing whichever ratio the receipt
+            # caught would advertise the top of a range that moves 18.5% run to
+            # run. The floor is matched or beaten by every run, the reader's own
+            # included.
+            wall_ratio = chrome["wall_median_s"] / per_el["wall_median_s"]
+            wall_floor = "%.1f" % (math.floor(wall_ratio * 10) / 10.0)
             hero = ASSETS["hero"][0]
             hero_text = read(hero)
             for name, (html, _w, _h, _scale, _png) in ASSETS.items():
                 text = read(html)
-                claim(html, text, ratio(chrome["wall_median_s"],
-                                        per_el["wall_median_s"]),
-                      "receipt wall ratio, faster tile")
+                claim(html, text,
+                      '<div class="v">%s<em>\u00d7</em></div>' % wall_floor,
+                      "floor of the wall ratio, faster tile")
+                claim(html, text,
+                      '<div class="v">%d<em>\u00d7</em></div>' % mem_floor,
+                      "floor of the tree-RSS ratio, memory tile")
                 claim(html, text, "%s s vs %s s" % (num(per_el["wall_median_s"]),
                                                     num(chrome["wall_median_s"])),
                       "receipt wall medians, caption")
-                claim(html, text, ratio(chrome["peak_tree_mib"],
-                                        per_el["peak_tree_mib"]),
-                      "receipt tree-RSS ratio, memory tile")
                 claim(html, text, "%s vs %s MiB" % (num(per_el["peak_tree_mib"]),
                                                     num(chrome["peak_tree_mib"])),
                       "receipt tree-RSS medians, caption")
@@ -319,7 +424,38 @@ def main():
             claim(hero, hero_text,
                   "%.1f%%" % (100.0 * per_el["peak_tree_mib"] / chrome["peak_tree_mib"]),
                   "bar width, RSS")
+            # The right panel and the terminal footer are SECOND copies of the
+            # same two measurements, written in different markup. A duplicate
+            # no guard reads is how the kicker outlived four releases, so each
+            # copy is claimed by the tag that distinguishes it from the
+            # stat-card caption above.
+            claim(hero, hero_text,
+                  '<span class="bv">%s s</span>' % num(chrome["wall_median_s"]),
+                  "right-panel Chromium wall")
+            claim(hero, hero_text,
+                  '<span class="bv win">%s s</span>' % num(per_el["wall_median_s"]),
+                  "right-panel html-render wall")
+            claim(hero, hero_text,
+                  '<span class="bv">%s MiB</span>' % num(chrome["peak_tree_mib"]),
+                  "right-panel Chromium tree RSS")
+            claim(hero, hero_text,
+                  '<span class="bv win">%s MiB</span>' % num(per_el["peak_tree_mib"]),
+                  "right-panel html-render tree RSS")
+            claim(hero, hero_text,
+                  "<b>%s s</b>, <b>%s MiB</b> peak." % (num(per_el["wall_median_s"]),
+                                                        num(per_el["peak_tree_mib"])),
+                  "terminal footer summary")
             claim(hero, hero_text, num(fid["over16_pct"]), "receipt fidelity")
+
+            # The hero names the browser it measured against, and that name is
+            # in the receipt: "Chromium 151" outlived the browser it described.
+            ver = re.search(r"Chrome (\d+)", chrome.get("version", ""))
+            if ver is None:
+                fails.append("receipt engines.chromium.version %r names no "
+                             "Chrome major version" % chrome.get("version"))
+            else:
+                claim(hero, hero_text, "Chromium %s" % ver.group(1),
+                      "the browser the receipt measured")
 
     # --- the deck the receipt was taken on ---------------------------------
     # These are properties of the generator, so they are asserted rather than
@@ -338,6 +474,23 @@ def main():
                          % (deck["slides"],
                             receipt["shapes"]["slides"]["html-render-clip"]["pngs"]))
 
+    # --- a derived record must actually be derived --------------------------
+    # shapes.slides.chromium says derived_from engines.chromium: the browser
+    # renders once and cuts, so there is no second measurement to disagree
+    # with. That makes the two copies one fact, and a copy nobody compares is
+    # free to drift -- the same hole as wall_s vs wall_median_s.
+    checked += 1
+    if receipt is not None:
+        der = receipt["shapes"]["slides"].get("chromium") or {}
+        src = receipt["engines"].get("chromium") or {}
+        if der.get("status") == "measured" and src.get("status") == "measured":
+            for field in ("wall_median_s", "peak_tree_mib"):
+                checked += 1
+                if der.get(field) != src.get(field):
+                    fails.append("receipt shapes.slides.chromium.%s is %r but it "
+                                 "claims derived_from engines.chromium, which "
+                                 "holds %r" % (field, der.get(field), src.get(field)))
+
     # --- assets: the committed PNG must be the command's output ------------
     for name, (html, w, h, scale, png) in ASSETS.items():
         checked += 1
@@ -352,6 +505,55 @@ def main():
         if literal not in readme:
             fails.append("README never states %s's real size %s" % (png, literal))
 
+    # --- the footer must credit the probe that produced these figures -------
+    # tools/gates.py is the pre-probe harness: it needs --deck, a client deck
+    # that is not in this repo, so "reproducible with gates.py" is a claim no
+    # reader can act on. The probe replaced it.
+    hero_html = read("assets/hero.html")
+    # The determinism tile advertises two numbers: how many renders were
+    # compared, and how many distinct digests came out. Both live in the
+    # receipt's top-level `determinism` block, which the probe writes only
+    # after hashing every repeat -- so a receipt without that block cannot
+    # back the tile at all, and saying nothing would be the same defect the
+    # tile exists to prevent. `1 md5` is the claim that N runs of the same
+    # input produce the same bytes; it is worth exactly as much as the
+    # measurement behind it.
+    checked += 1
+    if receipt is not None:
+        det = receipt.get("determinism")
+        if not det:
+            fails.append("assets/hero.html advertises byte-identical output but "
+                         "bench/results.json carries no determinism block: "
+                         "re-run tools/bench.py so the tile is measured")
+        else:
+            claim("assets/hero.html", hero_html,
+                  "<div class=\"v\">%d md5</div>" % det["distinct_md5"],
+                  "the receipt's distinct-digest count, determinism tile")
+            claim("assets/hero.html", hero_html,
+                  "<div class=\"l\">%d renders</div>" % det["renders"],
+                  "the probe's repeat count, determinism tile")
+    checked += 1
+    if "reproducible with <b>tools/bench.py</b>" not in hero_html:
+        fails.append("hero footer does not credit tools/bench.py as the reproducer")
+    checked += 1
+    if "tools/gates.py" in hero_html:
+        fails.append("assets/hero.html credits tools/gates.py, which needs --deck "
+                     "(a client deck this repo does not ship); the probe is "
+                     "tools/bench.py")
+
+    # The footer's glibc must be the one the receipt was measured on.
+    checked += 1
+    if receipt is not None:
+        m = re.search(r"GLIBC (\d+\.\d+)", receipt["host"].get("glibc", ""))
+        if not m:
+            fails.append("receipt host.glibc names no GLIBC version: %r"
+                         % (receipt["host"].get("glibc"),))
+        else:
+            want_glibc = "glibc %s" % m.group(1)
+            if want_glibc not in hero_html:
+                fails.append("hero footer does not state %r (receipt host glibc %r)"
+                             % (want_glibc, m.group(1)))
+
     # The usage line quoted beside the hero image must be the one that produced it.
     checked += 1
     hero_cmd = "html-render assets/hero.html hero.png 1600 900 2 --document"
@@ -364,8 +566,11 @@ def main():
     # as a reason to pick it over wkhtmltoimage. ldd on the shipped asset lists 13
     # dynamic libraries, so both sentences are false. Guard the exact phrases: a
     # bare "static" is a CSS keyword and cannot be banned.
+    # The clip-vs-per-element pixel count quoted a 44,236,800-px document that
+    # this repo does not generate, so no reader could reproduce it. Retired as
+    # a string: a denominator nobody can regenerate is not a measurement.
     for retired in ("no runtime deps", "tree-summed", "Static Blitz",
-                    "static binary"):
+                    "static binary", "44,236,800"):
         checked += 1
         hits = [f for f, t in (("README.md", readme), ("GATES.md", gates),
                                (".github/workflows/release.yml", release))
