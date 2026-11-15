@@ -263,6 +263,22 @@ Each of these cost real time, and none of them raises an error.
    loop would stop early. The `fetch()` path in trap 1 is still the reason
    `is_empty()` is not racy *upstream*; this CLI no longer uses that path.
 
+8. **Single-image mode cuts a taller document, and used to say nothing.** The
+   canvas is exactly `<width> x <height>`, so a 2200 px document at 800x600 is a
+   valid PNG of the top 600 px at `rc=0`, and before the `content_h` field its
+   `TIMING` line was identical to a complete render's. Measured on
+   `0.3.0-beta.8`: that stderr carries the `TIMING` line and no height at all.
+   `--full` is the escape, and the default stays the viewport because every
+   golden depends on it, so the fix is the signal rather than the geometry:
+   `TIMING` carries `content_h=<document px> canvas_h=<canvas px>` **only** when
+   the document exceeds the canvas, and stderr names the lost rows. The exit code
+   stays `0`, because whether a knowingly partial render should be fatal is
+   caller policy, not a renderer decision. `tools/test_full_page.py` pins both
+   directions: leg `f` asserts the field and the row count on a cut render, leg
+   `g` asserts both are absent on a document shorter than the canvas — without
+   `g`, a substring check on a line the binary always prints would pass on any
+   document and `f` would be decoration.
+
 ## Withdrawn claims
 
 **"Scrolling the viewport shifts the subpixel AA phase."** Wrong as a mechanism,
