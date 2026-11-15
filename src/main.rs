@@ -338,6 +338,140 @@ fn jpeg_pixels(bytes: &[u8]) -> Option<(u32, u32)> {
     None
 }
 
+/// Generic CSS font keywords, which name a class of face rather than a face.
+///
+/// A document that asks for one of these gets whatever the platform picks, by
+/// design, so the substitution is the request being honoured and not a defect.
+const GENERIC_FAMILIES: &[&str] = &[
+    "serif",
+    "sans-serif",
+    "monospace",
+    "cursive",
+    "fantasy",
+    "system-ui",
+    "ui-serif",
+    "ui-sans-serif",
+    "ui-monospace",
+    "ui-rounded",
+    "math",
+    "emoji",
+    "fangsong",
+];
+
+/// Split a computed `font-family` value into its family names, unquoted.
+fn split_families(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(|part| {
+            let trimmed = part.trim();
+            let unquoted = trimmed
+                .strip_prefix('"')
+                .and_then(|s| s.strip_suffix('"'))
+                .or_else(|| trimmed.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')))
+                .unwrap_or(trimmed);
+            unquoted.trim().to_string()
+        })
+        .filter(|name| !name.is_empty())
+        .collect()
+}
+
+/// Families the document asks for that no installed font provides.
+///
+/// fontconfig always resolves something, so a host without the named family
+/// gets a plausible PNG of text in a face the document did not ask for, at exit
+/// 0 and with nothing on stderr. Measured on `0.3.0-beta.8`: a document asking
+/// for `'Absolutely Nonexistent Font XYZ 9999'` painted **8238 non-white
+/// pixels** of DejaVu Sans. This reports every such family once, and the exit
+/// code stays 0 because the output is still a render of the document.
+///
+/// The check reads the computed `font-family` of every element rather than the
+/// CSS text, so it sees inline styles, stylesheets and inheritance alike. It is
+/// deliberately conservative in three ways, each of which would otherwise
+/// report a document that renders correctly:
+///
+///   * a generic keyword is skipped (see `GENERIC_FAMILIES`);
+///   * a family that resolves is skipped;
+///   * `@font-face` families are skipped. A document that embeds its own face
+///     registers it into ITS collection when the file is fetched, and a system
+///     collection cannot see that registration. Those families are collected
+///     from the document's stylesheet rules and passed in.
+///
+/// Returns the missing families and the number of installed families the
+/// instrument could see. A zero count means there is no ground truth to compare
+/// against — no fonts installed, or system discovery unavailable — and the
+/// caller must not read the empty list as a clean document.
+fn missing_font_families(document: &HtmlDocument, declared: &[String]) -> (Vec<String>, usize) {
+    let mut ctx = blitz_dom::FontContext::new();
+    let installed = ctx.collection.family_ids().count();
+    if installed == 0 {
+        return (Vec::new(), 0);
+    }
+    let mut missing: Vec<String> = Vec::new();
+    for (node_id, node) in document.tree().iter() {
+        if !node.is_element() {
+            continue;
+        }
+        for family in split_families(&document.resolved_style_value(node_id, "font-family")) {
+            if GENERIC_FAMILIES.iter().any(|g| g.eq_ignore_ascii_case(&family)) {
+                continue;
+            }
+            if declared.iter().any(|d| d.eq_ignore_ascii_case(&family)) {
+                continue;
+            }
+            if ctx.collection.family_id(&family).is_some() {
+                continue;
+            }
+            if !missing.iter().any(|m| m.eq_ignore_ascii_case(&family)) {
+                missing.push(family);
+            }
+        }
+    }
+    (missing, installed)
+}
+
+/// Family names declared by `@font-face` rules anywhere in the document.
+///
+/// `Document::load_resource` registers a fetched face under the CSS-declared
+/// name, so a family this returns is present in the document's collection even
+/// though a system collection has never heard of it. Reporting those would
+/// flag every document that embeds a webfont.
+fn font_face_families(document: &HtmlDocument) -> Vec<String> {
+    let mut families: Vec<String> = Vec::new();
+    for owner in document.stylesheet_owner_nodes() {
+        // Top-level rules only: `@font-face` nested inside `@media` is legal,
+        // and one level covers the shape this guard exists for. A miss costs a
+        // spurious warning, never a wrong render, and the exit code is 0 either
+        // way.
+        let count = document
+            .stylesheet_rule_count(owner, &[])
+            .unwrap_or_default();
+        for index in 0..count {
+            let Some(info) = document.stylesheet_rule_info(owner, &[index]) else {
+                continue;
+            };
+            if info.interface != "CSSFontFaceRule" {
+                continue;
+            }
+            let lower = info.css_text.to_ascii_lowercase();
+            let Some(at) = lower.find("font-family") else {
+                continue;
+            };
+            let rest = &info.css_text[at + "font-family".len()..];
+            let Some(colon) = rest.find(':') else {
+                continue;
+            };
+            let after = &rest[colon + 1..];
+            let value = after.split([';', '}']).next().unwrap_or("").trim();
+            for family in split_families(value) {
+                if !families.iter().any(|f| f.eq_ignore_ascii_case(&family)) {
+                    families.push(family);
+                }
+            }
+        }
+    }
+    families
+}
+
 /// Remove `clip_NN.png` files left in `dir` by an earlier, longer run.
 ///
 /// Clip numbering restarts at 1 every run, so a re-render that matches FEWER
@@ -644,6 +778,27 @@ async fn real_main() {
         document.resolve(0.0);
     }
     let laid_out = layout_started.elapsed();
+
+    // A missing font is substituted silently: fontconfig always resolves
+    // something, so the render is a plausible PNG of text in a face the
+    // document did not ask for. Reporting is the whole fix — the caller can
+    // decide — so the exit code stays 0, and a host where no fonts are visible
+    // says so rather than reading an empty list as a clean document.
+    let declared_faces = font_face_families(&document);
+    let (missing_families, installed_families) = missing_font_families(&document, &declared_faces);
+    if installed_families == 0 {
+        eprintln!(
+            "warning: no installed fonts were visible to the font check; \
+             font substitution cannot be detected on this host"
+        );
+    } else {
+        for family in &missing_families {
+            eprintln!(
+                "warning: font-family {family:?} is not installed; \
+                 the renderer substituted one"
+            );
+        }
+    }
 
     let paint_started = Instant::now();
     // Frames cut to the canvas width. A cut frame is a plausible PNG of part of

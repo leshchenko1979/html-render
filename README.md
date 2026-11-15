@@ -154,13 +154,21 @@ The divergence is concentrated, not spread: **7 rows are one table** (#9) and
 - **Untrusted input is not sandboxed.** Sub-resources are fetched at render time with no allowlist
   and `file://` is readable ([SECURITY.md](SECURITY.md#what-rendering-does-to-the-machine)).
 - **Peak memory is per process.** Counted across the whole process tree the advantage narrows to 5.7–6.1×.
-- **Five known defects produce wrong output with exit 0**, measured on `0.3.0-beta.8`:
-  a truncated `--document` render (#10), a silently substituted font (#12), table layout
+- **Four known defects produce wrong output with exit 0**, measured on `0.3.0-beta.8`:
+  a truncated `--document` render (#10), table layout
   off by up to 18px (#9), `<br>` runs shifting content 16px per break (#15), and a `200`
   whose body is not an image — that one fails to decode inside Blitz, after the bytes
   were delivered, so nothing upstream of the decoder can see it. [Read them](https://github.com/leshchenko1979/html-render/issues?q=is%3Aissue+is%3Aopen)
   before putting a render in a pipeline. #9 and #15 are pinned in the corpus gate;
-  **#10, #12 and the non-image `200` have no test at all**.
+  **#10 and the non-image `200` have no test at all**.
+- **A font the host does not have is reported** (#12). fontconfig always resolves
+  something, so a document naming a family that is not installed is rendered in
+  whatever the substitution picked — at exit `0`, with a layout that still looks
+  like a layout. Every such family is now named on stderr, once. Generic keywords
+  (`serif`, `sans-serif`, `monospace`) are not reported, because substituting one
+  is the request being honoured; `@font-face` families are not reported, because
+  the document registers those itself. The exit code stays `0`: the output is
+  still a render of the document, and the caller decides.
 - **A sub-resource that fails to fetch, or is refused for size, exits `4`** (#11).
   A `404`, a DNS failure, a connection refused, or an image whose decoded size exceeds
   `BLITZ_MAX_IMAGE_MP` writes the partial PNG and names the resource on stderr. Before
