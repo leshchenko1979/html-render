@@ -17,6 +17,11 @@ on:
     branches: [main]
     paths: ["Cargo.toml"]
   workflow_dispatch:
+    inputs:
+      dispatch_only:
+        description: "Run the dispatch step even if Cargo.lock did not move (self-test for #22)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -84,7 +89,12 @@ jobs:
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Dispatch the builds the push cannot start
-        if: steps.commit.outputs.moved == 'true'
+        # `dispatch_only` exists because the interesting branch is otherwise
+        # reachable only when Cargo.toml happens to resolve differently: a fix
+        # whose happy path has never run is the thing this issue is about. A
+        # manual run with the input set proves the dispatch and the read-back
+        # against whatever is on the ref right now.
+        if: steps.commit.outputs.moved == 'true' || github.event.inputs.dispatch_only == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         # `gh workflow run` creates the run through the API, so it is NOT
