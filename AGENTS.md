@@ -29,7 +29,7 @@ Run the ones your change can move; run all of them before a push touching `src/*
 | `test_parity_gate.py` | the parity harness reports what it actually measured |
 | `test_exit_codes.py` | the documented exit codes, against a real binary |
 | `test_clip_void.py` | `--clip` skips boxless elements and keeps output numbering contiguous |
-| `test_bands.py` | `--clip` banding leaves the whole corpus byte-identical (the leg that protects Gate C), keeps a multi-band deck's measured geometry identical, and lifts the total-page ceiling |
+| `test_bands.py` | `--clip` banding keeps a multi-band deck's measured geometry identical (delta ≤ 1, AA phase), lifts the total-page ceiling, and never reaches the single-PNG path (leg 1 is a negative control there, not proof about Gate C) |
 | `test_document_detect.py` | document-root detection, 6 legs |
 | `test_measure_rss.py` | RSS is tree-summed, not one process |
 | `test_css_audit.py` | the CSS audit's inert / load-bearing verdicts |

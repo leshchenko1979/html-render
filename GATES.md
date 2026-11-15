@@ -161,13 +161,18 @@ Each of these cost real time, and none of them raises an error.
    of 40 frames differed from the single canvas by **max channel delta 1**, two
    to ten pixels each, inside the glyphs. That is not clipping — a clipped frame
    loses whole regions, not single levels — and it is two orders below the gate's
-   tolerance of 8. What protects the parity verdict is not pixel identity but
-   that **the 32-fixture corpus renders byte-identically with banding on and
-   off**, because every corpus fixture is short enough to fit one band, where the
-   scroll is `(0,0)` and the paths are the same code. `tools/test_bands.py`
-   asserts that corpus identity as leg 1 and the geometry identity on a
-   multi-band deck as leg 2; the earlier claim of byte-identity on *every* frame
-   was wrong and the gate caught it.
+   tolerance of 8. What protects the 54-row corpus verdict is not pixel identity
+   but that **banding never runs on that path**: `run_parity.py` renders fixtures
+   with no `--clip`, and `--clip` is the only mode that bands, so the verdict
+   cannot see the change at all. The banded path's real check is Gate C, which
+   does render the deck with `--clip` and requires every slide at Chromium's
+   dimensions. `tools/test_bands.py` covers the rest: leg 1 is a **negative
+   control** — the single-PNG path renders identically at 1 MiB and 0, which
+   catches banding leaking into a mode that must not have it — and leg 2 asserts
+   the geometry identity on a multi-band deck. Two earlier claims were wrong and
+   the gate caught the first: byte-identity on *every* frame was false, and
+   describing leg 1 as the leg that protects the corpus verdict was wrong too,
+   since it passes because banding does not run there.
 
 ## Withdrawn claims
 
