@@ -228,6 +228,41 @@ Each of these cost real time, and none of them raises an error.
    (it passes because banding does not run there), and the AA-phase mechanism
    was wrong in the way set out above.
 
+7. **A failed sub-resource is invisible, and a tiny file can demand gigabytes.**
+   Two failures with no exit code between them, both closed by the provider
+   wrapper in `src/main.rs`.
+
+   `blitz_net::Provider::fetch` reports a failed fetch through `tracing`, which
+   is compiled out here, and never calls the handler: the node stays pending, the
+   box paints blank, and the run exits 0 with a valid PNG of the wrong thing.
+   Measured on `0.3.0-beta.8`: a `404` produced a **795-byte all-white PNG** at
+   `rc=0` with nothing on stderr. Fetching through `fetch_with_callback` — the
+   public path that hands back the `Result` — makes it reportable, and the run
+   now names the url and the status and exits `4`.
+
+   The same wrapper caps one decoded image at **128 MP**, read from the header
+   before the decoder runs, so the refusal costs no allocation. The file that
+   motivated it is **60 bytes** and claims `30000x30000`: 3.6 GB of RGBA, which
+   on a host without the headroom aborts with `rc=134` — a signal, not a
+   message, naming no file. `BLITZ_MAX_IMAGE_MP` moves the cap and `0` disables
+   it; a real `9000x9000` PNG (81 MP) still paints in **2.36 s** at the default,
+   so the cap is above what a document plausibly embeds.
+
+   The header sniffer recognises **PNG, JPEG, GIF and WebP** — measured, not
+   assumed: all four paint on `0.3.0-beta.8`, while **BMP and TIFF paint
+   nothing**, so those two cannot allocate however large their header claims.
+   Anything unrecognised passes through uncapped, because a cap that guesses
+   would refuse documents that render today. `tools/test_assets.py` pins all of
+   it in 10 legs, including the control that proves leg `c`'s refusal is the cap
+   and not the fixture.
+
+   **The in-flight counter is ours for the same reason.** `Provider::count`
+   derives it from the waker `Arc` that `fetch` clones for the life of a
+   request; `fetch_with_callback` does not clone it, so forwarding that count
+   would report an empty queue while fetches were still running and the drain
+   loop would stop early. The `fetch()` path in trap 1 is still the reason
+   `is_empty()` is not racy *upstream*; this CLI no longer uses that path.
+
 ## Withdrawn claims
 
 **"Scrolling the viewport shifts the subpixel AA phase."** Wrong as a mechanism,
