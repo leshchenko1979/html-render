@@ -8,18 +8,18 @@ edited by hand: every figure the README advertises is read from it by
 
 | | |
 |---|---|
-| Workflow run | [43746767310](https://github.com/leshchenko1979/html-render/actions/runs/43746767310) (`parity`, `f807f7c`) |
+| Workflow run | [43754284965](https://github.com/leshchenko1979/html-render/actions/runs/43754284965) (`parity`, `7bfc62e`) |
 | Artefact | `bench-results`, step *Benchmark against Chromium* |
-| Measured | 2026-11-15T18:28:59Z |
+| Measured | 2026-11-15T19:48:44Z |
 | Host | `runnervmy75tu`, Ubuntu 24.04, glibc 2.35, 4 vCPU, 15,989 MiB |
 | Probe | `html-render 0.3.0-beta.10`, `sha256 de69ad53…` |
 | Browser | Google Chrome 157.0.8103.78 |
 
-The *Measured* instant and the probe version above are asserted against this
-file by `tools/check_claims.py`, so they cannot drift from the receipt they
-describe. This receipt predates the `run` block in `tools/bench.py`, which is why
-the run id is recorded here by hand rather than read from the JSON; the next
-refresh carries `run.id` and `run.sha` in-file.
+The run id, commit, *Measured* instant, host and probe version above are
+asserted against this file by `tools/check_claims.py`, so they cannot drift from
+the receipt they describe. `tools/bench.py` writes `run.id`, `run.sha` and
+`run.ref` into the receipt itself, so this table renders fields the JSON already
+holds rather than being the only copy of them.
 
 ## Reproduce it
 
@@ -82,6 +82,10 @@ Identically, deliberately:
 
 - The **speed** ratio is modest and the deck is small. It is one document, not a
   workload class; a heavier page changes both sides.
+- **Speed moves between runs, and the browser is why.** Three runs of this probe
+  on one runner image held html-render's wall clock to 5.0 % while headless
+  Chromium's moved 18.5 %, so the README states speed as a range and memory as a
+  floor. A single run's ratio is a sample, not a constant.
 - The **memory** ratio is the striking one, and it is large because the
   instrument changed: earlier figures were largest-single-process maxima, which
   flatter a multi-process browser. Tree RSS is what a host has to hold.

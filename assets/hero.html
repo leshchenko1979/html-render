@@ -149,18 +149,18 @@ h1 span{color:var(--blue)}
 
       <div class="stats">
         <div class="stat">
-          <div class="v">1.61<em>×</em></div>
+          <div class="v">1.5<em>×</em></div>
           <div class="l">faster</div>
-          <div class="d">2.349 s vs 3.774 s</div>
+          <div class="d">2.039 s vs 3.101 s</div>
         </div>
         <div class="stat">
-          <div class="v">52.07<em>×</em></div>
+          <div class="v">51<em>×</em></div>
           <div class="l">lighter</div>
-          <div class="d">47.1 vs 2452.6 MiB</div>
+          <div class="d">47.2 vs 2431.3 MiB</div>
         </div>
         <div class="stat g">
           <div class="v">1 md5</div>
-          <div class="l">10 renders</div>
+          <div class="l">3 renders</div>
           <div class="d">one checksum</div>
         </div>
       </div>
@@ -174,35 +174,35 @@ h1 span{color:var(--blue)}
         <div class="metric">
           <div class="ml">Wall time · 8 slides at scale 2</div>
           <div class="bline">
-            <span class="bn">Chromium 151</span>
+            <span class="bn">Chromium 157</span>
             <span class="bt"><i style="width:100%"></i></span>
-            <span class="bv">3.774 s</span>
+            <span class="bv">3.101 s</span>
           </div>
           <div class="bline">
             <span class="bn">html-render</span>
-            <span class="bt"><i class="win" style="width:62.2%"></i></span>
-            <span class="bv win">2.349 s</span>
+            <span class="bt"><i class="win" style="width:65.8%"></i></span>
+            <span class="bv win">2.039 s</span>
           </div>
         </div>
 
         <div class="metric">
           <div class="ml">Peak RSS · whole process tree</div>
           <div class="bline">
-            <span class="bn">Chromium 151</span>
+            <span class="bn">Chromium 157</span>
             <span class="bt"><i style="width:100%"></i></span>
-            <span class="bv">2452.6 MiB</span>
+            <span class="bv">2431.3 MiB</span>
           </div>
           <div class="bline">
             <span class="bn">html-render</span>
             <span class="bt"><i class="win" style="width:1.9%"></i></span>
-            <span class="bv win">47.1 MiB</span>
+            <span class="bv win">47.2 MiB</span>
           </div>
         </div>
 
         <div class="metric">
           <div class="ml">Install size · what you ship</div>
           <div class="bline">
-            <span class="bn">Chromium 151</span>
+            <span class="bn">Chromium 157</span>
             <span class="bt"><i style="width:100%"></i></span>
             <span class="bv">~500 MB</span>
           </div>
@@ -233,7 +233,7 @@ h1 span{color:var(--blue)}
           <div class="o d">… 7 more, in document order</div>
         </div>
         <div class="tfoot">
-          One process, <b>8 slides</b>, <b>2.349 s</b>, <b>47.1 MiB</b> peak.
+          One process, <b>8 slides</b>, <b>2.039 s</b>, <b>47.2 MiB</b> peak.
         </div>
       </div>
 
@@ -243,7 +243,7 @@ h1 span{color:var(--blue)}
 
   <div class="foot">
     <div><b>github.com/leshchenko1979/html-render</b></div>
-    <div>4 vCPU · glibc 2.39 · reproducible with <b>tools/gates.py</b></div>
+    <div>4 vCPU · glibc 2.35 · reproducible with <b>tools/bench.py</b></div>
   </div>
 
 </div>

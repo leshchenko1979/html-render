@@ -117,33 +117,52 @@ every process in the engine's tree**, which is what a container limit counts:
 
 | engine | wall | peak tree RSS |
 |---|---|---|
-| Chromium, one tall screenshot cut into eight slides | 3.774 s | 2452.6 MiB |
-| `--full` | **2.352 s** | **37.7 MiB** |
-| `--clip` (banded, one PNG per frame) | 2.386 s | 75.3 MiB |
-| `--clip --per-element` | 2.349 s | 47.1 MiB |
+| Chromium, one tall screenshot cut into eight slides | 3.101 s | 2431.3 MiB |
+| `--full` | **2.042 s** | **37.7 MiB** |
+| `--clip` (banded, one PNG per frame) | 2.067 s | 75.3 MiB |
+| `--clip --per-element` | 2.039 s | 47.2 MiB |
 
-Ratios against Chromium: **1.60×** wall and **65.06×** memory for `--full`,
-**1.58×** / **32.57×** for `--clip`, **1.61×** / **52.07×** for `--per-element`.
+Ratios against Chromium: **1.52×** wall and **64.49×** memory for `--full`,
+**1.50×** / **32.29×** for `--clip`, **1.52×** / **51.51×** for `--per-element`.
+
+The same probe, three times, on the same runner image and the same deck
+(`deck.html` md5 `5c71602d…` every time). A record, not a gate:
+
+| run | Chromium wall | html-render wall | ratio | Chromium tree RSS | html-render tree RSS | ratio |
+|---|---|---|---|---|---|---|
+| 43744837000 | 3.186 s | 2.240 s | 1.42× | 2336.1 MiB | 37.9 MiB | 61.64× |
+| 43746767310 | 3.774 s | 2.352 s | 1.60× | 2452.6 MiB | 37.7 MiB | 65.06× |
+| 43752965645 | 3.250 s | 2.292 s | 1.42× | 2389.6 MiB | 37.8 MiB | 63.22× |
+| 43754284965 | 3.101 s | 2.042 s | 1.52× | 2431.3 MiB | 37.7 MiB | 64.49× |
+
+The browser is the noisy side: 18.5 % across its own wall clock, against 5.0 %
+for html-render. So speed is stated as a range and memory as a floor — a point
+figure would be whichever run the receipt happened to catch.
 
 Two things this table does not claim.
 
 **Speed is a modest win, and the earlier 2.49× was not.** That figure came from a
 private deck where the Chromium harness also paid 2.94 s of settle sleeps;
 removing them left 1.94×. The probe drives Chromium as cheaply as it can be
-driven — one tall screenshot, no sleeps — so 1.6× is the honest race.
+driven — one tall screenshot, no sleeps — so 1.4–1.6× is the honest race.
 
 **The memory ratio is larger than what was published before, for a method
 reason, not a code change.** Earlier rows compared html-render's footprint with
-Chromium's *largest single process* (858 MiB). Summing the tree gives 2452.6 MiB
+Chromium's *largest single process* (858 MiB). Summing the tree gives 2389.6 MiB
 on the same engine, because the browser, GPU and renderer processes all hold
 memory at once. The undercount was measured before the probe existed: on
 `assets/demo-deck.html` Chromium's tree peaked at 1703.5–1826.2 MiB while its
 largest process read 297.1–299.2 MiB.
 
 `--clip` costs more than `--per-element` because it keeps one full-height canvas
-per band alive; both are `html-render` against itself, so neither is a
-cross-engine claim. They differ on 3,551 of 44,236,800 pixels (0.0080 %), max
-channel delta 2/255 — antialiasing at fractional offsets.
+per band alive. Both are `html-render` against itself, so neither is a
+cross-engine claim: no ratio in this section pits the two modes against each
+other.
+
+An earlier version of this paragraph put a pixel count on how far the two modes
+diverge. That denominator is a document this repo does not generate, so no
+reader could reproduce the figure — withdrawn, and the probe does not compare
+the two modes.
 
 ### What is actually gated
 

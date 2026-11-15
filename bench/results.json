@@ -20,20 +20,33 @@
     "seed": 20261115,
     "slides": 8
   },
+  "determinism": {
+    "distinct_md5": 1,
+    "md5": "676825b4c0a9911e1a7bb8a9d2d55c9a",
+    "renders": 3,
+    "shape": "--full"
+  },
   "engines": {
     "chromium": {
       "command": "/usr/bin/google-chrome --headless --incognito --disable-gpu --no-sandbox --hide-scrollbars --force-device-scale-factor=2 --window-size=1280,5760 --screenshot=chromium.png file:///home/runner/work/html-render/html-render/bench/deck/deck.html",
-      "peak_tree_mib": 2452.6,
-      "peak_tree_mib_max": 2517.4,
+      "peak_tree_mib": 2431.3,
+      "peak_tree_mib_max": 2456.5,
       "png": "bench/deck/chromium.png",
+      "png_md5": "32aeac32b3f608638deba62d947ad163",
+      "png_md5_all": [
+        "32aeac32b3f608638deba62d947ad163",
+        "32aeac32b3f608638deba62d947ad163",
+        "32aeac32b3f608638deba62d947ad163"
+      ],
+      "png_md5_distinct": 1,
       "repeats": 3,
       "status": "measured",
       "version": "Google Chrome 157.0.8103.78",
-      "wall_median_s": 3.774,
+      "wall_median_s": 3.101,
       "wall_s": [
-        3.774,
-        3.957,
-        3.708
+        3.1,
+        3.332,
+        3.101
       ]
     },
     "html-render": {
@@ -41,13 +54,20 @@
       "peak_tree_mib": 37.7,
       "peak_tree_mib_max": 37.8,
       "png": "bench/deck/blitz.png",
+      "png_md5": "676825b4c0a9911e1a7bb8a9d2d55c9a",
+      "png_md5_all": [
+        "676825b4c0a9911e1a7bb8a9d2d55c9a",
+        "676825b4c0a9911e1a7bb8a9d2d55c9a",
+        "676825b4c0a9911e1a7bb8a9d2d55c9a"
+      ],
+      "png_md5_distinct": 1,
       "repeats": 3,
       "status": "measured",
-      "wall_median_s": 2.352,
+      "wall_median_s": 2.042,
       "wall_s": [
-        2.36,
-        2.347,
-        2.352
+        2.062,
+        2.042,
+        2.039
       ]
     }
   },
@@ -61,7 +81,7 @@
     "pixels": 29491200,
     "width": 2560
   },
-  "generated_at": "2026-11-15T18:28:59Z",
+  "generated_at": "2026-11-15T19:48:44Z",
   "host": {
     "cpu_count": 4,
     "glibc": "ldd (Ubuntu GLIBC 2.35-0ubuntu3.15) 2.35",
@@ -75,16 +95,23 @@
     "sha256": "de69ad53a09c9088dae15179e5def2b15eae36fb169015dfcae3eb8541c25405",
     "version": "html-render 0.3.0-beta.10"
   },
+  "run": {
+    "attempt": "1",
+    "id": "43754284965",
+    "ref": "refs/heads/main",
+    "repository": "leshchenko1979/html-render",
+    "sha": "7bfc62e8be47439d95cf6686bf9d4b57154f0803"
+  },
   "schema": 1,
   "shapes": {
     "slides": {
       "chromium": {
         "derived_from": "engines.chromium",
         "note": "one tall screenshot, cut into slides; no extra render",
-        "peak_tree_mib": 2452.6,
+        "peak_tree_mib": 2431.3,
         "pngs": 8,
         "status": "measured",
-        "wall_median_s": 3.774
+        "wall_median_s": 3.101
       },
       "html-render-clip": {
         "command": "/home/runner/work/html-render/html-render/target/release/render --clip deck.html slides 1280 5760 2 .slide --document",
@@ -97,17 +124,17 @@
         "pngs": 8,
         "repeats": 3,
         "status": "measured",
-        "wall_median_s": 2.386,
+        "wall_median_s": 2.067,
         "wall_s": [
-          2.386,
-          2.407,
-          2.385
+          2.101,
+          2.067,
+          2.066
         ]
       },
       "html-render-per-element": {
         "command": "/home/runner/work/html-render/html-render/target/release/render --clip deck.html slides-pe 1280 5760 2 .slide --document --per-element",
-        "peak_tree_mib": 47.1,
-        "peak_tree_mib_max": 47.1,
+        "peak_tree_mib": 47.2,
+        "peak_tree_mib_max": 47.4,
         "png_px": [
           2560,
           1440
@@ -115,11 +142,11 @@
         "pngs": 8,
         "repeats": 3,
         "status": "measured",
-        "wall_median_s": 2.349,
+        "wall_median_s": 2.039,
         "wall_s": [
-          2.337,
-          2.356,
-          2.349
+          2.04,
+          2.039,
+          2.037
         ]
       }
     }
