@@ -308,6 +308,20 @@ jobs:
           python3 tools/bench.py --bin target/release/render \
             --deck bench/deck --out bench/fresh.json --repeats 3 --require-both
 
+      - name: Upload the benchmark receipt
+        # The fresh receipt, not the committed one: it is the measurement this
+        # run took, and it is what a human downloads to refresh
+        # bench/results.json deliberately, once the drift check below agreed.
+        # Uploaded ahead of that check, not after it: the run whose drift
+        # verdict failed is exactly the run whose numbers you need in order
+        # to decide whether the receipt or the code is the thing that moved.
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: bench-results
+          path: bench/fresh.json
+          if-no-files-found: warn
+
       - name: Check the benchmark has not drifted
         # The step above measures; this one decides whether the measurement still
         # describes the binary the docs advertise. Without it, CI re-measured on
@@ -319,17 +333,6 @@ jobs:
           python3 tools/bench_drift.py --self-test
           python3 tools/bench_drift.py --committed bench/results.json \
             --fresh bench/fresh.json
-
-      - name: Upload the benchmark receipt
-        # The fresh receipt, not the committed one: it is the measurement this
-        # run took, and it is what a human downloads to refresh
-        # bench/results.json deliberately, after the drift check above agreed.
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: bench-results
-          path: bench/fresh.json
-          if-no-files-found: warn
 
       - name: Upload the built renderer
         # So the binary can be run on documents that must not be committed.
