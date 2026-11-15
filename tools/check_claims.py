@@ -595,6 +595,28 @@ def main():
         if hits:
             fails.append("retired claim %r survives in %s" % (retired, ", ".join(hits)))
 
+    # --- the drift bands, which live in code and are quoted in prose --------
+    # Three files state the tolerances and `tools/bench_drift.py` enforces them.
+    # Two copies of one fact drift apart, and the prose copy is the one a reader
+    # trusts — so the numbers are read out of the module that applies them.
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import bench_drift  # noqa: E402  (local tool, imported for its constants)
+    wall_pct = "%d %%" % round(bench_drift.WALL_TOL * 100)
+    mem_pct = "%d %%" % round(bench_drift.MEM_TOL * 100)
+    fid_pct = "%d %%" % round(bench_drift.FIDELITY_TOL * 100)
+    claim_prose("README.md", readme,
+                "gates the wall *ratio* at a\ndeliberately coarse %s" % wall_pct,
+                "the wall band, in the paragraph that disclaims speed")
+    claim_prose("GATES.md", gates, "past %s (wall ratio)" % wall_pct,
+                "the wall band, where the gate is described")
+    claim_prose("GATES.md", gates,
+                "%s (memory) or %s (fidelity)" % (mem_pct, fid_pct),
+                "the memory and fidelity bands, where the gate is described")
+    claim_prose("bench/README.md", bench_readme,
+                "**%s on the wall ratio, %s on\nmemory, %s on fidelity**"
+                % (wall_pct, mem_pct, fid_pct),
+                "the bands, as the probe documents them")
+
     # --- the version the page claims to document ----------------------------
     # The Status line and the install snippet name a release. Both are copies of
     # Cargo.toml, and both drifted: after beta.6 was cut the page still said

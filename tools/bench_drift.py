@@ -36,7 +36,7 @@ So the gate compares quantities that are properties of (renderer x document):
 |---|---|---|---|
 | peak tree RSS, four shapes | absolute | 20 % | 5.0 % |
 | fidelity, pixels off by >16 | absolute | 15 % | 0.0 % |
-| wall ratio, three shapes | ratio | 35 % | 16.8 % |
+| wall ratio, three shapes | ratio | 45 % | 30.3 % |
 | memory ratio, three shapes | ratio | 20 % | 5.5 % |
 
 A ratio survives a busy machine because both engines are measured in the same
@@ -57,7 +57,18 @@ import io
 import json
 import sys
 
-WALL_TOL = 0.35
+# 45 %, not 35 %. Chromium's multi-process startup is far more
+# contention-sensitive than a single process, so a busy machine moves the RATIO
+# too, just less than it moves the seconds. Six runs on one runner image put the
+# worst deviation from any single baseline at 30.3 %, so a 35 % band was a gate
+# that failed for being unlucky. The ceiling is set by the smallest signal worth
+# catching: a doubling of OUR renderer moves the ratio -50 %, so the band has to
+# sit under that. 45 % is the window between the two. Measured detection
+# threshold: a 1.85x slowdown of our renderer is caught, a 1.80x is not — so
+# read this band as "somewhere near a doubling", not as a fine instrument. It is
+# coarse on purpose, because speed is no longer advertised; the tight bands are
+# memory (20 %) and fidelity (15 %), which is where the claims now live.
+WALL_TOL = 0.45
 MEM_TOL = 0.20
 FIDELITY_TOL = 0.15
 
@@ -320,6 +331,14 @@ def self_test():
     leg("identical_passes", _receipt(), 0)
     leg("chromium_wall_noise_passes", _receipt(wall_c=3.774 * 1.18), 0)
     leg("wall_ratio_12pct_passes", _receipt(wall_c=3.774 * 1.13), 0)
+    # The observed natural span of the ratio across six runs is 30.3 %, so a
+    # band that failed here would fail on an ordinary day.
+    leg("wall_ratio_30pct_passes", _receipt(wall_c=3.774 * 1.30), 0)
+    leg("wall_ratio_40pct_passes", _receipt(wall_c=3.774 * 1.40), 0)
+    # The band's lower edge, measured rather than assumed: 1.85x is caught,
+    # 1.80x is not. Pinned so a future widening has to justify itself.
+    leg("renderer_180pct_passes", _receipt(wall_h=2.352 * 1.80), 0)
+    leg("renderer_185pct_fails", _receipt(wall_h=2.352 * 1.85), 1)
     leg("memory_doubled_fails", _receipt(peak_h=37.7 * 2), 1)
     leg("renderer_only_regression_fails", _receipt(wall_h=2.352 * 2), 1)
     # The pair the gate exists to draw: a busy machine slows BOTH engines, so

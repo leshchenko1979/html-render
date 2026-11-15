@@ -155,14 +155,15 @@ Earlier figures of 9.19× compared html-render's whole footprint against
 Chromium's *fattest single process*; the probe sums the entire process tree on
 both sides, which is what a container limit actually counts.
 
-**Speed is measured and gated, but it is not a claim.** The receipt carries wall
-clock for both engines and the drift check fails if it moves past 35 %, so a
-regression still gets caught. It is not advertised as a ratio, because the
-browser's own wall clock moved 21.7 % between those same four runs while ours
-moved 15.2 %: the ratio mostly reports how fast the browser happened to be
-that day, and a number that mostly measures the other program is not a
-property of this one. Run the probe yourself — it prints both sides and lets
-you judge.
+**Speed is measured and tripwired, but it is not a claim.** The receipt carries
+wall clock for both engines, and the drift check gates the wall *ratio* at a
+deliberately coarse 45 %: it catches a 1.85× slowdown of this renderer and misses
+a 1.80× one. Absolute seconds cannot be gated at all — the same host, deck and
+binary read Chromium at 1.604 s on one run and 3.120 s on the next. The ratio is
+not advertised, because it moves with the runner's load and mostly reports how
+fast the browser happened to be that day, and a number that mostly measures the
+other program is not a property of this one. Run the probe yourself — it prints
+both sides and lets you judge.
 
 Host, method and the run behind these figures: [GATES.md](GATES.md#cost).
 

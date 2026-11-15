@@ -25,7 +25,7 @@ python3 tools/bench.py --bin <render> --chrome <chrome> --out /tmp/mine.json
 Compare `/tmp/mine.json` to `bench/results.json`; if `deck.html_md5` matches
 `b77aac2de5931588dfa01eb5af418bc5`, both describe the same document. CI makes
 that comparison on every push: `tools/bench_drift.py` fails the build when a
-figure moves past 35 % (wall), 20 % (memory) or 15 % (fidelity) of the committed
+figure moves past 45 % (wall ratio), 20 % (memory) or 15 % (fidelity) of the committed
 receipt, so the published numbers cannot quietly come to describe a different
 program.
 
@@ -132,11 +132,16 @@ html-render's `--full` peak held between 37.6 MiB and 37.9 MiB across five runs
 of the probe on one runner image, while Chromium's moved 21.7 % and its wall
 clock 18.5 %.
 
-Wall clock is measured, printed and gated, and that is all it is. The drift
-check fails if it moves past 35 %, so a regression is caught; the ratio is not
-advertised, because over the four runs on one deck it ranged 1.42× to 1.60× and most
-of that movement was the browser's, not ours. A figure that mostly reports how
-fast the other program happened to be that day is not a property of this one.
+Wall clock is measured and printed, but the drift check gates the wall
+**ratio**, not the seconds — and it gates it coarsely. Absolute seconds cannot be
+gated at all: the same host, deck and binary read Chromium at 1.604 s on one run
+and 3.120 s on the next, because a multi-process browser on a busy runner is a
+measurement of the runner. The ratio survives that better but not perfectly, and
+it is load-dependent in one direction: six runs on one runner image span 1.42× to
+1.85×. So the band is 45 %, which catches a 1.85× slowdown of our renderer and
+misses a 1.80× one. Read it as a tripwire near a doubling, not as an instrument.
+Speed is not advertised anywhere; the ratio exists only so that a regression has
+somewhere to fail.
 
 A record, not a gate — same runner image throughout. The first four rows
 measured the previous deck (`deck.html` md5 `5c71602d…`), the last one the deck
@@ -399,8 +404,8 @@ runner image the ratio read 1.42×, 1.60×, 1.42× and 1.52× while html-render'
 wall held to 15.2 % and Chromium's moved 21.7 % — the figure mostly reported how
 fast the browser happened to be that day. The original 2.49× additionally came
 from a private deck where the Chromium harness paid 2.94 s of settle sleeps that
-the probe does not. Wall clock is still measured and still gated at 35 % drift;
-it is simply no longer advertised as a multiple. The claim is memory — at least
+the probe does not. Wall clock is still measured, and its ratio still tripwires
+at 45 % drift; it is simply no longer advertised as a multiple. The claim is memory — at least
 31× — which held to 0.8 % across five runs on one runner image.
 
 ## Corpus

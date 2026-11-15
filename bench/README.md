@@ -41,9 +41,11 @@ never reports success without saying which engines it actually measured.
 CI runs the probe on every push, but a measurement nobody compares is a
 measurement nobody reads. `tools/bench_drift.py` compares the fresh receipt
 against this committed one and fails the build when a figure moves past a band
-set from the probe's own run-to-run spread — **35 % on wall time, 20 % on
-memory, 15 % on fidelity**, each roughly two to three times the largest spread
-observed between two CI runs on the same runner image.
+set from the probe's own run-to-run spread — **45 % on the wall ratio, 20 % on
+memory, 15 % on fidelity**. The wall band is the loose one on purpose: the ratio
+itself moves with runner load (six runs on one image span 1.42× to 1.85×), so it
+sits between that observed 30.3 % spread and the −50 % a doubled renderer would
+show. Memory and fidelity are the tight instruments.
 
 Every figure the README prints is covered, which is six ratios across three
 shapes: a regression confined to `--clip` or `--per-element` moves four
@@ -93,12 +95,14 @@ Identically, deliberately:
 - **Memory is the claim.** It held inside 0.8 % across five runs of this probe on
   one runner image, so the README states it as a floor: at least 31×, taking the
   least favourable of the three modes.
-- **Speed is measured, gated, and not advertised.** The receipt carries wall
-  clock for both engines and `tools/bench_drift.py` fails if it moves past 35 %,
-  so a regression is caught. The ratio is not published, because across those
-  same four runs it ranged 1.42× to 1.60× while html-render's own wall held to
-  15.2 % and Chromium's moved 21.7 % — most of the movement was the browser
-  having a different day. A number that mostly measures the other program is not
+- **Speed is measured, tripwired, and not advertised.** The receipt carries wall
+  clock for both engines and `tools/bench_drift.py` gates their ratio at 45 %,
+  which catches a 1.85× slowdown and misses a 1.80× one — a tripwire near a
+  doubling, not an instrument. Absolute seconds are not gated at all, since the
+  same host and binary read Chromium 1.604 s then 3.120 s. The ratio is not
+  published, because across those runs it ranged 1.42× to 1.85× while
+  html-render's own wall held to 15.2 % and Chromium's moved 21.7 % — most of the
+  movement was the browser having a different day. A number that mostly measures the other program is not
   a property of this one.
 - The **memory** ratio is larger than figures published before this probe, for a
   method reason: earlier rows compared html-render against Chromium's *largest
