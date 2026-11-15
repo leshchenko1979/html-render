@@ -4,6 +4,27 @@ Newest first. Every entry names its commit range, so it can be re-derived with
 `git log --oneline <prev>..<tag>` rather than trusted. Pre-1.0: flags and output
 names may change between minor versions, and this file is where that shows up.
 
+## Unreleased
+
+### Changed
+
+- **#17: the default `--clip` canvas is as wide as the widest match.** The shared
+  canvas used to be the viewport's width, so an element wider than the viewport was
+  cropped at the viewport's edge: a 1600 px element in an 800 px viewport produced an
+  **800×100** PNG at `rc=0`, half its content missing, with the numbers that would
+  have revealed it (`w=1600.00` beside `physical 800x100`) on the line a caller does
+  not read. `v0.3.0-beta.9` made that cut loud (exit `4`); this removes it where the
+  width is paintable. Widening is a paint-surface change, not a layout one —
+  `paint_scene` builds its root clip from the surface size it is given while the
+  document's viewport, and therefore every `vh` unit, is untouched — and the row
+  budget is derived from the widened width, so peak memory stays one band at the
+  widest frame's width rather than one band at the viewport's. Past the renderer's
+  65,408 px limit nothing can be painted, so that residual case is still a cut and
+  still exits `4`. `tools/test_clip_wide.py` pins the width, the two strategies
+  agreeing on it, and — as the control that stops a widened canvas from passing while
+  blank — that the frame's right half carries the ink of a child sitting entirely past
+  the viewport edge. On the released `0.3.0-beta.9` binary seven of its legs fail.
+
 ## v0.3.0-beta.9 — 2026-11-15
 
 Raw list: `git log --oneline v0.3.0-beta.8..v0.3.0-beta.9`. This cut closes the

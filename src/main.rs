@@ -90,6 +90,8 @@ fn help_text() -> String {
          \x20               one of two strategies:\n\
          \x20                 (no flag)      paint the document in row bands, then cut\n\
          \x20                                each frame out of the band that holds it.\n\
+         \x20                                The band is as wide as the WIDEST match, so\n\
+         \x20                                a frame wider than the viewport is not cut.\n\
          \x20                                Peak memory is one band, not the page\n\
          \x20                                (BLITZ_BAND_MIB, default 4).\n\
          \x20                 --per-element  paint each frame on its OWN element-sized\n\
@@ -960,7 +962,36 @@ async fn real_main() {
                 // non-zero origin, and its top is an exact integer physical row, so
                 // the pixels are the ones a single canvas would have produced rather
                 // than a resample.
-                let band_rows = band_height(phys_w);
+                //
+                // The canvas is the viewport, widened to the widest frame (#17).
+                //
+                // An element wider than the viewport is laid out and painted past
+                // it, so a canvas exactly `phys_w` wide CUT the frame: a 1600 px
+                // element in an 800 px viewport came out 800x100 with half its
+                // content missing. Painting is not layout — `paint_scene` takes
+                // the surface size as an argument and builds its root clip from
+                // it (`blitz-paint` `render.rs`, `viewport_clip_rect`), while the
+                // document's own viewport is untouched — so widening the surface
+                // paints the overflow and leaves `vh` units resolving against the
+                // requested viewport.
+                //
+                // The cost is one canvas width for EVERY band, so the row budget
+                // is derived from the widened width: peak memory stays one band,
+                // at the widest frame's width rather than the viewport's.
+                let widest = rects
+                    .iter()
+                    .map(|r| {
+                        ((r.x * s).round() as u32)
+                            .saturating_add(((r.width * s).round() as u32).max(1))
+                    })
+                    .max()
+                    .unwrap_or(phys_w);
+                // Clamped to the renderer's own limit. Past it nothing can be
+                // painted at all, so that residual case is still a cut and still
+                // exits 4 — the widening removes the cut where the width is
+                // paintable, not the accounting.
+                let canvas_w = widest.max(phys_w).min(MAX_CANVAS_W);
+                let band_rows = band_height(canvas_w);
 
                 // One scratch buffer for every frame, reused across the loop.
                 // Allocating it inside the loop churned a frame-sized block per
@@ -997,7 +1028,7 @@ async fn real_main() {
                 // Refused before anything is painted, so a limit breach writes nothing.
                 for (_, band_h) in &bands {
                     refuse_oversized_canvas(
-                        phys_w,
+                        canvas_w,
                         *band_h,
                         "lower BLITZ_BAND_MIB, or reduce <scale>",
                     );
@@ -1011,27 +1042,27 @@ async fn real_main() {
                     if b != painted {
                         let (top, band_h) = bands[b];
                         document.set_viewport_scroll(Point { x: 0.0, y: top as f64 / s });
-                        canvas = paint_region(&mut document, 0, 0, phys_w, band_h, scale);
+                        canvas = paint_region(&mut document, 0, 0, canvas_w, band_h, scale);
                         painted = b;
                     }
                     let (top, band_h) = bands[b];
-                    let x = ((rect.x * s).round() as u32).min(phys_w.saturating_sub(1));
+                    let x = ((rect.x * s).round() as u32).min(canvas_w.saturating_sub(1));
                     let y = ((rect.y * s).round() as u32).saturating_sub(top);
-                    // The shared canvas is only as wide as the viewport, so an
-                    // element that overflows it is cut here. Measured before this
-                    // warning existed: a 1600 px element in an 800 px viewport
-                    // produced an 800x100 PNG at rc=0, half the element missing
-                    // and nothing on stderr. `--per-element` paints the element's
-                    // own width, so it is the remedy the warning names.
+                    // The canvas is the widest frame's width, so a frame is cut
+                    // here only when that width is past the renderer's limit and
+                    // `canvas_w` had to be clamped. Before #17 the canvas was the
+                    // viewport, and this was the common case: a 1600 px element in
+                    // an 800 px viewport produced an 800x100 PNG at rc=0 with half
+                    // the element missing and nothing on stderr.
                     let want_w = ((rect.width * s).round() as u32).max(1);
-                    if x + want_w > phys_w {
+                    if x.saturating_add(want_w) > canvas_w {
                         clipped_frames += 1;
                         eprintln!(
-                            "warning: clip_{:02} is {want_w} px wide but the canvas is {phys_w} px; the frame is cut (--per-element keeps the full width)",
+                            "warning: clip_{:02} is {want_w} px wide but the canvas is {canvas_w} px; the frame is cut (--per-element keeps the full width)",
                             i + 1
                         );
                     }
-                    let w = want_w.min(phys_w - x);
+                    let w = want_w.min(canvas_w - x);
                     let h = (((rect.height * s).round() as u32).max(1)).min(band_h.saturating_sub(y));
                     // `top + y` is the ABSOLUTE document row, so a reader sees the
                     // same coordinates whether the run was banded or not.
@@ -1047,7 +1078,7 @@ async fn real_main() {
                         x,
                         top + y
                     );
-                    crop_into(&mut out, &canvas, phys_w, x, y, w, h);
+                    crop_into(&mut out, &canvas, canvas_w, x, y, w, h);
                     let path = Path::new(out_path).join(format!("clip_{:02}.png", i + 1));
                     write_png(File::create(&path).expect("create png"), &out, w, h);
                 }

@@ -192,6 +192,12 @@ The divergence is concentrated, not spread: **7 rows are one table** (#9) and
   A `404`, a DNS failure, a connection refused, or an image whose decoded size exceeds
   `BLITZ_MAX_IMAGE_MP` writes the partial PNG and names the resource on stderr. Before
   this, all four produced a valid PNG of an empty box with exit `0`.
+- **A frame wider than the viewport is no longer cut** (#17). The default `--clip`
+  strategy paints the document into one shared canvas, and that canvas is now as wide
+  as the widest match: a 1600 px element in an 800 px viewport is written 1600 px wide
+  rather than 800. Peak memory stays one band, at that width, so the cost is
+  proportional to the widest element and not to the page. Past the renderer's 65,408 px
+  limit nothing can be painted, so that residual case is still a cut and still exits `4`.
 
 ## Where the detail lives
 

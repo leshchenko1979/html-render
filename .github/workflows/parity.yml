@@ -98,6 +98,14 @@ jobs:
         # built, so a regression fails here rather than on someone's deck.
         run: python3 tools/test_clip_void.py --bin target/release/render
 
+      - name: Test the wide-clip contract
+        # Regression for #17: the shared canvas used to be the viewport's width,
+        # so an element wider than the viewport was written half-rendered at
+        # exit 0. The canvas is now as wide as the widest match, and this asserts
+        # the overflow is PAINTED, not merely allocated: the frame's right half
+        # must carry the ink of a child that sits entirely past the viewport.
+        run: python3 tools/test_clip_wide.py --bin target/release/render
+
       - name: Test the banding contract
         # `--clip` paints the document in row bands so peak memory is one band,
         # not the whole page. Only safe if the rendering is untouched, so this

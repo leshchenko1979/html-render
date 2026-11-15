@@ -66,6 +66,16 @@ than no gate:
   `tools/test_bands.py` leg 4 compares every clip frame against its crop of the
   `--full` render and fails above delta 1.
 - clip mode is deterministic too: 3 runs, one md5.
+- the shared canvas is **as wide as the widest match**, not as wide as the
+  viewport (#17). An element wider than the viewport is laid out and painted past
+  it, so a canvas at the viewport's width cut the frame — measured before the fix:
+  a 1600 px element in an 800 px viewport wrote an 800×100 PNG at `rc=0` with half
+  its content missing. Widening is a paint-surface change, not a layout one:
+  `paint_scene` builds its root clip from the surface size it is given, while the
+  document's viewport — and therefore every `vh` unit — is untouched. The row
+  budget is derived from the widened width, so peak memory is one band at the
+  widest frame's width. `tools/test_clip_wide.py` pins the width and, separately,
+  that the overflow is painted rather than left white.
 
 ## What the residual is
 
@@ -278,6 +288,21 @@ Each of these cost real time, and none of them raises an error.
    `g` asserts both are absent on a document shorter than the canvas — without
    `g`, a substring check on a line the binary always prints would pass on any
    document and `f` would be decoration.
+9. **The shared `--clip` canvas was the viewport's width, so a wide element was cut
+   in half and called success.** An element wider than the viewport is laid out and
+   painted past it, but the canvas was `phys_w` wide, so the frame was cropped at the
+   viewport's edge: a 1600 px element in an 800 px viewport produced an 800×100 PNG at
+   `rc=0`, half its content missing, and the numbers that would have revealed it
+   (`w=1600.00` beside `physical 800x100`) were on the line a caller does not read.
+   The canvas is now as wide as the widest match, which is a paint-surface change and
+   not a layout one: `paint_scene` takes the surface size as an argument and builds its
+   root clip from it (`blitz-paint` `render.rs`, `viewport_clip_rect`), while the
+   document's own viewport is untouched, so `vh` units still resolve against the
+   requested viewport. The row budget is recomputed from the widened width, so peak
+   memory stays one band at that width rather than one band at the viewport's.
+   `tools/test_clip_wide.py` pins it, and its `b` leg is the control that stops a
+   widened canvas from passing while blank: the frame's right half must carry the ink
+   of a child that sits entirely past the viewport edge.
 
 ## Withdrawn claims
 
