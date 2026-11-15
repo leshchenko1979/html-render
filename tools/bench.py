@@ -296,6 +296,17 @@ def probe(args):
     results = {
         "schema": 1,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        # Who took this measurement, so a committed receipt identifies its own
+        # run instead of relying on a hand-typed table beside it. Absent outside
+        # CI (a developer's local probe has no run id), which is why every reader
+        # treats these as optional metadata rather than as facts to compare.
+        "run": {
+            "id": os.environ.get("GITHUB_RUN_ID"),
+            "attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+            "sha": os.environ.get("GITHUB_SHA"),
+            "ref": os.environ.get("GITHUB_REF"),
+            "repository": os.environ.get("GITHUB_REPOSITORY"),
+        },
         "deck": {
             "seed": args.seed,
             "slides": bench_deck.SLIDES,

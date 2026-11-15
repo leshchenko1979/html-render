@@ -194,6 +194,31 @@ def main():
         clip = shapes["html-render-clip"]
         per_el = shapes["html-render-per-element"]
 
+        # The provenance table in `bench/README.md` is a set of claims about
+        # this receipt, and it was hand-typed: it named run 43744837000 measured
+        # at 18:08:34Z while the committed receipt was taken at 18:28:59Z by a
+        # later run. A reader following it would have downloaded a different
+        # measurement, which is the one thing a provenance table must never do.
+        bench_readme = read(os.path.join("bench", "README.md"))
+        claim("bench/README.md", bench_readme, receipt["generated_at"],
+              "the instant this receipt was measured")
+        claim("bench/README.md", bench_readme, receipt["probe"]["version"],
+              "the binary that was measured")
+        claim("bench/README.md", bench_readme,
+              receipt["probe"]["sha256"][:8] + "\u2026",
+              "the probe's own digest")
+        claim("bench/README.md", bench_readme, receipt["host"]["hostname"],
+              "the host that measured it")
+        claim("bench/README.md", bench_readme,
+              "%d vCPU" % receipt["host"]["cpu_count"],
+              "the vCPU count the probe saw")
+        claim("bench/README.md", bench_readme,
+              "{:,} MiB".format(receipt["host"]["mem_total_mib"]),
+              "the RAM the probe saw")
+        claim("bench/README.md", bench_readme,
+              receipt["engines"]["chromium"]["version"],
+              "the browser that was measured against")
+
         # A figure about a comparison is only meaningful if the other side was
         # actually measured. This is the assertion the old constants could not
         # make: they quoted 4.13 % against Chromium whether or not any host had

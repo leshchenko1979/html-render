@@ -8,12 +8,18 @@ edited by hand: every figure the README advertises is read from it by
 
 | | |
 |---|---|
-| Workflow run | [43744837000](https://github.com/leshchenko1979/html-render/actions/runs/43744837000) (`parity`) |
+| Workflow run | [43746767310](https://github.com/leshchenko1979/html-render/actions/runs/43746767310) (`parity`, `f807f7c`) |
 | Artefact | `bench-results`, step *Benchmark against Chromium* |
-| Measured | 2026-11-15T18:08:34Z |
-| Host | `runnervmy75tu`, Ubuntu 24.04, glibc 2.35, 4 vCPU, 15,988 MiB |
+| Measured | 2026-11-15T18:28:59Z |
+| Host | `runnervmy75tu`, Ubuntu 24.04, glibc 2.35, 4 vCPU, 15,989 MiB |
 | Probe | `html-render 0.3.0-beta.10`, `sha256 de69ad53…` |
 | Browser | Google Chrome 157.0.8103.78 |
+
+The *Measured* instant and the probe version above are asserted against this
+file by `tools/check_claims.py`, so they cannot drift from the receipt they
+describe. This receipt predates the `run` block in `tools/bench.py`, which is why
+the run id is recorded here by hand rather than read from the JSON; the next
+refresh carries `run.id` and `run.sha` in-file.
 
 ## Reproduce it
 
@@ -29,6 +35,25 @@ Chromium must be on `PATH` (or pass `--chrome`) for the comparison half. On a
 host where it cannot launch, the probe records `chromium: unavailable` with the
 measured reason and still benches the renderer — it never silently skips, and it
 never reports success without saying which engines it actually measured.
+
+## How drift is caught
+
+CI runs the probe on every push, but a measurement nobody compares is a
+measurement nobody reads. `tools/bench_drift.py` compares the fresh receipt
+against this committed one and fails the build when a figure moves past a band
+set from the probe's own run-to-run spread — **35 % on wall time, 20 % on
+memory, 15 % on fidelity**, each roughly two to three times the largest spread
+observed between two CI runs on the same runner image.
+
+Every figure the README prints is covered, which is six ratios across three
+shapes: a regression confined to `--clip` or `--per-element` moves four
+published numbers and nothing in the `--full` pair, so checking only `--full`
+would have reported green. The self-test proves that shape of failure on purpose
+(`--self-test`, 15 legs).
+
+A FAIL here is not "this run was slow". It means the published figures now
+describe a different program, and either the code regressed or the receipt needs
+refreshing in the same commit as the prose that quotes it.
 
 ## What the deck is
 

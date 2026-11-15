@@ -20,7 +20,11 @@ python3 tools/bench.py --bin <render> --chrome <chrome> --out /tmp/mine.json
 ```
 
 Compare `/tmp/mine.json` to `bench/results.json`; if `deck.html_md5` matches
-`5c71602d1dd6c259ea3e3ba316da5233`, both describe the same document.
+`5c71602d1dd6c259ea3e3ba316da5233`, both describe the same document. CI makes
+that comparison on every push: `tools/bench_drift.py` fails the build when a
+figure moves past 35 % (wall), 20 % (memory) or 15 % (fidelity) of the committed
+receipt, so the published numbers cannot quietly come to describe a different
+program.
 
 Sections A–C below are the older `tools/gates.py` runs on a private deck. They
 established the invariants (determinism, the 2× scale law, clip-equals-crop) and
