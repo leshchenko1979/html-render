@@ -135,6 +135,13 @@ jobs:
         # paint at all; the 404 leg pins the other silent failure.
         run: python3 tools/test_redirect.py --bin target/release/render
 
+      - name: Test failed and oversized sub-resources
+        # A failed fetch used to leave a blank box at exit 0, and a 60-byte PNG
+        # header could demand gigabytes before any pixel decoded. Leg (a) is the
+        # control that proves the pipeline paints at all; (d) is the control that
+        # proves the refusal in (c) is the cap and not the fixture.
+        run: python3 tools/test_assets.py --bin target/release/render
+
       - name: Test the full-page escape hatch
         # Single-image mode paints exactly the viewport, so a taller document is
         # cut with exit 0 and nothing on stderr. Leg (a) pins that trap so a
