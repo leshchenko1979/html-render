@@ -220,6 +220,39 @@ def crash_is_unavailable(tmp):
 
 
 @leg
+def slides_count_caught(tmp):
+    """A --clip run that writes the wrong NUMBER of PNGs must be failed.
+
+    The slides shape asserts two things the document shape cannot: that there is
+    one PNG per slide, and that each is the slide's size. Without the first, a
+    renderer that wrote one tall PNG into the directory would read as a fast
+    success, and the per-slide figure would be the document figure mislabelled.
+    """
+    script = (
+        "import os, sys; sys.path.insert(0, %r); import bench_deck; "
+        "d = sys.argv[1]; os.makedirs(d, exist_ok=True); "
+        "bench_deck.write_png(os.path.join(d, 'clip_01.png'), 20, 10, "
+        "[bytes((0,0,0))*20]*10)"
+        % os.path.dirname(os.path.abspath(__file__))
+    )
+    out = os.path.join(tmp, "slides")
+    got = bench.run_slides(
+        "fake", [sys.executable, "-c", script, out], tmp, out, 8, (20, 10), 1
+    )
+    if got["status"] != "failed":
+        return "1 PNG was accepted where 8 slides exist: %r" % (got,)
+    if "wrote 1 PNGs, want 8" not in got["reason"]:
+        return "failed for the wrong reason: %s" % got["reason"]
+    # And the size assertion, one PNG at the right count but the wrong shape.
+    got2 = bench.run_slides(
+        "fake", [sys.executable, "-c", script, out], tmp, out, 1, (40, 40), 1
+    )
+    if got2["status"] != "failed" or "is 20x10, want 40x40" not in got2["reason"]:
+        return "a 20x10 slide passed as 40x40: %r" % (got2,)
+    return None
+
+
+@leg
 def median(tmp):
     if statistics.median([3.0, 1.0, 2.0]) != 2.0:
         return "median of 1,2,3 is not 2"

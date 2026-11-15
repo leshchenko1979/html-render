@@ -158,6 +158,65 @@ def run_engine(label, cmd, cwd, png, want, repeats, timeout=RUN_TIMEOUT, missing
     }
 
 
+def run_slides(label, cmd, cwd, outdir, want_count, want_each, repeats, timeout=RUN_TIMEOUT):
+    """Run a `--clip` render `repeats` times, asserting the output is the deck.
+
+    The slides shape is the one the README advertises: N PNGs, one per slide,
+    because that is what a caller with a deck actually wants. Its cost is not
+    the document shape's cost divided by N — `--per-element` paints each frame
+    on its own canvas — so it has to be measured, not derived.
+
+    Two assertions, because both failures are silent otherwise: the number of
+    PNGs must equal the number of slides, and each must be the slide's size.
+    A renderer that wrote one tall PNG into the directory would otherwise read
+    as a fast success.
+    """
+    walls = []
+    peaks = []
+    for i in range(repeats):
+        if os.path.isdir(outdir):
+            shutil.rmtree(outdir)
+        os.makedirs(outdir)
+        rc, out, err, wall, peak_kib = measure_rss.run_measured(
+            cmd, mode="tree", timeout=timeout, cwd=cwd
+        )
+        if rc != 0:
+            return {
+                "status": "failed",
+                "reason": "run %d exited %d: %s" % (i + 1, rc, (err or out).strip()[-400:]),
+                "command": " ".join(cmd),
+            }
+        pngs = sorted(f for f in os.listdir(outdir) if f.endswith(".png"))
+        if len(pngs) != want_count:
+            return {
+                "status": "failed",
+                "reason": "run %d wrote %d PNGs, want %d" % (i + 1, len(pngs), want_count),
+                "command": " ".join(cmd),
+            }
+        for name in pngs:
+            got = bench_compare.ihdr(os.path.join(outdir, name))
+            if got != tuple(want_each):
+                return {
+                    "status": "failed",
+                    "reason": "run %d: %s is %dx%d, want %dx%d"
+                    % (i + 1, name, got[0], got[1], want_each[0], want_each[1]),
+                    "command": " ".join(cmd),
+                }
+        walls.append(round(wall, 3))
+        peaks.append(round(peak_kib / 1024.0, 1))
+    return {
+        "status": "measured",
+        "command": " ".join(cmd),
+        "repeats": repeats,
+        "wall_s": walls,
+        "wall_median_s": round(statistics.median(walls), 3),
+        "peak_tree_mib": round(statistics.median(peaks), 1),
+        "peak_tree_mib_max": max(peaks),
+        "pngs": want_count,
+        "png_px": list(want_each),
+    }
+
+
 def host_facts():
     facts = {
         "hostname": platform.node(),
@@ -273,6 +332,58 @@ def probe(args):
         results["engines"]["html-render"]["deck_dir"] = deckdir
         return results, deckdir, html
 
+    # --- the slides shape: what a caller with a deck actually asks for -------
+    # One PNG per slide via `--clip --per-element`, measured the same way. The
+    # browser's side needs no second render: one tall screenshot cut into
+    # slides is free, so its cost for this shape IS its document cost, and the
+    # record says so rather than implying a measurement that did not happen.
+    slide_px = (bench_deck.SLIDE_W * args.scale, bench_deck.SLIDE_H * args.scale)
+
+    def clip_cmd(outname, per_element):
+        """The `--clip` invocation for one strategy, writing into `outname`."""
+        cmd = [
+            os.path.abspath(args.bin),
+            "--clip",
+            os.path.basename(html),
+            outname,
+            str(bench_deck.SLIDE_W),
+            str(bench_deck.DOC_H),
+            str(args.scale),
+            ".slide",
+            "--document",
+        ]
+        if per_element:
+            cmd.append("--per-element")
+        return cmd
+
+    # Both strategies, because they are a real choice and they differ by more
+    # than 2x on this deck: the banded strategy paints the document once and
+    # cuts each frame out of the band holding it, while --per-element paints a
+    # canvas per frame. A receipt naming only one would let the README advertise
+    # whichever number flattered it.
+    results["shapes"] = {
+        "slides": {
+            "html-render-clip": run_slides(
+                "html-render --clip",
+                clip_cmd("slides", False),
+                deckdir,
+                os.path.join(deckdir, "slides"),
+                bench_deck.SLIDES,
+                slide_px,
+                args.repeats,
+            ),
+            "html-render-per-element": run_slides(
+                "html-render --clip --per-element",
+                clip_cmd("slides-pe", True),
+                deckdir,
+                os.path.join(deckdir, "slides-pe"),
+                bench_deck.SLIDES,
+                slide_px,
+                args.repeats,
+            ),
+        }
+    }
+
     chrome_png = os.path.join(deckdir, "chromium.png")
     try:
         chrome = find_chrome(args.chrome)
@@ -295,6 +406,17 @@ def probe(args):
     )
     if results["engines"]["chromium"]["status"] == "measured":
         results["fidelity"] = bench_compare.fidelity(chrome_png, blitz_png, decoder=args.decoder)
+        # The browser renders the deck once and cuts it; there is no second
+        # render to measure. Saying "same as the document shape" is the honest
+        # record, and it is a field so a reader can check the claim.
+        results["shapes"]["slides"]["chromium"] = {
+            "status": "measured",
+            "derived_from": "engines.chromium",
+            "note": "one tall screenshot, cut into slides; no extra render",
+            "wall_median_s": results["engines"]["chromium"]["wall_median_s"],
+            "peak_tree_mib": results["engines"]["chromium"]["peak_tree_mib"],
+            "pngs": bench_deck.SLIDES,
+        }
         results["engines"]["chromium"]["version"] = (
             __import__("subprocess")
             .run([chrome, "--version"], capture_output=True, text=True, timeout=60)
