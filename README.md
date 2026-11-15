@@ -79,7 +79,9 @@ html-render --clip deck.html slides/ 1280 720 2 'section.slide' --per-element  #
 `--clip` cuts every match out of the document, painted in row bands, so peak memory is one
 band rather than the whole page;
 `--per-element` paints an element-sized canvas per match instead and holds even less.
-`--full` lets a single image run to the document's height rather than the viewport.
+`--full` lets a single image run to the document's height rather than the viewport,
+painted in row bands and streamed to the encoder, so a tall page is not a memory limit
+and has no height ceiling (a `position:fixed` element forces one canvas instead, and says so).
 Whether the input is a document or a fragment is auto-detected from the first tag and can be overridden; passing both overrides at once is an error.
 Output is deterministic — same input, same bytes — so a changed pixel in CI means a changed document.
 A 1280×640 card at scale 2, the shape of `assets/og.png` at 2560×1280, is the same call with different numbers.
@@ -92,7 +94,7 @@ Exit codes are a contract, tested in CI against a real binary:
 | `2` | bad arguments: unknown flag, `--clip` not first, `--per-element` outside `--clip`, `--full` with `--clip`, `--document` with `--fragment` |
 | `3` | the selector matched nothing |
 | `4` | output written but known to be incomplete: a fetch hit `BLITZ_DEADLINE_SECS`, or a frame was cut to the canvas width |
-| `5` | a single canvas would exceed the renderer limit (65408 wide, 65532 tall): nothing written |
+| `5` | a single canvas would exceed the renderer limit (65408 wide, 65532 tall): nothing written. `--clip` and `--full` band the page, so this now means one *band* or one element is too large, or banding was disabled with `BLITZ_BAND_MIB=0` |
 | `101` | panic: unparsable number, invalid selector, unreadable input |
 
 `html-render --help` is the only maintained list of flags.

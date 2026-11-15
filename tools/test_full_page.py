@@ -102,9 +102,74 @@ def main():
             )
         )
 
+    def render(html, out, extra, env=None):
+        full_env = dict(os.environ)
+        if env:
+            full_env.update(env)
+        return subprocess.run(
+            [args.bin, html, out, str(VIEW_W), str(VIEW_H), "1", "--document"] + extra,
+            capture_output=True,
+            text=True,
+            env=full_env,
+        )
+
+    def same_bytes(a, b):
+        with open(a, "rb") as fa, open(b, "rb") as fb:
+            return fa.read() == fb.read()
+
     leg("a-default", TALL, [], (VIEW_W, VIEW_H), False)
     leg("b-full", TALL, ["--full"], (VIEW_W, TALL), True)
     leg("c-short", SHORT, ["--full"], (VIEW_W, VIEW_H), True)
+
+    # d — the streamed path must be the same image as the single canvas it
+    # replaced. TALL is 2200 rows against a 1310-row band, so banding really
+    # runs here (two bands); a leg on a one-band document would pass without
+    # reaching the mechanism, which is this suite's own recorded vice.
+    d_html = os.path.join(tmp, "d.html")
+    with open(d_html, "w", encoding="utf-8") as fh:
+        fh.write(tall_document(TALL))
+    d_banded = os.path.join(tmp, "d-banded.png")
+    d_single = os.path.join(tmp, "d-single.png")
+    pd = render(d_html, d_banded, ["--full"])
+    ps = render(d_html, d_single, ["--full"], env={"BLITZ_BAND_MIB": "0"})
+    ok = (
+        pd.returncode == 0
+        and ps.returncode == 0
+        and os.path.exists(d_banded)
+        and os.path.exists(d_single)
+        and same_bytes(d_banded, d_single)
+    )
+    legs.append((
+        "d-banded",
+        ok,
+        f"banded rc={pd.returncode} single rc={ps.returncode} "
+        f"identical={os.path.exists(d_banded) and os.path.exists(d_single) and same_bytes(d_banded, d_single)}",
+    ))
+
+    # e — a position:fixed element cannot be banded: blitz repaints it at every
+    # band's top, which would stamp the header down the image. The renderer must
+    # say so and fall back to exactly the single-canvas image.
+    e_html = os.path.join(tmp, "e.html")
+    with open(e_html, "w", encoding="utf-8") as fh:
+        fh.write(
+            '<!doctype html><html><body style="margin:0">'
+            '<div style="position:fixed;top:0;left:0;width:100%;height:60px;background:#c00"></div>'
+            '<div style="height:2200px;background:#eef"></div>'
+            "</body></html>"
+        )
+    e_auto = os.path.join(tmp, "e-auto.png")
+    e_off = os.path.join(tmp, "e-off.png")
+    pa = render(e_html, e_auto, ["--full"])
+    po = render(e_html, e_off, ["--full"], env={"BLITZ_BAND_MIB": "0"})
+    warned = "position:fixed" in pa.stderr
+    fell_back = (
+        os.path.exists(e_auto) and os.path.exists(e_off) and same_bytes(e_auto, e_off)
+    )
+    legs.append((
+        "e-fixed",
+        pa.returncode == 0 and po.returncode == 0 and warned and fell_back,
+        f"rc={pa.returncode} warned={warned} fell_back={fell_back}",
+    ))
 
     failed = 0
     for name, ok, detail in legs:

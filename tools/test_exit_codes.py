@@ -38,11 +38,26 @@ DOC = """<!doctype html><html><body style="margin:0">
 EMPTY = """<!doctype html><html><body><p>no divs here</p></body></html>
 """
 
-# Taller than any canvas the renderer can paint (65532 px). Used to prove the
-# ceiling is refused BEFORE painting, so a caller never finds a partial dump.
+# Taller than any canvas the renderer can paint (65532 px). `--full` now paints
+# such a page in bands, so this document is what proves BOTH halves of the
+# contract: with banding on it renders whole, and with `BLITZ_BAND_MIB=0` the
+# single canvas is refused BEFORE painting, so a caller never finds a partial
+# dump.
 TALL = """<!doctype html><html><body style="margin:0">
 <div style="height:70000px"></div></body></html>
 """
+
+def png_height(path):
+    """IHDR height, read from the header rather than from a decoder.
+
+    Deliberately not a full decode: the leg asserts the canvas the renderer
+    declared, and a decoder would also mask a truncated stream.
+    """
+    with open(path, "rb") as fh:
+        head = fh.read(24)
+    if len(head) < 24 or head[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    return int.from_bytes(head[20:24], "big")
 
 
 def run(binary, argv, env=None):
@@ -214,8 +229,27 @@ def main():
         if os.path.exists(wide_png):
             fails.append("5 canvas too wide wrote a file before refusing")
             print("FAIL 5 canvas too wide wrote a file before refusing")
-        check("5 canvas too tall (--full)", [tall, os.path.join(tmp, "tall.png"), "120", "60", "1", "--full"], 5,
-              want_err="--per-element paints one element-sized canvas")
+        # With banding off, `--full` is back to one canvas of the document's own
+        # height, so the ceiling bites and nothing is written.
+        tall_off = os.path.join(tmp, "tall-off.png")
+        check("5 canvas too tall (--full, banding off)",
+              [tall, tall_off, "120", "60", "1", "--full"], 5,
+              want_err="banding lifts this", env={"BLITZ_BAND_MIB": "0"})
+        if os.path.exists(tall_off):
+            fails.append("5 canvas too tall (--full, banding off) wrote a file before refusing")
+            print("FAIL 5 canvas too tall (--full, banding off) wrote a file before refusing")
+
+        # With banding on (the default) the same page renders whole: the ceiling
+        # was a property of the single-canvas strategy, not of the renderer.
+        tall_on = os.path.join(tmp, "tall-on.png")
+        check("0 canvas too tall (--full) banded", [tall, tall_on, "120", "60", "1", "--full"], 0)
+        got = png_height(tall_on) if os.path.exists(tall_on) else None
+        legs += 1
+        if got != 70000:
+            fails.append("0 canvas too tall (--full) banded: PNG height %r, want 70000" % (got,))
+            print("FAIL 0 canvas too tall (--full) banded: PNG height %r, want 70000" % (got,))
+        else:
+            print("ok   0 canvas too tall (--full) banded   height=%d" % got)
 
         # 0 — stale clip frames are swept. Numbering restarts at 1 each run, so
         # a shorter re-render used to leave the previous run's tail in place and

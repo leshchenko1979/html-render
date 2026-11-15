@@ -25,11 +25,12 @@
 
 use std::env;
 use std::fs::File;
+use std::io::Write as _;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyrender::{render_to_buffer, PaintScene as _};
+use anyrender::{render_to_buffer, ImageRenderer as _, PaintScene as _};
 use anyrender_vello_cpu::VelloCpuImageRenderer;
 use blitz_dom::{util::Color, Document as _, DocumentConfig, Point};
 use blitz_html::HtmlDocument;
@@ -516,14 +517,24 @@ async fn real_main() {
             } else {
                 phys_h
             };
-            refuse_oversized_canvas(phys_w, out_phys_h);
-            let buffer = paint_region(&mut document, 0, 0, phys_w, out_phys_h, scale);
-            write_png(
-                File::create(out_path).expect("create png"),
-                &buffer,
-                phys_w,
-                out_phys_h,
-            );
+            if full_page {
+                // Banded + streamed: the canvas is never materialised whole, so
+                // the document height stops being a memory limit or a ceiling.
+                write_full_banded(&mut document, out_path, phys_w, out_phys_h, scale, trace);
+            } else {
+                refuse_oversized_canvas(
+                    phys_w,
+                    out_phys_h,
+                    "reduce <height>, or pass --full to paint the whole document in bands",
+                );
+                let buffer = paint_region(&mut document, 0, 0, phys_w, out_phys_h, scale);
+                write_png(
+                    File::create(out_path).expect("create png"),
+                    &buffer,
+                    phys_w,
+                    out_phys_h,
+                );
+            }
         }
         Some(sel) => {
             let ids = document
@@ -584,7 +595,11 @@ async fn real_main() {
                 for (i, rect) in rects.iter().enumerate() {
                     let w = (((rect.width * s).round() as u32).max(1));
                     let h = (((rect.height * s).round() as u32).max(1));
-                    refuse_oversized_canvas(w, h);
+                    refuse_oversized_canvas(
+                        w,
+                        h,
+                        "--per-element paints one element-sized canvas per match, so total page height stops mattering",
+                    );
                     document.set_viewport_scroll(Point { x: rect.x, y: rect.y });
                     let buffer = paint_region(&mut document, 0, 0, w, h, scale);
                     println!(
@@ -659,7 +674,11 @@ async fn real_main() {
                 }
                 // Refused before anything is painted, so a limit breach writes nothing.
                 for (_, band_h) in &bands {
-                    refuse_oversized_canvas(phys_w, *band_h);
+                    refuse_oversized_canvas(
+                        phys_w,
+                        *band_h,
+                        "lower BLITZ_BAND_MIB, or reduce <scale>",
+                    );
                 }
 
                 let mut painted: usize = usize::MAX;
@@ -773,17 +792,17 @@ const BAND_BUDGET_MIB_DEFAULT: usize = 4;
 ///
 /// Exit 5 rather than 4: code 4 means "written, but known incomplete", and this
 /// path writes nothing at all.
-fn refuse_oversized_canvas(w: u32, h: u32) {
+fn refuse_oversized_canvas(w: u32, h: u32, tall_hint: &str) {
     if w <= MAX_CANVAS_W && h <= MAX_CANVAS_H {
         return;
     }
     eprintln!(
         "error: canvas {w}x{h} exceeds the renderer limit ({MAX_CANVAS_W}x{MAX_CANVAS_H})"
     );
+    // The remedy depends on the path, so the caller supplies it: a hint that
+    // names a flag which cannot help is worse than no hint.
     if h > MAX_CANVAS_H {
-        eprintln!(
-            "hint: --per-element paints one element-sized canvas per match, so total page height stops mattering"
-        );
+        eprintln!("hint: {tall_hint}");
     }
     std::process::exit(5);
 }
@@ -883,6 +902,149 @@ fn paint_region(
         w,
         h,
     )
+}
+
+/// True when any node is `position: fixed`.
+///
+/// This decides whether `--full` may be painted in row bands at all. A fixed
+/// element is anchored to the VIEWPORT, so scrolling the viewport to a band's
+/// top repaints it at that band's top: banding a `--full` render would stamp
+/// the header down the image. Proven, not reasoned: a document with one
+/// `position:fixed` header rendered with `BLITZ_BAND_MIB=1` carried the header
+/// in all six `--clip` frames (`pixel(50,50) = (255,0,0)` in each, 39,301 red
+/// pixels in the top region of every one).
+///
+/// The comparison is typed against `taffy::Position::Fixed`, which is what
+/// blitz's own paint tree does (`paint_tree.rs:42`). Matching on a `Debug`
+/// string would pass silently if the variant were renamed.
+fn has_viewport_anchored(document: &HtmlDocument) -> bool {
+    document
+        .tree()
+        .iter()
+        .any(|(_, n)| n.taffy_position() == taffy::Position::Fixed)
+}
+
+/// Paint a `--full` render in row bands, streaming each band's rows straight
+/// into the PNG encoder.
+///
+/// The single-canvas path allocates `width * document_height * 4` twice — once
+/// in the renderer and once in the encoder — and refuses anything taller than
+/// `MAX_CANVAS_H`. This path never holds more than one band: peak memory is the
+/// band budget (4 MiB default) plus the row buffers, and the document height
+/// stops mattering, so the 65,532 px ceiling is lifted for `--full`.
+///
+/// One renderer and one `Vec` are reused across bands (`resize` + `render_to_vec`)
+/// rather than rebuilt per band, so allocation stops being per-band work.
+///
+/// Correctness note: each band is painted at a non-zero scroll offset, so glyph
+/// edges land on a slightly different subpixel grid than in the single-canvas
+/// render. Measured on the `--clip` equivalent: max channel delta 1/255. That is
+/// the same tolerance `tools/test_bands.py` asserts, and it is why banding
+/// refuses outright on documents with a `position:fixed` element rather than
+/// accepting a seam.
+fn write_full_banded(
+    document: &mut HtmlDocument,
+    out_path: &str,
+    phys_w: u32,
+    out_phys_h: u32,
+    scale: f32,
+    trace: bool,
+) {
+    let band_rows = band_height(phys_w);
+    let anchored = has_viewport_anchored(document);
+    // A fixed element makes banding WRONG, not merely imprecise: it would be
+    // repainted at every band's top. Fall back to one canvas and say so, rather
+    // than emit a plausible PNG of the wrong thing.
+    let banded = band_rows != u32::MAX && !anchored;
+    if anchored && band_rows != u32::MAX {
+        eprintln!(
+            "warning: document has a position:fixed element; painting one canvas \
+             (banding would repeat it down the image). Set BLITZ_BAND_MIB=0 to silence."
+        );
+    }
+
+    let bands: Vec<(u32, u32)> = if banded {
+        let mut v = Vec::new();
+        let mut top = 0u32;
+        while top < out_phys_h {
+            let h = band_rows.min(out_phys_h - top);
+            v.push((top, h));
+            top += h;
+        }
+        v
+    } else {
+        vec![(0, out_phys_h)]
+    };
+    // The remedy differs by reason, and a hint naming a flag that cannot help is
+    // worse than no hint: when banding is off because the budget is 0, telling
+    // the reader to "set BLITZ_BAND_MIB=0" is circular; when a fixed element
+    // blocked it, banding is not available at all.
+    let tall_hint = if banded {
+        "each band is already under the limit, so this is the WIDTH: reduce <width> or <scale>"
+    } else if anchored {
+        "a position:fixed element cannot be banded: reduce <height> or <scale>"
+    } else {
+        "banding is switched off: set BLITZ_BAND_MIB above 0 to paint the page in bands"
+    };
+    // Refused before anything is painted, so a limit breach writes nothing.
+    for (_, h) in &bands {
+        refuse_oversized_canvas(phys_w, *h, tall_hint);
+    }
+    if trace {
+        eprintln!(
+            "trace: full bands={} band_rows={} height={} anchored={}",
+            bands.len(),
+            band_rows,
+            out_phys_h,
+            anchored
+        );
+    }
+
+    let s = scale as f64;
+    let mut encoder = png::Encoder::new(
+        File::create(out_path).expect("create png"),
+        phys_w,
+        out_phys_h,
+    );
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    // `into_stream_writer` lives on the post-header `Writer`, not on `Encoder`
+    // (png 0.18.1 `encoder.rs:1086`, inside `impl Writer<W>` at :533).
+    let writer = encoder.write_header().expect("png stream header");
+    let mut sw = writer.into_stream_writer().expect("png stream writer");
+
+    let mut renderer = VelloCpuImageRenderer::new(phys_w, bands[0].1);
+    let mut buf: Vec<u8> = Vec::new();
+    for (top, h) in &bands {
+        if banded {
+            document.set_viewport_scroll(Point {
+                x: 0.0,
+                y: *top as f64 / s,
+            });
+        }
+        renderer.resize(phys_w, *h);
+        renderer.render_to_vec(
+            |scene| {
+                scene.fill(
+                    Fill::NonZero,
+                    Default::default(),
+                    Color::WHITE,
+                    Default::default(),
+                    &Rect::new(0.0, 0.0, phys_w as f64, *h as f64),
+                );
+                paint_scene(scene, document.as_mut(), scale as f64, phys_w, *h, 0, 0);
+            },
+            &mut buf,
+        );
+        // Exactly this band's rows: `render_to_vec` resized `buf` to `phys_w * h * 4`,
+        // and the stream's total must equal `phys_w * out_phys_h * 4` or the PNG
+        // is short and every decoder rejects it.
+        sw.write_all(&buf).expect("png rows");
+    }
+    if banded {
+        document.set_viewport_scroll(Point::ZERO);
+    }
+    sw.finish().expect("png finish");
 }
 
 fn write_png<W: std::io::Write>(writer: W, buffer: &[u8], width: u32, height: u32) {

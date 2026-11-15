@@ -13,9 +13,9 @@ Raw list: `git log --oneline v0.3.0-beta.7..main`.
 - `--clip` paints the document in row bands instead of one document-height
   canvas, cutting each frame out of the band that contains it and scrolling to
   the next band when it runs past. Peak memory is one band (`BLITZ_BAND_MIB`,
-  default 16) rather than the page, and the total page height stops mattering:
+  default 4) rather than the page, and the total page height stops mattering:
   a 72,000 px document that used to exit `5` now renders all its frames. The
-  per-canvas ceiling still applies to one band and to `--full`, so a single
+  per-canvas ceiling still applies to one band and to a single element, so a
   frame taller than 65,532 px is still refused.
   The pixels are NOT byte-identical, and the first version of this entry claimed
   they were. Scrolling the viewport shifts the subpixel antialiasing phase, so a
@@ -32,6 +32,18 @@ Raw list: `git log --oneline v0.3.0-beta.7..main`.
   against Chromium, and it passed on this change. The test's first leg is a
   negative control — the single-PNG path renders identically at 1 MiB and 0 —
   which catches banding leaking into a mode that must not have it.
+- `--full` streams too: the page is painted in row bands and each band's rows
+  go straight into the PNG encoder, so `width x document height x 4` is never
+  materialised and the height ceiling no longer applies to it. A 70,000 px
+  document that exited `5` now renders whole. Two costs, both named rather than
+  hidden. The encoder streams, so `IHDR` height must be known up front — it is,
+  from `scroll_height`. And a `position:fixed` element cannot be banded at all:
+  blitz repaints it at every band's top (measured: a red fixed header appears in
+  all six frames of a six-band deck), so the renderer falls back to one canvas,
+  warns on stderr, and `tools/test_full_page.py` asserts the fallback image is
+  byte-identical to the `BLITZ_BAND_MIB=0` render. The same test asserts a
+  2200 px banded `--full` is byte-identical to the single canvas it replaced,
+  on a document tall enough (two bands) to reach the mechanism.
 - `GATES.md` claimed `--clip` output is byte-identical to cropping the
   `--document` render, "0 differing pixels, 12/12". Banding falsified that and
   nothing went red, because the claim was prose that no test read. Measured on a

@@ -155,12 +155,16 @@ Each of these cost real time, and none of them raises an error.
    measured on a released binary, one pixel either side — 65,532 renders and
    65,533 panics, 65,408 renders and 65,410 panics — and neither is derivable
    from the other. `refuse_oversized_canvas` refuses with `rc=5` before painting,
-   so nothing is written. For `--full`, whose canvas IS the document: 45 slides
-   at 1440p 1×, **22 at 2×, 15 at 3×**.
-   Neither `--clip` strategy is bounded by the *total page* — it bands the
-   document (`BLITZ_BAND_MIB`, default 4) and `--per-element` gives each frame
-   its own canvas — so the wall now applies to a single band or a single
-   element: a frame taller than 65,532 px still hits it, in both modes.
+   so nothing is written.
+
+   **No mode is bounded by the total page any more.** `--clip` bands the
+   document (`BLITZ_BAND_MIB`, default 4), `--per-element` gives each frame its
+   own canvas, and `--full` bands and streams rows into the PNG encoder without
+   ever materialising `width × height × 4`. So the wall applies to a single
+   *canvas*: one band, one element, or a whole page when banding is switched off
+   (`BLITZ_BAND_MIB=0`) or when a `position:fixed` element forces the
+   single-canvas fallback. 45 slides at 1440p 1×, **22 at 2×, 15 at 3×** is what
+   a single canvas still cannot hold; `--full` renders all of them.
 
    **Banding costs one level of antialiasing, and only where it bands.** The
    banded path scrolls the viewport (`set_viewport_scroll`) instead of offsetting

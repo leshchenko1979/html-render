@@ -22,6 +22,11 @@ anyrender = "0.14"
 anyrender_vello_cpu = "0.18"
 peniko = "0.6"
 png = "0.18"
+# Named directly for one comparison: `Node::taffy_position()` returns
+# `taffy::Position`, and blitz-dom's own paint tree compares it the same way
+# (`paint_tree.rs:42`). A typed compare means an upstream rename is a compile
+# error, not a silent false. Same 0.15 blitz-dom pins, so cargo unifies them.
+taffy = "0.15"
 # Needed because blitz-net spawns a tokio task per sub-resource fetch.
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 
