@@ -122,31 +122,55 @@ and stay out of that text because it is tested against the argument parser.
 
 ## Performance
 
-One corpus, one host: a 12-slide 4.16 MB deck at 2560×1440, scale 2, medians of repeated runs, peak RSS as the largest single process.
+Every figure below is read from `bench/results.json`, a receipt produced by
+`tools/bench.py` on a GitHub runner and committed unedited.
+The deck is generated from a seed, so the same command renders the same
+document on your machine:
+
+```bash
+git clone https://github.com/leshchenko1979/html-render && cd html-render
+python3 tools/bench.py --bin <path-to-render> --chrome <path-to-chrome> --out /tmp/mine.json
+```
+
+If `deck.html` hashes to `5c71602d1dd6c259ea3e3ba316da5233`, you are measuring
+the deck in the receipt. Anything else means the generator moved and the
+figures below describe a document that no longer exists.
+
+Eight slides, 1280×5760 CSS px at scale 2, three repeats per engine, wall clock
+as the median, peak RSS as the **sum of every process the engine spawned**:
 
 | measurement | Chromium | html-render | ratio |
 |---|---|---|---|
-| wall clock, `--clip` | 13.36 s | 5.72 s | **2.34×** |
-| peak RSS, `--clip` | 858 MiB | 275.2 MiB | **3.12×** |
-| wall clock, `--per-element` | 13.36 s | 5.37 s | **2.49×** |
-| peak RSS, `--per-element` | 858 MiB | 93.4 MiB | **9.19×** |
-| wall clock, `--per-element`, harness sleep removed | 10.42 s | 5.37 s | **1.94×** |
+| wall clock, `--full` | 3.774 s | 2.352 s | **1.60×** |
+| peak RSS, `--full` | 2452.6 MiB | 37.7 MiB | **65.06×** |
+| wall clock, `--clip` | 3.774 s | 2.386 s | **1.58×** |
+| peak RSS, `--clip` | 2452.6 MiB | 75.3 MiB | **32.57×** |
+| wall clock, `--per-element` | 3.774 s | 2.349 s | **1.61×** |
+| peak RSS, `--per-element` | 2452.6 MiB | 47.1 MiB | **52.07×** |
 
-The last row is the one to trust.
-The harness makes Chromium wait 1.5 s to settle plus 120 ms per screenshot — 2.94 s of its 13.36 s — and html-render pays none of it, being synchronous.
-Strip that out and the honest speed ratio is 1.94, not 2.49.
-Memory needs no correction, and its 9.19× is the number that matters under a container limit: 93.4 MiB against a browser's 858 MiB.
+Read the memory column and the speed column differently.
+**Speed is modest: about 1.6×, and that is the whole claim.**
+An earlier README advertised 2.49×, taken on an external deck where the
+Chromium harness also paid 2.94 s of settle sleeps; strip that out and it was
+1.94×. The probe drives Chromium as cheaply as it can be driven — one tall
+screenshot cut into slides, no sleeps — so 1.6× is what survives a fair race.
 
-Method, host and the runs behind these figures: [GATES.md](GATES.md#cost).
+**Memory is where the difference lives.** Earlier figures of 9.19× compared
+html-render's whole footprint against Chromium's *fattest single process*.
+The probe sums the entire process tree on both sides, which is what a container
+limit actually counts: Chromium peaks at 2452.6 MiB across its renderer, GPU and
+browser processes, html-render at 37.7 MiB in one process.
+
+Host, method and the run behind these figures: [GATES.md](GATES.md#cost).
 
 ## Fidelity against Chromium
 
-Diffed pixel for pixel against Chromium at the same viewport and scale, a
-12-slide deck comes out **4.13 % of pixels differing by more than 16 levels** —
-antialiasing and glyph rasterisation, not layout: wrap points match, boxes sit at
-Chromium's coordinates, and every photo region lands at a 0 px shift.
-That figure comes from the same external deck as the performance rows, so it is
-history too: it needs a browser to reproduce and the document is not here.
+Diffed pixel for pixel against Chromium at the same viewport and scale, the
+probe's deck comes out **4.5462 % of pixels differing by more than 16 levels**
+over all 29,491,200 pixels — antialiasing and glyph rasterisation, not layout:
+mean channel difference 7.115, and both engines ink 19.1–19.4 % of the canvas.
+That is the whole deck at full resolution, not a sample, and
+`tools/bench_compare.py` will recompute it from the two PNG sets you just made.
 
 **The reproducible fidelity number is the corpus**, not the deck. Geometry is
 measured over 36 fixtures, every run, against Chromium at the same viewport:

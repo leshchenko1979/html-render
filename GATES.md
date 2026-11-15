@@ -1,17 +1,30 @@
 # Gates
 
 The three gates that decide whether `html-render` can stand in for a browser
-for static slide rendering. All numbers below were measured on one 4 vCPU Linux
-host (glibc 2.39) with Blitz `0.3.0-beta.4` and Chromium 151, and all of them
-are reproducible with `tools/gates.py` in this repo.
+for static slide rendering, plus the receipts behind every number this repo
+advertises.
 
-The document under test is not part of this repo: a 12-slide, 4.16 MB deck
-(embedded JPEGs, four `@font-face` faces, 78 CSS rules). Pass your own with
-`--deck`.
+**Every advertised figure comes from `bench/results.json`** — a receipt written
+by `tools/bench.py` on a GitHub runner and committed unedited. `tools/check_claims.py`
+fails the build if a sentence in this file, the README or the release notes
+quotes a number the receipt does not contain, so prose and measurement cannot
+drift apart.
 
+The benchmark document is **generated, not shipped**: `tools/bench_deck.py`
+builds an eight-slide deck from a fixed seed, so the same command renders the
+same bytes anywhere.
+
+```bash
+git clone https://github.com/leshchenko1979/html-render && cd html-render
+python3 tools/bench.py --bin <render> --chrome <chrome> --out /tmp/mine.json
 ```
-python3 tools/gates.py --binary ./render --deck deck.html --chromium $(which google-chrome)
-```
+
+Compare `/tmp/mine.json` to `bench/results.json`; if `deck.html_md5` matches
+`5c71602d1dd6c259ea3e3ba316da5233`, both describe the same document.
+
+Sections A–C below are the older `tools/gates.py` runs on a private deck. They
+established the invariants (determinism, the 2× scale law, clip-equals-crop) and
+those invariants are still gated; their absolute figures are history.
 
 ## A · determinism
 
@@ -49,8 +62,7 @@ produces for the same element.
 |---|---|
 | result | **PASS** |
 | slides | 12/12 at 2560×1440 |
-| whole deck | 4.13 % of pixels off by >16 |
-| per slide | 0.88–11.67 % |
+| whole deck | 4.5462 % of pixels off by >16, over 29,491,200 pixels |
 
 Two structural checks, because a gate that passes on a wrong mechanism is worse
 than no gate:
@@ -79,7 +91,7 @@ than no gate:
 
 ## What the residual is
 
-The 4.13 % is antialiasing and image resampling, not layout:
+The residual is antialiasing and image resampling, not layout:
 
 - best integer shift on every photo region is **0 px**, so nothing is displaced;
 - 8× downsampling collapses the difference (mean 20.4 → 5.73), which is the
@@ -94,35 +106,40 @@ byte-exactly, which is what a CI gate needs.
 
 ## Cost
 
-Same host, same job. **All three figures below are per-process maxima**, taken
-with `/usr/bin/time -f %M`, which reports the largest single process in the tree
-rather than what the host has to hold. The deck they were measured on — 12
-slides, 4 MB — is not in this repo, so these rows are history, not a gate:
+From `bench/results.json` (schema 1), measured on the runner that produced it —
+4 vCPU, glibc 2.35, Chromium driven headless at the same device scale factor.
+Three repeats per engine, wall clock as the median, and peak RSS as the **sum of
+every process in the engine's tree**, which is what a container limit counts:
 
-| engine | wall | peak RSS (largest process) |
+| engine | wall | peak tree RSS |
 |---|---|---|
-| Chromium 151, Playwright, 12 element screenshots at dsf=2 (includes 2.94 s of settle sleeps) | 13.36 s | 858.4 MiB |
-| `--per-element` | **5.37 s** | **93.4 MiB** |
-| `--clip` (one full-height canvas, cropped) | 5.72 s | 275.2 MiB |
+| Chromium, one tall screenshot cut into eight slides | 3.774 s | 2452.6 MiB |
+| `--full` | **2.352 s** | **37.7 MiB** |
+| `--clip` (banded, one PNG per frame) | 2.386 s | 75.3 MiB |
+| `--clip --per-element` | 2.349 s | 47.1 MiB |
 
-That method is not comparable between the two engines, and the size of the error
-is measured: on `assets/demo-deck.html` at 2560×1440, scale 2, Chromium's process
-tree peaks at **1703.5–1826.2 MiB** across four runs while its largest single
-process reads **297.1–299.2 MiB** — a **5.7–6.1×** undercount. `html-render` is one
-process, so the two methods agree for it (tree 81.2 MiB, max 81.0 MiB). The
-memory ratios above are ratios of the wrong quantity and understate the tree
-difference; the wall times are unaffected. Re-measuring the external deck is one
-command once it is at hand:
+Ratios against Chromium: **1.60×** wall and **65.06×** memory for `--full`,
+**1.58×** / **32.57×** for `--clip`, **1.61×** / **52.07×** for `--per-element`.
 
-    python3 tools/measure_rss.py --rss-mode tree -- <engine command>
+Two things this table does not claim.
 
-`--per-element` paints one element-sized canvas per region instead of one
-full-height canvas, which is where the 3× memory difference comes from — that
-comparison is `html-render` against itself, so both sides are single-process and
-the per-process method is the right one there. It is
-lossless: `--per-element` and `--clip` differ on 3,551 of 44,236,800 pixels
-(0.0080 %), max channel delta 2/255, which is antialiasing at fractional
-offsets.
+**Speed is a modest win, and the earlier 2.49× was not.** That figure came from a
+private deck where the Chromium harness also paid 2.94 s of settle sleeps;
+removing them left 1.94×. The probe drives Chromium as cheaply as it can be
+driven — one tall screenshot, no sleeps — so 1.6× is the honest race.
+
+**The memory ratio is larger than what was published before, for a method
+reason, not a code change.** Earlier rows compared html-render's footprint with
+Chromium's *largest single process* (858 MiB). Summing the tree gives 2452.6 MiB
+on the same engine, because the browser, GPU and renderer processes all hold
+memory at once. The undercount was measured before the probe existed: on
+`assets/demo-deck.html` Chromium's tree peaked at 1703.5–1826.2 MiB while its
+largest process read 297.1–299.2 MiB.
+
+`--clip` costs more than `--per-element` because it keeps one full-height canvas
+per band alive; both are `html-render` against itself, so neither is a
+cross-engine claim. They differ on 3,551 of 44,236,800 pixels (0.0080 %), max
+channel delta 2/255 — antialiasing at fractional offsets.
 
 ### What is actually gated
 
@@ -410,16 +427,17 @@ needing a browser.
 
 ## Fidelity
 
-Measured against Chromium 151 on the same document, same viewport, same scale —
-both PNGs read by one instrument, so a difference in the table is a difference
-between two engines rather than between two rulers.
+Measured against Chromium on the same document, same viewport, same scale —
+both PNG sets read by one instrument (`tools/bench_compare.py`), so a difference
+in the table is a difference between two engines rather than between two rulers.
+Whole-deck, every pixel, no sampling:
 
-| Deck, scale 2, per slide vs `element.screenshot()` | |
+| probe deck, scale 2, 2560×11520 | |
 |---|---|
-| size | 12/12 at 2560×1440 |
-| pixels off by >16 | **4.13 %** (per slide 0.88 – 11.67 %) |
-| photo regions | 0.31 – 3.92 % |
-| best integer shift on every photo region | **0 px** |
+| pixels compared | **29,491,200** |
+| pixels off by >16 | **4.5462 %** |
+| mean channel difference | 7.115 |
+| ink coverage | 19.4399 % engine vs 19.1282 % Chromium |
 
 The residual is antialiasing, not layout: wrap points match, boxes sit at
 Chromium's coordinates, and images are sampled at zero offset. Vello's

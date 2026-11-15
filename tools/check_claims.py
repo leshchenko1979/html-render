@@ -18,6 +18,7 @@ Exit 0 = every quoted number is the one the inputs produce.
 """
 
 import argparse
+import json as _json
 import os
 import re
 import struct
@@ -31,29 +32,21 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # The measurements. Each is the number as measured, with the instrument named
 # beside it so a reader can tell a re-measurable figure from a remembered one.
 # ---------------------------------------------------------------------------
-CHROME_WALL_S = 13.36        # 12-slide 4.16 MB deck, Playwright, 12 shots, dsf=2
-PER_ELEMENT_WALL_S = 5.37         # same deck, html-render --per-element
-CLIP_WALL_S = 5.72           # same deck, html-render --clip
-CHROME_RSS_MIB = 858.0       # largest single process (/usr/bin/time -f %M)
-PER_ELEMENT_RSS_MIB = 93.4        # largest single process; html-render is 1 process
-CLIP_RSS_MIB = 275.2         # largest single process
-
-# assets/demo-deck.html, 2560x1440, scale 2, four runs each, tools/measure_rss.py
-TREE_RUNS = (1703.5, 1826.2)
-MAX_RUNS = (297.1, 299.2)
-
-DIFF_PIXELS = 3551           # --per-element vs --clip, 12 slides
-TOTAL_PIXELS = 44236800      # 12 x 2560 x 1440
-
-DECK_MB = "4.16"             # the external deck the cost table was taken on
-DECK_SLIDES = 12
-FIDELITY_PCT = "4.13"        # whole deck, pixels off by >16, from tools/gates.py
-
-# tools/gates.py pads the browser's side of the clock: one 1.5 s settle wait
-# plus 120 ms per element screenshot. html-render is synchronous and waits for
-# nothing, so a ratio computed on raw wall clock credits us with the harness's
-# own sleep. 22 % of Chromium's 13.36 s is not rendering.
-SETTLE_S = 1.5 + DECK_SLIDES * 0.120
+# There are no measurement constants here any more, deliberately. Every figure
+# the docs advertise is read from `bench/results.json`, which is the raw output
+# of a CI run of `tools/bench.py`. Two reasons that matters more than it looks:
+#
+#   * a constant is a second copy of a measurement, and a second copy drifts —
+#     this file used to carry 13.36 s and 858 MiB while the probe that produced
+#     them lived nowhere a reader could run it;
+#   * a constant cannot tell you whether the measurement still EXISTS. Reading
+#     the receipt means a page that claims fidelity against Chromium fails the
+#     guard when the receipt says Chromium was unavailable, instead of quoting a
+#     figure from a run that never measured the other side.
+#
+# `bench/results.json` is never edited by hand: `bench/README.md` records the run
+# id it came from, and `tools/bench.py` writes it.
+RECEIPT = os.path.join("bench", "results.json")
 
 ASSETS = {
     # html, width, height, scale, committed png
@@ -137,6 +130,12 @@ def png_size(rel):
     return struct.unpack(">II", head[16:24])
 
 
+def num(x):
+    """858.0 -> '858', 93.4 -> '93.4': the docs drop a trailing .0."""
+    text = ("%f" % x).rstrip("0").rstrip(".")
+    return text
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", default=None, help="also re-render the assets with this binary")
@@ -175,47 +174,144 @@ def main():
     def ratio(a, b, places=2):
         return "%.*f" % (places, a / b)
 
-    # --- speed and memory ratios -------------------------------------------
-    claim("README", readme, ratio(CHROME_WALL_S, CLIP_WALL_S), "13.36/5.72")
-    claim("README", readme, ratio(CHROME_RSS_MIB, CLIP_RSS_MIB), "858/275.2")
-    claim("README", readme, ratio(CHROME_WALL_S, PER_ELEMENT_WALL_S), "13.36/5.37")
-    claim("README", readme, ratio(CHROME_RSS_MIB, PER_ELEMENT_RSS_MIB), "858/93.4")
-    # The same speed ratio with the harness's own settle sleep taken out, which
-    # the README states beside the raw one. Memory is unaffected: sleeping
-    # allocates nothing, so there is no equivalent correction on that row.
-    claim("README", readme, ratio(CHROME_WALL_S - SETTLE_S, PER_ELEMENT_WALL_S),
-          "(13.36 - settle)/5.37")
+    # --- every figure below comes from the committed receipt ---------------
+    # `bench/results.json` is a CI run of `tools/bench.py`: the same deck,
+    # rendered once by each engine, wall clock a median of three, memory the
+    # peak of the whole process tree. Nothing here is typed in by hand.
+    receipt_path = os.path.join(ROOT, RECEIPT)
+    try:
+        with open(receipt_path, encoding="utf-8") as fh:
+            receipt = _json.load(fh)
+    except OSError as exc:
+        fails.append("cannot read %s (%s): every advertised figure comes from it"
+                     % (RECEIPT, exc))
+        receipt = None
 
-    # The single-process undercount, quoted as a range by README, GATES and the
-    # release body. Both ends come from the same four runs.
-    lo = ratio(min(TREE_RUNS), max(MAX_RUNS), 1)
-    hi = ratio(max(TREE_RUNS), min(MAX_RUNS), 1)
-    claim("README", readme, "%s–%s" % (lo, hi), "tree/max range")
-    claim("GATES", gates, "%s–%s" % (lo, hi), "tree/max range")
-    claim("release body", release, "%s-%s" % (lo, hi), "tree/max range")
+    if receipt is not None:
+        doc = receipt["engines"]["html-render"]
+        chrome = receipt["engines"]["chromium"]
+        shapes = receipt["shapes"]["slides"]
+        clip = shapes["html-render-clip"]
+        per_el = shapes["html-render-per-element"]
 
-    # html-render against itself: the 3x is a per-process comparison and holds.
-    claim("GATES", gates, "%d×" % round(CLIP_RSS_MIB / PER_ELEMENT_RSS_MIB),
-          "275.2/93.4 rounds to 3")
+        # A figure about a comparison is only meaningful if the other side was
+        # actually measured. This is the assertion the old constants could not
+        # make: they quoted 4.13 % against Chromium whether or not any host had
+        # managed to run Chromium.
+        checked += 1
+        if chrome.get("status") != "measured":
+            fails.append(
+                "the receipt says chromium is %r (%s), so no ratio or fidelity "
+                "figure in the docs can be backed"
+                % (chrome.get("status"), chrome.get("reason"))
+            )
+        else:
+            # A receipt carries two copies of the same measurement: the raw
+            # repeats in `wall_s` and the `wall_median_s` the docs quote. Only
+            # the median was asserted, so a receipt whose repeats say 3.7 and
+            # whose median says 1.0 would have backed every ratio in the docs
+            # with a number no run produced. Perturbing `wall_s` alone proved it:
+            # the guard stayed green. Assert the arithmetic instead of trusting
+            # it, and hold the peak to its own maximum.
+            for name, rec in receipt["engines"].items():
+                reps = rec.get("wall_s")
+                if rec.get("status") == "measured" and reps:
+                    checked += 1
+                    if sorted(reps)[len(reps) // 2] != rec.get("wall_median_s"):
+                        fails.append(
+                            "receipt engines.%s wall_median_s %r is not the "
+                            "median of its own repeats %r"
+                            % (name, rec.get("wall_median_s"), reps))
+                peak, peak_max = rec.get("peak_tree_mib"), rec.get("peak_tree_mib_max")
+                if peak is not None and peak_max is not None:
+                    checked += 1
+                    if peak > peak_max:
+                        fails.append(
+                            "receipt engines.%s peak_tree_mib %r exceeds its own "
+                            "peak_tree_mib_max %r" % (name, peak, peak_max))
+            for name, rec in shapes.items():
+                peak, peak_max = rec.get("peak_tree_mib"), rec.get("peak_tree_mib_max")
+                if peak is not None and peak_max is not None:
+                    checked += 1
+                    if peak > peak_max:
+                        fails.append(
+                            "receipt shapes.%s peak_tree_mib %r exceeds its own "
+                            "peak_tree_mib_max %r" % (name, peak, peak_max))
 
-    # --- pixel counts ------------------------------------------------------
-    pct = "%.4f" % (DIFF_PIXELS * 100.0 / TOTAL_PIXELS)
-    claim("GATES", gates, pct, "3,551/44,236,800")
-    claim("GATES", gates, "{:,}".format(DIFF_PIXELS), "pixels differing")
-    claim("GATES", gates, "{:,}".format(TOTAL_PIXELS), "12 x 2560 x 1440")
-    # 12 slides x 2560 x 1440 must be the number the docs call the total. This
-    # one has no prose to match, so it is a bare assertion rather than a claim.
+            for label, rec in (
+                ("document", doc),
+                ("--clip", clip),
+                ("--per-element", per_el),
+            ):
+                claim("README", readme, ratio(chrome["wall_median_s"],
+                                              rec["wall_median_s"]),
+                      "receipt wall ratio, %s" % label)
+                claim("README", readme, ratio(chrome["peak_tree_mib"],
+                                              rec["peak_tree_mib"]),
+                      "receipt tree-RSS ratio, %s" % label)
+
+            # The wall and RSS medians themselves, which the tables print.
+            for label, rec in (("document", doc), ("--clip", clip),
+                               ("--per-element", per_el)):
+                claim("README", readme, num(rec["wall_median_s"]),
+                      "receipt wall median, %s" % label)
+                claim("README", readme, num(rec["peak_tree_mib"]),
+                      "receipt peak tree RSS, %s" % label)
+            claim("README", readme, num(chrome["wall_median_s"]), "receipt chromium wall")
+            claim("README", readme, num(chrome["peak_tree_mib"]),
+                  "receipt chromium peak tree RSS")
+
+            fid = receipt["fidelity"]
+            claim("README", readme, num(fid["over16_pct"]), "receipt fidelity")
+            claim("GATES", gates, num(fid["over16_pct"]), "receipt fidelity")
+            claim("release body", release, num(fid["over16_pct"]), "receipt fidelity")
+            claim("GATES", gates, "{:,}".format(fid["pixels"]),
+                  "receipt fidelity pixel count")
+            claim("README", readme, "{:,}".format(fid["pixels"]),
+                  "receipt fidelity pixel count")
+
+            # The asset HTMLs bake the same two ratios by hand, as a tile
+            # caption and as a bar width. Same rule: read from the receipt.
+            hero = ASSETS["hero"][0]
+            hero_text = read(hero)
+            for name, (html, _w, _h, _scale, _png) in ASSETS.items():
+                text = read(html)
+                claim(html, text, ratio(chrome["wall_median_s"],
+                                        per_el["wall_median_s"]),
+                      "receipt wall ratio, faster tile")
+                claim(html, text, "%s s vs %s s" % (num(per_el["wall_median_s"]),
+                                                    num(chrome["wall_median_s"])),
+                      "receipt wall medians, caption")
+                claim(html, text, ratio(chrome["peak_tree_mib"],
+                                        per_el["peak_tree_mib"]),
+                      "receipt tree-RSS ratio, memory tile")
+                claim(html, text, "%s vs %s MiB" % (num(per_el["peak_tree_mib"]),
+                                                    num(chrome["peak_tree_mib"])),
+                      "receipt tree-RSS medians, caption")
+            claim(hero, hero_text,
+                  "%.1f%%" % (100.0 * per_el["wall_median_s"] / chrome["wall_median_s"]),
+                  "bar width, wall")
+            claim(hero, hero_text,
+                  "%.1f%%" % (100.0 * per_el["peak_tree_mib"] / chrome["peak_tree_mib"]),
+                  "bar width, RSS")
+            claim(hero, hero_text, num(fid["over16_pct"]), "receipt fidelity")
+
+    # --- the deck the receipt was taken on ---------------------------------
+    # These are properties of the generator, so they are asserted rather than
+    # quoted: if the deck changes shape, the receipt describes a document that
+    # no longer exists and every figure in it is about the wrong thing.
     checked += 1
-    if DECK_SLIDES * 2560 * 1440 != TOTAL_PIXELS:
-        fails.append("TOTAL_PIXELS %d is not %d x 2560 x 1440 = %d"
-                     % (TOTAL_PIXELS, DECK_SLIDES, DECK_SLIDES * 2560 * 1440))
-    claim("README", readme, FIDELITY_PCT, "gates.py whole-deck fidelity")
-    claim("GATES", gates, FIDELITY_PCT, "gates.py whole-deck fidelity")
-    claim("release body", release, FIDELITY_PCT, "gates.py whole-deck fidelity")
-
-    # --- the deck every cost figure was measured on -------------------------
-    claim("README", readme, DECK_MB, "external deck size")
-    claim("GATES", gates, DECK_MB, "external deck size")
+    if receipt is not None:
+        deck = receipt["deck"]
+        want_px = [deck["css_px"][0] * deck["scale"], deck["css_px"][1] * deck["scale"]]
+        if deck["expected_px"] != want_px:
+            fails.append("receipt expected_px %r != css_px * scale %r"
+                         % (deck["expected_px"], want_px))
+        checked += 1
+        if deck["slides"] != receipt["shapes"]["slides"]["html-render-clip"]["pngs"]:
+            fails.append("receipt deck has %d slides but the --clip run wrote %d PNGs"
+                         % (deck["slides"],
+                            receipt["shapes"]["slides"]["html-render-clip"]["pngs"]))
 
     # --- assets: the committed PNG must be the command's output ------------
     for name, (html, w, h, scale, png) in ASSETS.items():
@@ -271,43 +367,15 @@ def main():
         claim("README", readme, "N=html-render_%s_linux_amd64" % version,
               "Cargo.toml version, asset name")
 
-        # --- the asset HTML bakes the same measurements by hand -------------
-        # The PNG checks further up prove each committed image is its HTML's
-        # output, and nothing more. Both asset HTMLs also STATE the figures by
-        # hand: the "2.49x faster" tile, its "5.37 s vs 13.36 s" caption, and a
-        # version kicker. A second copy of a fact that nothing compares is
-        # exactly the drift this file exists to kill, and this one had already
-        # drifted: both kickers read v0.3.0-beta.6 while the tree was on
+        # --- the asset HTML's version kicker --------------------------------
+        # The PNG checks above prove each committed image is its HTML's output,
+        # and nothing more. The HTML also states a version by hand, and that had
+        # already drifted: both kickers read v0.3.0-beta.6 while the tree was on
         # beta.10, with every gate green, because the PNG was compared to its
-        # HTML and the HTML was compared to nothing.
-        def num(x):
-            """858.0 -> '858', 93.4 -> '93.4': the assets drop a trailing .0."""
-            return ("%f" % x).rstrip("0").rstrip(".")
-
+        # HTML and the HTML was compared to nothing. The measurement figures in
+        # these files are asserted in the receipt block above.
         for name, (html, _w, _h, _scale, _png) in ASSETS.items():
-            text = read(html)
-            claim(html, text, "v%s" % version, "Cargo.toml version, kicker")
-            claim(html, text, ratio(CHROME_WALL_S, PER_ELEMENT_WALL_S),
-                  "13.36/5.37, faster tile")
-            claim(html, text, "%s s vs %s s" % (num(PER_ELEMENT_WALL_S),
-                                                num(CHROME_WALL_S)),
-                  "wall-time caption")
-            claim(html, text, ratio(CHROME_RSS_MIB, PER_ELEMENT_RSS_MIB),
-                  "858/93.4, memory tile")
-            claim(html, text, "%s vs %s MiB" % (num(PER_ELEMENT_RSS_MIB),
-                                                num(CHROME_RSS_MIB)),
-                  "peak-RSS caption")
-
-        # The hero's bar chart encodes those two ratios a second time, as pixel
-        # widths: a re-measured ratio that leaves the bars alone draws a picture
-        # the caption beside it contradicts. og.html has no chart.
-        hero = ASSETS["hero"][0]
-        hero_text = read(hero)
-        claim(hero, hero_text, "%.1f%%" % (100.0 * PER_ELEMENT_WALL_S / CHROME_WALL_S),
-              "bar width, 5.37/13.36")
-        claim(hero, hero_text, "%.1f%%" % (100.0 * PER_ELEMENT_RSS_MIB / CHROME_RSS_MIB),
-              "bar width, 93.4/858")
-        claim(hero, hero_text, FIDELITY_PCT, "gates.py whole-deck fidelity")
+            claim(html, read(html), "v%s" % version, "Cargo.toml version, kicker")
 
     # --- the corpus verdict ------------------------------------------------
     # These numbers drifted once already: README said "47 boxes ... 4 divergent"
@@ -316,7 +384,6 @@ def main():
     # disagree without this failing. The unit is a verdict ROW, not a box: the
     # absence assertion has no box, which is why 42 + 11 + 1 sums to the 54
     # rows the line quotes while only 53 of them are boxes.
-    import json as _json
     baseline = _json.load(open(os.path.join(ROOT, "tools", "parity_baseline.json"),
                                encoding="utf-8"))
     rows = baseline["text_free_rows"]

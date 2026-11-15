@@ -154,15 +154,16 @@ jobs:
 
           Not a browser: renders JS-free HTML/CSS to PNG.
 
-          Measured on a 12-slide, 4 MB deck at 2560x1440: **5.37 s** against
-          headless Chromium's 13.36 s (2.49x faster). The RSS figures published
-          for that deck — 93.4 MiB against 858 MiB — are **largest single
-          process**, not the process tree; measured on a deck in the repo,
-          Chromium's tree peaks 5.7-6.1x above its largest process while
-          html-render is one process, so the real memory gap is wider than the
-          9.19x those two numbers give. 4.13% of pixels differ by more than 16
-          levels (glyph antialiasing, not layout), and ten renders of the same
-          input are byte-identical. Source of these figures: \`GATES.md\`.
+          Measured by a probe in this repo, not quoted from a private deck:
+          \`tools/bench.py\` renders a seeded eight-slide deck through both
+          engines on a GitHub runner and writes \`bench/results.json\`, which is
+          committed unedited. Against headless Chromium: **1.60x** faster and
+          **65x** smaller in peak process-tree RSS for \`--document\` (2.352 s
+          against 3.774 s; 37.7 MiB against 2452.6 MiB). Speed is a modest win
+          and the README says so; memory is where the difference is. 4.5462% of
+          pixels differ by more than 16 levels (glyph antialiasing, not layout),
+          and ten renders of the same input are byte-identical. Reproduce it:
+          \`python3 tools/bench.py --bin <render> --chrome <chrome>\`.
           EOF
           )
           # Idempotent on purpose: a re-dispatch on a published tag must REPLACE
