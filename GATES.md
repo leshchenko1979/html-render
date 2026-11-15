@@ -12,7 +12,10 @@ drift apart.
 
 The benchmark document is **generated, not shipped**: `tools/bench_deck.py`
 builds an eight-slide deck from a fixed seed, so the same command renders the
-same bytes anywhere.
+same bytes anywhere. The slides argue the case for the probe rather than being
+filler, and they quote no measured figure: the deck's identity is recorded in
+the receipt, so a number here would move on every refresh and trip the drift
+check it sits beside.
 
 ```bash
 git clone https://github.com/leshchenko1979/html-render && cd html-render

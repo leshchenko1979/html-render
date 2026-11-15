@@ -66,6 +66,16 @@ arithmetic, not a checked-in blob.
 That property is what makes a cross-host comparison meaningful: every reader
 measures the identical document.
 
+The eight slides also make the argument for the probe: what a deck actually is,
+what a browser is actually for, the cost of the process tree, determinism,
+figures as code, what this project does not claim, and how to reproduce it.
+**No measured figure appears in the deck, deliberately.** Its identity is
+recorded in the receipt and the drift check refuses to compare receipts taken on
+different documents, so a figure quoted here would have to move on every honest
+re-measurement and would make that check fire on its own refresh. The numbers
+live in the README, where `tools/check_claims.py` holds them to the receipt; the
+deck argues, and points there.
+
 ## How the two engines are measured
 
 Identically, deliberately:
