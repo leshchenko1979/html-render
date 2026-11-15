@@ -4,9 +4,15 @@ Newest first. Every entry names its commit range, so it can be re-derived with
 `git log --oneline <prev>..<tag>` rather than trusted. Pre-1.0: flags and output
 names may change between minor versions, and this file is where that shows up.
 
-## Unreleased
+## v0.3.0-beta.8 — 2026-11-15
 
-Raw list: `git log --oneline v0.3.0-beta.7..main`.
+Raw list: `git log --oneline v0.3.0-beta.7..v0.3.0-beta.8`. This cut exists
+because `beta.7` is the artefact that fails the contract this tree now
+documents: it predates banded painting, so on it a document past the canvas
+ceiling still exits `5` under `--full` and never emits the `BLITZ_BAND_MIB`
+remedy the exit-code contract asserts. Nothing about `beta.7` is wrong for what
+it shipped; the page simply moved on, and the published tarball and the page
+have to describe the same object.
 
 **Changed**
 
