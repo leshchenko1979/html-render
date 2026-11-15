@@ -286,6 +286,35 @@ jobs:
         # four divergences passed every push and forty would have passed too.
         run: python3 tools/run_parity.py
 
+      - name: Benchmark against Chromium
+        # The advertised ratios come from a deck that is not in this repo, so a
+        # reader could not check one. tools/bench.py generates its own deck from
+        # a seed and measures both engines the same way: one process each, one
+        # tall PNG out, wall = median of 3, peak = the whole process tree. This
+        # host is the only one that can run it, because Chromium cannot launch
+        # on a machine without a GPU process (see the reason field the probe
+        # records when it cannot).
+        #
+        # --require-both is a hard gate here and nowhere else: a probe that
+        # silently benches one engine and reports success would make the
+        # fidelity claim unbacked, and CI is the host that must have a browser.
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check -r tools/requirements.txt
+          python3 tools/bench.py --bin target/release/render \
+            --deck bench/deck --out bench/results.json --repeats 3 --require-both
+
+      - name: Upload the benchmark receipt
+        # The committed bench/results.json is this file, downloaded and
+        # committed by hand: the measurement is CI's, and the provenance is the
+        # run id recorded beside it.
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: bench-results
+          path: bench/results.json
+          if-no-files-found: warn
+
       - name: Upload the built renderer
         # So the binary can be run on documents that must not be committed.
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

@@ -1,0 +1,59 @@
+{
+  "deck": {
+    "css_px": [
+      1280,
+      5760
+    ],
+    "expected_px": [
+      2560,
+      11520
+    ],
+    "generator": "tools/bench_deck.py",
+    "html_md5": "5c71602d1dd6c259ea3e3ba316da5233",
+    "plates_md5": {
+      "plate-a.png": "5dea3bb009d5e51fee1ce649575fd5b9",
+      "plate-b.png": "d809f7dbfe5031937dc82dbdef9af9a9",
+      "plate-c.png": "67c44621ded3e1b0f1799c57e3171755",
+      "plate-d.png": "6b3171fb1e3ab25bb226f593402e4720"
+    },
+    "scale": 2,
+    "seed": 20261115,
+    "slides": 8
+  },
+  "engines": {
+    "chromium": {
+      "command": "/root/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome --headless --incognito --disable-gpu --no-sandbox --hide-scrollbars --force-device-scale-factor=2 --window-size=1280,5760 --screenshot=chromium.png file:///tmp/bench-run/deck.html",
+      "reason": "run 1 exited -6: 5 r14: 0000000000000016 r15: 00007fff8243f918\n  di: 0000000000087e54  si: 0000000000087e54  bp: 00007fff8243f290  bx: 0000000000087e54\n  dx: 0000000000000006  ax: 0000000000000000  cx: 00007dc17f49eb2c  sp: 00007fff8243f250\n  ip: 00007dc17f49eb2c efl: 0000000000000246 cgf: 002b000000000033 erf: 0000000000000000\n trp: 0000000000000000 msk: 0000000000000000 cr2: 0000000000000000\n[end of stack trace]",
+      "status": "unavailable"
+    },
+    "html-render": {
+      "command": "/tmp/hr-ci/render deck.html blitz.png 1280 5760 2 --full",
+      "peak_tree_mib": 40.3,
+      "peak_tree_mib_max": 40.5,
+      "png": "/tmp/bench-run/blitz.png",
+      "repeats": 3,
+      "status": "measured",
+      "wall_median_s": 4.306,
+      "wall_s": [
+        4.306,
+        4.655,
+        3.962
+      ]
+    }
+  },
+  "generated_at": "2026-11-15T18:04:19Z",
+  "host": {
+    "cpu_count": 4,
+    "glibc": "ldd (Ubuntu GLIBC 2.39-0ubuntu8.7) 2.39",
+    "hostname": "VM-400234",
+    "mem_total_mib": 3921,
+    "platform": "Linux-6.8.0-100-generic-x86_64-with-glibc2.39",
+    "python": "3.14.6"
+  },
+  "probe": {
+    "path": "/tmp/hr-ci/render",
+    "sha256": "19d7fbb64493ebba1e37a7e1a60d1dce870780bdbdb091b914bef7cf00a088ef",
+    "version": "html-render 0.3.0-beta.8"
+  },
+  "schema": 1
+}

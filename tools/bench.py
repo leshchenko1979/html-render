@@ -313,6 +313,11 @@ def main(argv=None):
     ap.add_argument("--decoder", default="auto", choices=("auto", "pillow", "stdlib"))
     ap.add_argument("--deck", default=None, help="keep the generated deck in this directory")
     ap.add_argument("--out", default=RESULTS)
+    ap.add_argument(
+        "--require-both",
+        action="store_true",
+        help="exit 1 unless Chromium was measured too (CI: this host must have one)",
+    )
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args(argv)
 
@@ -337,6 +342,17 @@ def main(argv=None):
     if results["engines"]["html-render"]["status"] != "measured":
         print("error: html-render was not measured: %s" % results["engines"]["html-render"]["reason"])
         return 1
+    if args.require_both:
+        chrome = results["engines"].get("chromium", {})
+        if chrome.get("status") != "measured":
+            print(
+                "error: --require-both, but chromium is %s: %s"
+                % (chrome.get("status"), chrome.get("reason"))
+            )
+            return 1
+        if "fidelity" not in results:
+            print("error: --require-both, but no fidelity figure was produced")
+            return 1
     return 0
 
 
