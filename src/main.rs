@@ -633,8 +633,18 @@ async fn real_main() {
 
                 // Frame index -> band. Bands are contiguous row ranges built from the
                 // frames' own physical extents, so every frame lies wholly inside the
-                // band it is cut from.
-                let (bands, band_of) = plan_bands(&rects, s, band_rows);
+                // band it is cut from. The extents are computed HERE, where the concrete
+                // box type is already known, so `plan_bands` names no renderer type and
+                // stays a pure function of integers.
+                let extents: Vec<(u32, u32)> = rects
+                    .iter()
+                    .map(|r| {
+                        let top = (r.y * s).round() as u32;
+                        let bottom = top + ((r.height * s).round() as u32).max(1);
+                        (top, bottom)
+                    })
+                    .collect();
+                let (bands, band_of) = plan_bands(&extents, band_rows);
                 // Refused before anything is painted, so a limit breach writes nothing.
                 for (_, band_h) in &bands {
                     refuse_oversized_canvas(phys_w, *band_h);
@@ -774,27 +784,24 @@ fn band_height(phys_w: u32) -> u32 {
 
 /// Split the frames into contiguous row bands, each at most `band_rows` tall.
 ///
+/// `extents[i]` is frame `i`'s `(top_phys, bottom_phys)`, computed by the caller.
 /// Returns `(bands, band_of)`: `bands[b]` is `(top_phys, height_phys)` and
 /// `band_of[i]` is the band holding frame `i`. A band's top is an exact integer
 /// physical row and the viewport is scrolled to `top / scale` CSS px, so the
 /// strip is an exact integer translation of the single-canvas render — not a
 /// resample, which would move the parity baseline.
-fn plan_bands(rects: &[Rect], s: f64, band_rows: u32) -> (Vec<(u32, u32)>, Vec<usize>) {
-    let top_of = |r: &Rect| (r.y * s).round() as u32;
-    let h_of = |r: &Rect| ((r.height * s).round() as u32).max(1);
-
-    let mut order: Vec<usize> = (0..rects.len()).collect();
-    order.sort_by_key(|&i| top_of(&rects[i]));
+fn plan_bands(extents: &[(u32, u32)], band_rows: u32) -> (Vec<(u32, u32)>, Vec<usize>) {
+    let mut order: Vec<usize> = (0..extents.len()).collect();
+    order.sort_by_key(|&i| extents[i].0);
 
     let mut bands: Vec<(u32, u32)> = Vec::new();
-    let mut band_of = vec![0usize; rects.len()];
+    let mut band_of = vec![0usize; extents.len()];
     let mut top = 0u32;
     let mut bottom = 0u32;
     let mut open = false;
 
     for &i in &order {
-        let t = top_of(&rects[i]);
-        let b = t + h_of(&rects[i]);
+        let (t, b) = extents[i];
         if open && b.saturating_sub(top) > band_rows {
             bands.push((top, (bottom - top).max(1)));
             open = false;

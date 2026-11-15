@@ -148,8 +148,9 @@ Each of these cost real time, and none of them raises an error.
    measured on a released binary, one pixel either side — 65,532 renders and
    65,533 panics, 65,408 renders and 65,410 panics — and neither is derivable
    from the other. `refuse_oversized_canvas` refuses with `rc=5` before painting,
-   so nothing is written. In slides: 45 at 1440p 1×, **22 at 2×, 15 at 3×**.
-   Neither mode is bounded by the *total page* any more — `--clip` bands the
+   so nothing is written. For `--full`, whose canvas IS the document: 45 slides
+   at 1440p 1×, **22 at 2×, 15 at 3×**.
+   Neither `--clip` strategy is bounded by the *total page* — it bands the
    document (`BLITZ_BAND_MIB`, default 64) and `--per-element` gives each frame
    its own canvas — so the wall now applies to a single band or a single
    element: a frame taller than 65,532 px still hits it, in both modes.
