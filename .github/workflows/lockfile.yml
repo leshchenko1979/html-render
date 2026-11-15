@@ -20,6 +20,9 @@ on:
 
 permissions:
   contents: write
+  # The job ends by dispatching workflows, which is an API call and not a push:
+  # without this the dispatch is refused. Scoped to this job's token.
+  actions: write
 
 # Serialised, not cancelled: two runs racing to commit one file would leave the
 # loser's push rejected after it had already resolved a graph.
@@ -56,12 +59,19 @@ jobs:
           test "$pkgs" -gt 20 || { echo "only $pkgs packages resolved"; exit 1; }
 
       - name: Commit it if it moved
-        # No `[skip ci]`: a lockfile change can move the resolved graph, so the
-        # parity build that follows is the check that the pixels did not.
+        id: commit
+        # No `[skip ci]`, and that is the whole point: a lockfile change can move
+        # the resolved graph, so the builds are the check that it did not move a
+        # pixel. But a push made with `GITHUB_TOKEN` starts NO workflow (GitHub
+        # suppresses the recursive trigger), so the builds do not follow on their
+        # own — the next step dispatches them. Without it this commit landed with
+        # nothing building it and the job still read green (#22).
         run: |
+          set -euo pipefail
           if git ls-files --error-unmatch Cargo.lock >/dev/null 2>&1; then
             if git diff --quiet -- Cargo.lock; then
               echo "Cargo.lock unchanged: the committed graph is what Cargo.toml resolves to"
+              echo "moved=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
           fi
@@ -70,3 +80,43 @@ jobs:
           git add Cargo.lock
           git commit -m "chore(deps): resolve Cargo.lock from Cargo.toml"
           git push
+          echo "moved=true" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch the builds the push cannot start
+        if: steps.commit.outputs.moved == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # `gh workflow run` creates the run through the API, so it is NOT
+        # suppressed the way a `GITHUB_TOKEN` push is.
+        #
+        # Both workflows, not just parity: `Cargo.lock` is a path trigger for
+        # each, and one suppression skipped both. On v0.3.0-beta.8 a re-resolved
+        # lock left `container` building the stale graph while this job reported
+        # success, and neither run existed until it was dispatched by hand.
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          for wf in parity.yml container.yml; do
+            echo "dispatching $wf for $sha"
+            gh workflow run "$wf" --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
+          done
+
+          # A dispatch names a REF, not a commit, so it verifies that ref's HEAD —
+          # which is this commit only if nothing landed in between. Read back
+          # by sha instead of trusting the dispatch: a check pointed at the wrong
+          # tree is this issue's defect wearing a green tick.
+          for wf in parity.yml container.yml; do
+            found=""
+            for _ in $(seq 1 30); do
+              n=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$wf/runs?head_sha=$sha" \
+                    --jq '.total_count')
+              if [ "$n" -gt 0 ]; then found=yes; break; fi
+              sleep 3
+            done
+            test -n "$found" || {
+              echo "::error::$wf has no run for $sha: the lockfile commit is unverified"
+              exit 1
+            }
+            echo "$wf: run queued for $sha"
+          done

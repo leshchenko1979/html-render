@@ -49,9 +49,9 @@ so the baseline and that prose move in the same commit.
 | Workflow | Fires on | Cost |
 |---|---|---|
 | `parity.yml` | push to any branch touching `src/**`, `Cargo.toml`, `Cargo.lock`, `assets/**`, `fixtures/**`, `tools/**`, `.github/workflows/**`, `.github/dependabot.yml` | a full Rust build |
-| `container.yml` | tags `v*`, and `main` when the image can move | 326-crate Docker build |
+| `container.yml` | tags `v*`, `main` when the image can move, or a dispatch from `lockfile.yml` | 326-crate Docker build |
 | `release.yml` | tags `v*`, or a dispatched tag | builds from that tag, publishes |
-| `lockfile.yml` | `main` when `Cargo.toml` moves | commits `Cargo.lock` back |
+| `lockfile.yml` | `main` when `Cargo.toml` moves | commits `Cargo.lock` back, then dispatches the builds that commit cannot start |
 | `drain-probe.yml` | **dispatch only** | 60-minute budget, answers one question |
 
 A docs-only commit fires **nothing**.
