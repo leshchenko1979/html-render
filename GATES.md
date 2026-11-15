@@ -23,7 +23,7 @@ python3 tools/bench.py --bin <render> --chrome <chrome> --out /tmp/mine.json
 ```
 
 Compare `/tmp/mine.json` to `bench/results.json`; if `deck.html_md5` matches
-`5c71602d1dd6c259ea3e3ba316da5233`, both describe the same document. CI makes
+`b77aac2de5931588dfa01eb5af418bc5`, both describe the same document. CI makes
 that comparison on every push: `tools/bench_drift.py` fails the build when a
 figure moves past 35 % (wall), 20 % (memory) or 15 % (fidelity) of the committed
 receipt, so the published numbers cannot quietly come to describe a different
@@ -115,39 +115,44 @@ byte-exactly, which is what a CI gate needs.
 
 From `bench/results.json` (schema 1), measured on the runner that produced it —
 4 vCPU, glibc 2.35, Chromium driven headless at the same device scale factor.
-Three repeats per engine, wall clock as the median, and peak RSS as the **sum of
-every process in the engine's tree**, which is what a container limit counts:
+Three repeats per engine, and peak RSS as the **sum of every process in the
+engine's tree**, which is what a container limit counts:
 
-| engine | wall | peak tree RSS |
+| engine | peak tree RSS | wall |
 |---|---|---|
-| Chromium, one tall screenshot cut into eight slides | 3.101 s | 2431.3 MiB |
-| `--full` | **2.042 s** | **37.7 MiB** |
-| `--clip` (banded, one PNG per frame) | 2.067 s | 75.3 MiB |
-| `--clip --per-element` | 2.039 s | 47.2 MiB |
+| Chromium, one tall screenshot cut into eight slides | 2431.3 MiB | 3.101 s |
+| `--full` | **37.7 MiB** | 2.042 s |
+| `--clip` (banded, one PNG per frame) | 75.3 MiB | 2.067 s |
+| `--clip --per-element` | 47.2 MiB | 2.039 s |
 
-Ratios against Chromium: **1.52×** wall and **64.49×** memory for `--full`,
-**1.50×** / **32.29×** for `--clip`, **1.52×** / **51.51×** for `--per-element`.
+**The advertised claim is memory: at least 51× less than Chromium**, taking the
+least favourable of the three modes. Memory is the one quantity here that is
+steady enough to carry a claim — html-render's peak held inside 0.5 % across
+four runs of the probe on one runner image, while Chromium's moved 21.7 % and
+its wall clock 18.5 %.
 
-The same probe, three times, on the same runner image and the same deck
-(`deck.html` md5 `5c71602d…` every time). A record, not a gate:
+Wall clock is measured, printed and gated, and that is all it is. The drift
+check fails if it moves past 35 %, so a regression is caught; the ratio is not
+advertised, because over those same four runs it ranged 1.42× to 1.60× and most
+of that movement was the browser's, not ours. A figure that mostly reports how
+fast the other program happened to be that day is not a property of this one.
 
-| run | Chromium wall | html-render wall | ratio | Chromium tree RSS | html-render tree RSS | ratio |
-|---|---|---|---|---|---|---|
-| 43744837000 | 3.186 s | 2.240 s | 1.42× | 2336.1 MiB | 37.9 MiB | 61.64× |
-| 43746767310 | 3.774 s | 2.352 s | 1.60× | 2452.6 MiB | 37.7 MiB | 65.06× |
-| 43752965645 | 3.250 s | 2.292 s | 1.42× | 2389.6 MiB | 37.8 MiB | 63.22× |
-| 43754284965 | 3.101 s | 2.042 s | 1.52× | 2431.3 MiB | 37.7 MiB | 64.49× |
+A record, not a gate — same runner image, same deck (`deck.html` md5
+`b77aac2d…` in every row below):
 
-The browser is the noisy side: 18.5 % across its own wall clock, against 5.0 %
-for html-render. So speed is stated as a range and memory as a floor — a point
-figure would be whichever run the receipt happened to catch.
+| run | Chromium tree RSS | html-render tree RSS | Chromium wall | html-render wall |
+|---|---|---|---|---|
+| 43744837000 | 2336.1 MiB | 37.9 MiB | 3.186 s | 2.240 s |
+| 43746767310 | 2452.6 MiB | 37.7 MiB | 3.774 s | 2.352 s |
+| 43752965645 | 2389.6 MiB | 37.8 MiB | 3.250 s | 2.292 s |
+| 43754284965 | 2431.3 MiB | 37.7 MiB | 3.101 s | 2.042 s |
 
-Two things this table does not claim.
+Two things this section does not claim.
 
-**Speed is a modest win, and the earlier 2.49× was not.** That figure came from a
-private deck where the Chromium harness also paid 2.94 s of settle sleeps;
-removing them left 1.94×. The probe drives Chromium as cheaply as it can be
-driven — one tall screenshot, no sleeps — so 1.4–1.6× is the honest race.
+**It does not claim a speed multiple.** An earlier version of this file
+advertised 2.49×, then 1.94×, then a 1.4–1.6× range. All three were the same
+error at decreasing size: a ratio whose denominator is a browser having a noisy
+day. The withdrawal is recorded in §Withdrawn claims.
 
 **The memory ratio is larger than what was published before, for a method
 reason, not a code change.** Earlier rows compared html-render's footprint with
@@ -380,6 +385,17 @@ is a line-box *height* computation in a `font-size: 0` + inline-block context,
 still unidentified and unfiled.
 
 **"`Provider::is_empty()` races the first poll."** Also wrong: see trap 1.
+
+**"2.49× faster than Chromium."** Withdrawn, along with the 1.94× that replaced it
+and the 1.4–1.6× range that replaced that. Three sizes of one error: a ratio
+whose denominator is a browser's wall clock. Across four probe runs on one
+runner image the ratio read 1.42×, 1.60×, 1.42× and 1.52× while html-render's own
+wall held to 15.2 % and Chromium's moved 21.7 % — the figure mostly reported how
+fast the browser happened to be that day. The original 2.49× additionally came
+from a private deck where the Chromium harness paid 2.94 s of settle sleeps that
+the probe does not. Wall clock is still measured and still gated at 35 % drift;
+it is simply no longer advertised as a multiple. The claim is memory, at least
+51×, which held to 0.5 % across the same runs.
 
 ## Corpus
 

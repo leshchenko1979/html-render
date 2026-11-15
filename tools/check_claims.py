@@ -284,11 +284,6 @@ def main():
             # proved it: the guard stayed green while the table disagreed with
             # itself. A row string is unique per shape, so a drift cannot hide
             # behind its twin.
-            def readme_wall_row(label, rec):
-                return "| wall clock, `%s` | %s s | %s s | **%s\u00d7** |" % (
-                    label, num(chrome["wall_median_s"]), num(rec["wall_median_s"]),
-                    ratio(chrome["wall_median_s"], rec["wall_median_s"]))
-
             def readme_rss_row(label, rec):
                 return "| peak RSS, `%s` | %s MiB | %s MiB | **%s\u00d7** |" % (
                     label, num(chrome["peak_tree_mib"]), num(rec["peak_tree_mib"]),
@@ -296,98 +291,78 @@ def main():
 
             for label, rec in (("--full", doc), ("--clip", clip),
                                ("--per-element", per_el)):
-                claim("README", readme, readme_wall_row(label, rec),
-                      "cost row, %s wall" % label)
                 claim("README", readme, readme_rss_row(label, rec),
                       "cost row, %s tree RSS" % label)
 
+            # Peak RSS leads the GATES table; wall clock is the last column and
+            # carries no ratio, because it is measured and gated but no longer
+            # advertised (see GATES.md §Withdrawn claims).
             claim("GATES", gates,
-                  "| Chromium, one tall screenshot cut into eight slides | %s s | %s MiB |"
-                  % (num(chrome["wall_median_s"]), num(chrome["peak_tree_mib"])),
+                  "| Chromium, one tall screenshot cut into eight slides | %s MiB | %s s |"
+                  % (num(chrome["peak_tree_mib"]), num(chrome["wall_median_s"])),
                   "cost row, chromium")
             claim("GATES", gates,
-                  "| `--full` | **%s s** | **%s MiB** |"
-                  % (num(doc["wall_median_s"]), num(doc["peak_tree_mib"])),
+                  "| `--full` | **%s MiB** | %s s |"
+                  % (num(doc["peak_tree_mib"]), num(doc["wall_median_s"])),
                   "cost row, --full")
             claim("GATES", gates,
-                  "| `--clip` (banded, one PNG per frame) | %s s | %s MiB |"
-                  % (num(clip["wall_median_s"]), num(clip["peak_tree_mib"])),
+                  "| `--clip` (banded, one PNG per frame) | %s MiB | %s s |"
+                  % (num(clip["peak_tree_mib"]), num(clip["wall_median_s"])),
                   "cost row, --clip")
             claim("GATES", gates,
-                  "| `--clip --per-element` | %s s | %s MiB |"
-                  % (num(per_el["wall_median_s"]), num(per_el["peak_tree_mib"])),
+                  "| `--clip --per-element` | %s MiB | %s s |"
+                  % (num(per_el["peak_tree_mib"]), num(per_el["wall_median_s"])),
                   "cost row, --per-element")
-            claim("GATES", gates,
-                  "Ratios against Chromium: **%s\u00d7** wall and **%s\u00d7** memory for `--full`,"
-                  % (ratio(chrome["wall_median_s"], doc["wall_median_s"]),
-                     ratio(chrome["peak_tree_mib"], doc["peak_tree_mib"])),
-                  "cost ratio sentence, --full")
-            claim("GATES", gates,
-                  "**%s\u00d7** / **%s\u00d7** for `--clip`"
-                  % (ratio(chrome["wall_median_s"], clip["wall_median_s"]),
-                     ratio(chrome["peak_tree_mib"], clip["peak_tree_mib"])),
-                  "cost ratio sentence, --clip")
-            claim("GATES", gates,
-                  "**%s\u00d7** / **%s\u00d7** for `--per-element`"
-                  % (ratio(chrome["wall_median_s"], per_el["wall_median_s"]),
-                     ratio(chrome["peak_tree_mib"], per_el["peak_tree_mib"])),
-                  "cost ratio sentence, --per-element")
 
-            # Speed is advertised as a run-to-run RANGE, because three runs of
-            # this probe on one runner image span 1.40-1.61x: the browser's own
-            # wall clock moves 18.5% while html-render's holds to 5.0%. A point
-            # figure would be the top of that range dressed as a measurement.
-            # The endpoints are read back out of the prose and every ratio in
-            # this receipt must fall inside them, so a range the measurement has
-            # outgrown fails here instead of quietly overstating.
-            checked += 1
-            span = re.search(r"(\d+\.\d+)\s*[\u2013-]\s*(\d+\.\d+)\s*\u00d7",
-                             readme)
-            if span is None:
-                fails.append("README should state the speed claim as a range "
-                             "(e.g. 1.4\u20131.6\u00d7) and does not")
-            else:
-                lo, hi = float(span.group(1)), float(span.group(2))
-                if lo > hi:
-                    fails.append("README speed range %s\u2013%s\u00d7 is inverted"
-                                 % (span.group(1), span.group(2)))
-                # A range wide enough contains anything, so containment alone
-                # would let 1.0-9.0x pass as a "measurement". The measured
-                # spread is 14.3% wide (1.40-1.61x); 25% leaves room for a
-                # refreshed receipt and still refuses a vacuous range.
-                checked += 1
-                if (hi - lo) / lo > 0.25:
-                    fails.append("README speed range %s\u2013%s\u00d7 is too wide "
-                                 "to be a measurement (%.0f%% of the low end)"
-                                 % (span.group(1), span.group(2),
-                                    100.0 * (hi - lo) / lo))
-                for label, rec in (("document", doc), ("--clip", clip),
-                                   ("--per-element", per_el)):
-                    got = chrome["wall_median_s"] / rec["wall_median_s"]
-                    # The README states the band to one decimal, so compare at
-                    # that precision. A raw 1.6046 is "1.6x" in the prose, and
-                    # failing it would punish a measurement for rounding the
-                    # same way the sentence beside it does.
-                    if not lo <= round(got, 1) <= hi:
-                        fails.append(
-                            "README advertises %s\u2013%s\u00d7 but this receipt "
-                            "measures %s\u00d7 for %s, outside the range"
-                            % (span.group(1), span.group(2),
-                               ratio(chrome["wall_median_s"],
-                                     rec["wall_median_s"]), label))
+            # The history table quotes earlier runs, which this receipt cannot
+            # verify. Its LAST row is this run, and that row must agree with the
+            # receipt — it is the row a refresh forgets, and the one that read
+            # 1.61x for a measurement of 1.6046.
+            claim("GATES", gates,
+                  "| %s | %s MiB | %s MiB | %s s | %s s |"
+                  % (receipt["run"]["id"], num(chrome["peak_tree_mib"]),
+                     num(doc["peak_tree_mib"]), num(chrome["wall_median_s"]),
+                     num(doc["wall_median_s"])),
+                  "history table, this run")
+
 
             # Memory is advertised as a FLOOR, and the floor is derived, so the
             # prose cannot round a measurement up: it prints the integer below
             # the measured ratio, which every run of the probe matches or beats.
+            # TWO floors, because the modes differ by 1.6x: quoting the best
+            # mode as "the claim" would overstate the banded one, which is the
+            # least favourable and therefore the honest headline.
             mem_ratio = chrome["peak_tree_mib"] / per_el["peak_tree_mib"]
             mem_floor = int(math.floor(mem_ratio))
-            claim("README", readme, "at least %d\u00d7" % mem_floor,
-                  "floor of the tree-RSS ratio")
+            worst_ratio = chrome["peak_tree_mib"] / clip["peak_tree_mib"]
+            worst_floor = int(math.floor(worst_ratio))
+            if worst_floor > mem_floor:
+                fails.append("the advertised mode is not the least favourable: "
+                             "%d\u00d7 against %d\u00d7" % (mem_floor, worst_floor))
+            claim("README", readme, "At least %d\u00d7 less in the least favourable mode"
+                  % worst_floor, "floor of the least favourable mode")
+            claim("README", readme, "%d\u00d7 in the advertised one" % mem_floor,
+                  "floor of the advertised mode")
 
             fid = receipt["fidelity"]
             claim("README", readme, num(fid["over16_pct"]), "receipt fidelity")
             claim("GATES", gates, num(fid["over16_pct"]), "receipt fidelity")
             claim("release body", release, num(fid["over16_pct"]), "receipt fidelity")
+            # The release body quotes the cost figures too, and it is the copy
+            # nobody re-reads: it advertised 1.60x / 65x from an older run long
+            # after the README had moved. Speed is gone from it; memory is
+            # claimed here so a stale release note fails the build.
+            claim("release body", release,
+                  "**at least %dx** smaller" % worst_floor,
+                  "release body, memory floor")
+            claim("release body", release,
+                  "%s MiB against %s MiB for" % (num(clip["peak_tree_mib"]),
+                                                 num(chrome["peak_tree_mib"])),
+                  "release body, --clip against Chromium")
+            claim("release body", release,
+                  "%s MiB for \\`--clip --per-element\\`, %s MiB for" % (
+                      num(per_el["peak_tree_mib"]), num(doc["peak_tree_mib"])),
+                  "release body, per-element and --full")
             claim("GATES", gates, "{:,}".format(fid["pixels"]),
                   "receipt fidelity pixel count")
             claim("README", readme, "{:,}".format(fid["pixels"]),
@@ -400,41 +375,26 @@ def main():
             # caught would advertise the top of a range that moves 18.5% run to
             # run. The floor is matched or beaten by every run, the reader's own
             # included.
-            wall_ratio = chrome["wall_median_s"] / per_el["wall_median_s"]
-            wall_floor = "%.1f" % (math.floor(wall_ratio * 10) / 10.0)
             hero = ASSETS["hero"][0]
             hero_text = read(hero)
             for name, (html, _w, _h, _scale, _png) in ASSETS.items():
                 text = read(html)
                 claim(html, text,
-                      '<div class="v">%s<em>\u00d7</em></div>' % wall_floor,
-                      "floor of the wall ratio, faster tile")
-                claim(html, text,
                       '<div class="v">%d<em>\u00d7</em></div>' % mem_floor,
                       "floor of the tree-RSS ratio, memory tile")
-                claim(html, text, "%s s vs %s s" % (num(per_el["wall_median_s"]),
-                                                    num(chrome["wall_median_s"])),
-                      "receipt wall medians, caption")
+                claim(html, text,
+                      '<div class="v">%d<em>\u00d7</em></div>' % worst_floor,
+                      "floor of the least favourable mode, worst-case tile")
                 claim(html, text, "%s vs %s MiB" % (num(per_el["peak_tree_mib"]),
                                                     num(chrome["peak_tree_mib"])),
                       "receipt tree-RSS medians, caption")
             claim(hero, hero_text,
-                  "%.1f%%" % (100.0 * per_el["wall_median_s"] / chrome["wall_median_s"]),
-                  "bar width, wall")
-            claim(hero, hero_text,
                   "%.1f%%" % (100.0 * per_el["peak_tree_mib"] / chrome["peak_tree_mib"]),
                   "bar width, RSS")
             # The right panel and the terminal footer are SECOND copies of the
-            # same two measurements, written in different markup. A duplicate
-            # no guard reads is how the kicker outlived four releases, so each
-            # copy is claimed by the tag that distinguishes it from the
-            # stat-card caption above.
-            claim(hero, hero_text,
-                  '<span class="bv">%s s</span>' % num(chrome["wall_median_s"]),
-                  "right-panel Chromium wall")
-            claim(hero, hero_text,
-                  '<span class="bv win">%s s</span>' % num(per_el["wall_median_s"]),
-                  "right-panel html-render wall")
+            # same measurements, written in different markup. A duplicate no
+            # guard reads is how the kicker outlived four releases, so each copy
+            # is claimed by the tag that distinguishes it.
             claim(hero, hero_text,
                   '<span class="bv">%s MiB</span>' % num(chrome["peak_tree_mib"]),
                   "right-panel Chromium tree RSS")
@@ -442,8 +402,7 @@ def main():
                   '<span class="bv win">%s MiB</span>' % num(per_el["peak_tree_mib"]),
                   "right-panel html-render tree RSS")
             claim(hero, hero_text,
-                  "<b>%s s</b>, <b>%s MiB</b> peak." % (num(per_el["wall_median_s"]),
-                                                        num(per_el["peak_tree_mib"])),
+                  "<b>%s MiB</b> peak." % num(per_el["peak_tree_mib"]),
                   "terminal footer summary")
             claim(hero, hero_text, num(fid["over16_pct"]), "receipt fidelity")
 
@@ -456,6 +415,24 @@ def main():
             else:
                 claim(hero, hero_text, "Chromium %s" % ver.group(1),
                       "the browser the receipt measured")
+
+    # --- the withdrawn speed claim ------------------------------------------
+    # This file used to assert a wall-clock multiple in three places: README's
+    # cost table, GATES's ratio sentence, and a tile on each asset. All three
+    # are withdrawn (GATES.md §Withdrawn claims), and a positive claim cannot
+    # enforce an absence — so the surfaces that carried them are checked for
+    # the strings a re-add would produce.
+    for name, text, needle in (
+            ("README.md", readme, "| wall clock, `"),
+            ("GATES.md", gates, "\u00d7** wall and"),
+            ("assets/hero.html", read(ASSETS["hero"][0]), "faster"),
+            ("assets/og.html", read(ASSETS["og"][0]), "faster"),
+    ):
+        checked += 1
+        if needle in text:
+            fails.append("%s still advertises speed (%r): the ratio is "
+                         "withdrawn — see GATES.md \u00a7Withdrawn claims"
+                         % (name, needle))
 
     # --- the deck the receipt was taken on ---------------------------------
     # These are properties of the generator, so they are asserted rather than
@@ -532,6 +509,15 @@ def main():
             claim("assets/hero.html", hero_html,
                   "<div class=\"l\">%d renders</div>" % det["renders"],
                   "the probe's repeat count, determinism tile")
+            # The release note states the same property in words, and it is
+            # the copy nobody re-reads: it said "ten renders" for a probe that
+            # runs three, and no guard noticed because the string had no claim.
+            _words = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
+                      6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+            claim("release body", release,
+                  "%s renders of the same input are byte-identical"
+                  % _words.get(det["renders"], str(det["renders"])),
+                  "the probe's repeat count, release note")
     checked += 1
     if "reproducible with <b>tools/bench.py</b>" not in hero_html:
         fails.append("hero footer does not credit tools/bench.py as the reproducer")

@@ -22,14 +22,14 @@ html-render assets/hero.html hero.png 1600 900 2 --document
 Rendering a page to an image in CI normally means shipping a browser:
 hundreds of megabytes of image,
 a JavaScript engine the job never uses,
-and a cold start before the first pixel exists.
+a cold start before the first pixel exists,
+and a language runtime to install first.
 
 This reads a file and writes a PNG.
-On a 12-slide deck it is **2.34× faster and 3.12× lighter** than headless Chromium
+On an 8-slide deck it peaks at **at least 32× less memory** than headless Chromium
 ([the measurements](#performance)).
-That deck is not in this repo, so those figures are history, not a benchmark you can re-run;
-[GATES.md](GATES.md#cost) records the method and the runs behind them.
-and there is no language runtime to install first.
+The deck and the probe that measured it both live in this repo, so unlike most
+benchmarks you can re-run it yourself: `python3 tools/bench.py`.
 
 Decks, social cards, report one-pagers, CI visual diffs — if the input is HTML plus CSS and the output is an image, that is the entire job.
 
@@ -132,43 +132,36 @@ git clone https://github.com/leshchenko1979/html-render && cd html-render
 python3 tools/bench.py --bin <path-to-render> --chrome <path-to-chrome> --out /tmp/mine.json
 ```
 
-If `deck.html` hashes to `5c71602d1dd6c259ea3e3ba316da5233`, you are measuring
+If `deck.html` hashes to `b77aac2de5931588dfa01eb5af418bc5`, you are measuring
 the deck in the receipt. Anything else means the generator moved and the
 figures below describe a document that no longer exists.
 
-Eight slides, 1280×5760 CSS px at scale 2, three repeats per engine, wall clock
-as the median, peak RSS as the **sum of every process the engine spawned**:
+Eight slides, 1280×5760 CSS px at scale 2, three repeats per engine, peak RSS as
+the **sum of every process the engine spawned**:
 
 | measurement | Chromium | html-render | ratio |
 |---|---|---|---|
-| wall clock, `--full` | 3.101 s | 2.042 s | **1.52×** |
 | peak RSS, `--full` | 2431.3 MiB | 37.7 MiB | **64.49×** |
-| wall clock, `--clip` | 3.101 s | 2.067 s | **1.50×** |
 | peak RSS, `--clip` | 2431.3 MiB | 75.3 MiB | **32.29×** |
-| wall clock, `--per-element` | 3.101 s | 2.039 s | **1.52×** |
 | peak RSS, `--per-element` | 2431.3 MiB | 47.2 MiB | **51.51×** |
 
-Read the memory column and the speed column differently.
+**Memory is the claim.** At least 32× less in the least favourable mode, and
+51× in the advertised one. It is steady enough to carry a claim: across four
+runs of this probe on one GitHub runner image (43744837000, 43746767310,
+43752965645, 43754284965) html-render's `--full` peak held between 37.7 MiB and
+37.9 MiB, 0.5 %, while Chromium's moved between 2336 MiB and 2453 MiB.
+Earlier figures of 9.19× compared html-render's whole footprint against
+Chromium's *fattest single process*; the probe sums the entire process tree on
+both sides, which is what a container limit actually counts.
 
-**Speed is modest: 1.4–1.6× across runs, and that is the whole claim.**
-Both engines move between runs, and the browser moves more. Four runs of this
-probe on one GitHub runner image (43744837000, 43746767310, 43752965645,
-43754284965) held html-render between 2.042 s and 2.352 s, a 15 % spread, while
-headless Chromium moved from 3.101 s to 3.774 s, a 22 % spread. The ratio you
-measure therefore depends mostly on how fast the browser happened to run, which
-is why the claim is a range rather than a point. Run the probe yourself and you
-should land inside it.
-An earlier README advertised 2.49×, taken on an external deck where the
-Chromium harness also paid 2.94 s of settle sleeps; strip that out and it was
-1.94×. The probe drives Chromium as cheaply as it can be driven — one tall
-screenshot cut into slides, no sleeps — so 1.4–1.6× is what survives a fair race.
-
-**Memory is where the difference lives, and it is steady enough to state as a
-floor: at least 51×.** Across the same four runs html-render's peak held
-between 37.7 MiB and 37.9 MiB — 0.5 % — while Chromium's moved between
-2336 MiB and 2453 MiB. Earlier figures of 9.19× compared html-render's whole
-footprint against Chromium's *fattest single process*; the probe sums the entire
-process tree on both sides, which is what a container limit actually counts.
+**Speed is measured and gated, but it is not a claim.** The receipt carries wall
+clock for both engines and the drift check fails if it moves past 35 %, so a
+regression still gets caught. It is not advertised as a ratio, because the
+browser's own wall clock moved 21.7 % between those same four runs while ours
+moved 15.2 %: the ratio mostly reports how fast the browser happened to be
+that day, and a number that mostly measures the other program is not a
+property of this one. Run the probe yourself — it prints both sides and lets
+you judge.
 
 Host, method and the run behind these figures: [GATES.md](GATES.md#cost).
 

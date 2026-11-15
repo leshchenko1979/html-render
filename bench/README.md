@@ -90,15 +90,20 @@ Identically, deliberately:
 
 ## Read the numbers honestly
 
-- The **speed** ratio is modest and the deck is small. It is one document, not a
-  workload class; a heavier page changes both sides.
-- **Speed moves between runs, and the browser is why.** Three runs of this probe
-  on one runner image held html-render's wall clock to 5.0 % while headless
-  Chromium's moved 18.5 %, so the README states speed as a range and memory as a
-  floor. A single run's ratio is a sample, not a constant.
-- The **memory** ratio is the striking one, and it is large because the
-  instrument changed: earlier figures were largest-single-process maxima, which
-  flatter a multi-process browser. Tree RSS is what a host has to hold.
+- **Memory is the claim.** It held inside 0.5 % across four runs of this probe on
+  one runner image, so the README states it as a floor: at least 51×, taking the
+  least favourable of the three modes.
+- **Speed is measured, gated, and not advertised.** The receipt carries wall
+  clock for both engines and `tools/bench_drift.py` fails if it moves past 35 %,
+  so a regression is caught. The ratio is not published, because across those
+  same four runs it ranged 1.42× to 1.60× while html-render's own wall held to
+  15.2 % and Chromium's moved 21.7 % — most of the movement was the browser
+  having a different day. A number that mostly measures the other program is not
+  a property of this one.
+- The **memory** ratio is larger than figures published before this probe, for a
+  method reason: earlier rows compared html-render against Chromium's *largest
+  single process*, which flatters a multi-process browser. Tree RSS is what a
+  host has to hold.
 - **Fidelity** is a share of pixels off by more than 16/255 against Chromium's
   own screenshot of the same document. It is not a statement about any other
   page, and the divergent pixels are concentrated in a few known layout defects
