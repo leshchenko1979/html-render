@@ -301,18 +301,34 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --quiet --disable-pip-version-check -r tools/requirements.txt
+          # Written to a scratch path, never over bench/results.json: the
+          # committed receipt is the reference this run is compared against, and
+          # a probe that overwrites its own baseline turns the next comparison
+          # into "does this run match itself".
           python3 tools/bench.py --bin target/release/render \
-            --deck bench/deck --out bench/results.json --repeats 3 --require-both
+            --deck bench/deck --out bench/fresh.json --repeats 3 --require-both
+
+      - name: Check the benchmark has not drifted
+        # The step above measures; this one decides whether the measurement still
+        # describes the binary the docs advertise. Without it, CI re-measured on
+        # every push and compared the result to nothing: a change that made the
+        # renderer three times slower would have left every gate green while the
+        # README quoted figures from a program nobody had.
+        run: |
+          set -euo pipefail
+          python3 tools/bench_drift.py --self-test
+          python3 tools/bench_drift.py --committed bench/results.json \
+            --fresh bench/fresh.json
 
       - name: Upload the benchmark receipt
-        # The committed bench/results.json is this file, downloaded and
-        # committed by hand: the measurement is CI's, and the provenance is the
-        # run id recorded beside it.
+        # The fresh receipt, not the committed one: it is the measurement this
+        # run took, and it is what a human downloads to refresh
+        # bench/results.json deliberately, after the drift check above agreed.
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: bench-results
-          path: bench/results.json
+          path: bench/fresh.json
           if-no-files-found: warn
 
       - name: Upload the built renderer

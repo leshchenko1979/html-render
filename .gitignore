@@ -9,3 +9,4 @@ __pycache__/
 
 # Generated benchmark deck (tools/bench_deck.py rebuilds it from the seed).
 bench/deck/
+bench/fresh.json
