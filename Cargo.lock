@@ -840,6 +840,7 @@ dependencies = [
  "blitz-traits",
  "peniko",
  "png",
+ "taffy",
  "tokio",
 ]
 
