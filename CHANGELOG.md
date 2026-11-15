@@ -27,6 +27,26 @@ names may change between minor versions, and this file is where that shows up.
 
 ### Fixed since `v0.3.0-beta.8`, issues not yet closed
 
+- **#11: a sub-resource that fails now exits `4`.** `blitz_net::Provider::fetch`
+  reported a failed fetch through `tracing` (compiled out) and never called the
+  handler, so a `404` left the node pending and the run exited `0` with a valid
+  PNG of an empty box. Measured on the released binary: **795 bytes of all-white
+  output**, nothing on stderr. The provider is now driven through
+  `fetch_with_callback`, the public path that hands back the `Result`, and every
+  failure is named before exit `4`. The same wrapper caps one decoded image at
+  **128 MP** (`BLITZ_MAX_IMAGE_MP`): a **60-byte** PNG header claiming
+  `30000x30000` asks for 3.6 GB before a pixel is decoded and aborts with
+  `rc=134`, which names no file. The size is read from the header, so the
+  refusal costs no allocation, and a real `9000x9000` PNG still paints in
+  **2.36 s**. `tools/test_assets.py` pins all of it in 10 legs.
+- **#12: a font the host does not have is reported.** fontconfig always resolves
+  something, so `font-family:'Absolutely Nonexistent Font XYZ 9999'` painted
+  **8238 non-white pixels** of DejaVu Sans at exit `0` with nothing on stderr.
+  Every family that no installed font provides is now named once on stderr. The
+  exit code stays `0` — the output is still a render of the document, and the
+  caller decides. Generic keywords and `@font-face` families are excluded, and a
+  host where no fonts are visible says so rather than reporting an empty list as
+  a clean document. `tools/test_fonts.py` pins it in 4 legs.
 - **#16 no longer reproduces.** A 70,000 px document under `--full` exits `0` and
   writes a correct `800x70000` PNG, measured on the released binary; the `u16`
   ceiling is gone from the banded path and still refuses with exit `5` under
