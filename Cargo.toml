@@ -25,8 +25,16 @@ png = "0.18"
 # Named directly for one comparison: `Node::taffy_position()` returns
 # `taffy::Position`, and blitz-dom's own paint tree compares it the same way
 # (`paint_tree.rs:42`). A typed compare means an upstream rename is a compile
-# error, not a silent false. Same 0.15 blitz-dom pins, so cargo unifies them.
-taffy = "0.15"
+# error, not a silent false.
+#
+# `default-features = false` is load-bearing, not tidiness. taffy's `default`
+# set includes `float_layout`, and cargo unions features across the whole graph,
+# so a plain `taffy = "0.15"` switches `float_layout` on for everyone while
+# `stylo_taffy/floats` stays off. `taffy::Style` then gains `clear` and `float`
+# and stylo_taffy's initializer (convert.rs:966) dies with E0063 — a build
+# failure in a dependency, before this crate's own code is even reached.
+# Requesting no features leaves blitz-dom's own list as the sole contributor.
+taffy = { version = "0.15", default-features = false }
 # Needed because blitz-net spawns a tokio task per sub-resource fetch.
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 
