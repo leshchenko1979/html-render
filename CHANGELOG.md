@@ -29,9 +29,20 @@ Raw list: `git log --oneline v0.3.0-beta.7..main`.
   one: `run_parity.py` renders fixtures with no `--clip`, and `--clip` is the
   only path that bands, so banding cannot enter that verdict at all. Gate C does
   render the deck with `--clip`, so it is the leg that exercises the banded path
-  against Chromium, and it passed on this change. The test's third leg is a
+  against Chromium, and it passed on this change. The test's first leg is a
   negative control — the single-PNG path renders identically at 1 MiB and 0 —
   which catches banding leaking into a mode that must not have it.
+- `GATES.md` claimed `--clip` output is byte-identical to cropping the
+  `--document` render, "0 differing pixels, 12/12". Banding falsified that and
+  nothing went red, because the claim was prose that no test read. Measured on a
+  12-slide deck spanning 11 bands: **1 of 12** frames identical, 11 differing by
+  max channel delta **1**, the differing-pixel count growing with band index
+  (0 → 28 px) — the same antialiasing phase shift, not a layout difference. The
+  sentence now states the tolerance it actually has, and `tools/test_bands.py`
+  leg 4 asserts it frame by frame against the `--full` render, plus a mechanism
+  check that at least one frame was painted at a non-zero scroll offset: without
+  it, a fixture whose glyphs are too small to shift passes the leg while never
+  reaching the path the leg exists to guard (it did, at 16 px text).
 - The band budget defaults to **16 MiB**, not the 64 first shipped, because
   peak memory is flat below it and linear above it. On a 40-slide deck
   (48,000 rows) the median of five runs per budget: 1 MiB / 471 bands /

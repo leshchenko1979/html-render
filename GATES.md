@@ -55,9 +55,16 @@ produces for the same element.
 Two structural checks, because a gate that passes on a wrong mechanism is worse
 than no gate:
 
-- `--clip` output is **byte-identical to cropping the `--document` render**
-  (0 differing pixels, 12/12), so the clip branch cannot hide a defect the
-  full-document measurement missed.
+- `--clip` output matches **cropping the `--document` render** at every frame's
+  own rectangle, to within one level per channel, so the clip branch cannot
+  hide a defect the full-document measurement missed.
+  It used to be byte-identical, and this document said so; row banding ended
+  that. Measured on a 12-slide deck spanning 11 bands: 1 of 12 frames identical,
+  11 differing by max channel delta **1**, and the count grows with band index
+  (0 → 28 px) because the shift is the antialiasing phase of a non-zero
+  `set_viewport_scroll`, not a layout difference. Asserted, not assumed:
+  `tools/test_bands.py` leg 4 compares every clip frame against its crop of the
+  `--full` render and fails above delta 1.
 - clip mode is deterministic too: 3 runs, one md5.
 
 ## What the residual is

@@ -4,7 +4,7 @@
 `--clip` without `--per-element` paints the document in row bands sized from
 `BLITZ_BAND_MIB` (default 16 MiB), so peak memory is one band rather than the
 whole page. That is only safe if the rendering is untouched, so this test pins
-four things:
+five things:
 
   1. THE DEFAULT MODE IS UNTOUCHED — every fixture in `fixtures.json` renders
      byte-identically with the knob at 1 MiB and at 0. This is a NEGATIVE
@@ -25,6 +25,12 @@ four things:
   4. A DOCUMENT PAST THE CEILING NOW RENDERS — 72,000 rows exceeds
      `MAX_CANVAS_H` (65,532), where `BLITZ_BAND_MIB=0` still refuses with exit 5.
 
+  5. THE GATE-C STRUCTURAL CHECK STILL HOLDS — every `--clip` frame equals the
+     rectangle cut from the `--document` render to within one level per channel.
+     This leg exists because that claim lived in `GATES.md` as prose no test
+     read, and banding falsified it (11 of 12 frames differ by 1/255) without
+     anything going red.
+
     python3 tools/test_bands.py --bin target/release/render
 
 Exit 0 = the contract holds. Exit 1 = it does not. Against a binary from before
@@ -37,6 +43,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 import tempfile
 
@@ -277,6 +284,84 @@ def main():
         fails.append("[tall single canvas] wrote %d file(s) before refusing"
                      % len(frames(b_one)))
 
+    # ---- leg 4: the structural check Gate C claims ------------------------
+    # GATES.md C asserts that every --clip frame equals the same rectangle cut
+    # from the --document render, "0 differing pixels, 12/12". Banding made that
+    # false the day it landed (AA phase, see the docstring), and it was prose no
+    # test read, so it rotted silently. The property that DOES hold is geometry
+    # plus a one-level tolerance, and it is asserted here rather than restated.
+    N_GC = 6
+    GC_H = 200
+    gc_html = os.path.join(tmp, "gc.html")
+    # Large bold glyphs on purpose. `deck()` uses 16 px text, which renders
+    # identically banded or not, so a tolerance of 1 would never be exercised —
+    # the leg would pass without touching the mechanism it guards. Measured: at
+    # 64 px bold the phase shift appears from the third band on.
+    gc_slides = []
+    for i in range(N_GC):
+        c = "#%02x%02x%02x" % ((i * 37) % 256, (i * 67) % 256, (i * 97) % 256)
+        gc_slides.append(
+            '<div class="s" style="width:%dpx;height:%dpx;background:%s">'
+            '<span style="font:bold 64px sans-serif">slide %d</span></div>'
+            % (CSS_W, GC_H, c, i + 1)
+        )
+    with open(gc_html, "w", encoding="utf-8") as fh:
+        fh.write('<!doctype html><html><body style="margin:0">'
+                 + "".join(gc_slides) + "</body></html>")
+    gc_clip = os.path.join(tmp, "gc_clip")
+    gc_full = os.path.join(tmp, "gc_full.png")
+    # 1 MiB forces a band smaller than a frame, so every frame is painted at its
+    # own non-zero scroll offset: the case where the phase shift shows up.
+    rc_gc, out_gc, err_gc, _ = run(binary, gc_html, gc_clip, CSS_W, GC_H, band_mib=1)
+    rc_gf, _, err_gf, _w, _k = measure_rss.run_measured(
+        [binary, gc_html, gc_full, str(CSS_W), str(GC_H), str(SCALE), "--full", "--document"]
+    )
+    gc_worst = -1
+    gc_bad = []
+    if rc_gc != 0:
+        fails.append("[gate-c] clip rc=%d (want 0)\n%s" % (rc_gc, err_gc[-400:]))
+    if rc_gf != 0:
+        fails.append("[gate-c] --full rc=%d (want 0)\n%s" % (rc_gf, err_gf[-400:]))
+    if rc_gc == 0 and rc_gf == 0:
+        fw_full, fh_full, ch_full, px_full = measure.read_png(gc_full)
+        stride = fw_full * ch_full
+        boxes = {}
+        for ln in out_gc.splitlines():
+            m = re.match(r"(clip_\d+) .* physical (\d+)x(\d+) at (\d+),(\d+)", ln)
+            if m:
+                boxes[m.group(1)] = (int(m.group(2)), int(m.group(3)),
+                                     int(m.group(4)), int(m.group(5)))
+        gc_worst = 0
+        for name in frames(gc_clip):
+            stem = name[:-4] if name.endswith(".png") else name
+            path = os.path.join(gc_clip, name)
+            fw, fh, ch, px = measure.read_png(path)
+            if stem not in boxes:
+                gc_bad.append("%s has no clip report line" % stem)
+                continue
+            bw, bh, bx, by = boxes[stem]
+            if (fw, fh) != (bw, bh):
+                gc_bad.append("%s is %dx%d, report says %dx%d" % (stem, fw, fh, bw, bh))
+                continue
+            if ch != ch_full or bx + fw > fw_full or by + fh > fh_full:
+                gc_bad.append("%s does not fit the --full render" % stem)
+                continue
+            crop = px_full[by * stride + bx * ch:(by + fh) * stride]
+            if len(crop) != len(px):
+                gc_bad.append("%s crop is %d bytes, frame is %d" % (stem, len(crop), len(px)))
+                continue
+            gc_worst = max(gc_worst, max((abs(a - b) for a, b in zip(px, crop)), default=0))
+        if len(frames(gc_clip)) != N_GC:
+            gc_bad.append("%d frame(s), want %d" % (len(frames(gc_clip)), N_GC))
+        scrolled = sum(1 for b in boxes.values() if b[3] > 0)
+        if scrolled < 1:
+            gc_bad.append("every frame was painted at scroll 0:0, so this leg never "
+                          "reached the banded path it is meant to guard")
+        if gc_worst > 1:
+            gc_bad.append("max channel delta %d between clip frames and the --full crop "
+                          "(want <=1: the gate's tolerance is 8)" % gc_worst)
+        fails.extend("[gate-c] " + b for b in gc_bad)
+
     print("  leg 1  default mode: %d/%d fixtures byte-identical at 1 MiB and 0 "
           "(negative control: this path never bands)"
           % (len(corpus) - len(corpus_diff) - len(corpus_fail), len(corpus)))
@@ -286,6 +371,8 @@ def main():
              worst, len(sampled)))
     print("  leg 2  peak rss: banded %.1f MiB, single canvas %.1f MiB, canvas %.1f MiB"
           % (rss_b, rss_o, canvas_mib))
+    print("  leg 4  gate C structural check: %d frames vs crops of the --full render, max channel delta %s"
+          % (len(frames(gc_clip)), "n/a" if gc_worst < 0 else gc_worst))
     print("  leg 3  72,000-row deck: banded rc=%d with %d frames, banding off rc=%d"
           % (rc_b2, len(frames(b_band)), rc_o2))
 
