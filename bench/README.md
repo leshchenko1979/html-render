@@ -90,8 +90,8 @@ Identically, deliberately:
 
 ## Read the numbers honestly
 
-- **Memory is the claim.** It held inside 0.5 % across four runs of this probe on
-  one runner image, so the README states it as a floor: at least 51×, taking the
+- **Memory is the claim.** It held inside 0.8 % across five runs of this probe on
+  one runner image, so the README states it as a floor: at least 31×, taking the
   least favourable of the three modes.
 - **Speed is measured, gated, and not advertised.** The receipt carries wall
   clock for both engines and `tools/bench_drift.py` fails if it moves past 35 %,

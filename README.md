@@ -26,7 +26,7 @@ a cold start before the first pixel exists,
 and a language runtime to install first.
 
 This reads a file and writes a PNG.
-On an 8-slide deck it peaks at **at least 32× less memory** than headless Chromium
+On an 8-slide deck it peaks at **at least 31× less memory** than headless Chromium
 ([the measurements](#performance)).
 The deck and the probe that measured it both live in this repo, so unlike most
 benchmarks you can re-run it yourself: `python3 tools/bench.py`.

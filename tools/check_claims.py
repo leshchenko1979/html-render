@@ -175,6 +175,17 @@ def main():
             fails.append("%s should quote %r (%s) and does not"
                          % (where, computed, note))
 
+    def claim_prose(where, text, computed, note):
+        """Assert `computed` appears in `text`, ignoring how the prose wraps.
+
+        Prose in this repo is reflowed by hand, so a claim that encodes where a
+        line happens to break fails for a reason unrelated to the figure — and
+        the temptation, once it does, is to weaken the claim rather than fix the
+        wrap. Collapsing whitespace on both sides removes the question: the
+        claim is about words and digits, not about layout.
+        """
+        claim(where, " ".join(text.split()), " ".join(computed.split()), note)
+
     def ratio(a, b, places=2):
         return "%.*f" % (places, a / b)
 
@@ -349,6 +360,20 @@ def main():
                   % worst_floor, "floor of the least favourable mode")
             claim("README", readme, "%d\u00d7 in the advertised one" % mem_floor,
                   "floor of the advertised mode")
+            # The floor is quoted a SECOND time on each of three surfaces, in
+            # lowercase prose rather than as the headline claim. Those copies
+            # went stale in exactly the refresh that moved 51x to 31x: the
+            # guarded sentence said 31x while the summary three paragraphs
+            # earlier still promised 32x. Claim every copy, not the headline.
+            claim_prose("README", readme,
+                        "**at least %d\u00d7 less memory**" % worst_floor,
+                        "floor, restated in the README intro")
+            claim_prose("GATES", gates,
+                        "at least %d\u00d7 \u2014 which held to" % worst_floor,
+                        "floor, restated in the withdrawn-claims section")
+            claim_prose("bench/README", bench_readme,
+                        "at least %d\u00d7, taking the" % worst_floor,
+                        "floor, restated in the receipt README")
 
             fid = receipt["fidelity"]
             claim("README", readme, num(fid["over16_pct"]), "receipt fidelity")

@@ -400,8 +400,8 @@ wall held to 15.2 % and Chromium's moved 21.7 % — the figure mostly reported h
 fast the browser happened to be that day. The original 2.49× additionally came
 from a private deck where the Chromium harness paid 2.94 s of settle sleeps that
 the probe does not. Wall clock is still measured and still gated at 35 % drift;
-it is simply no longer advertised as a multiple. The claim is memory, at least
-51×, which held to 0.5 % across the same runs.
+it is simply no longer advertised as a multiple. The claim is memory — at least
+31× — which held to 0.8 % across five runs on one runner image.
 
 ## Corpus
 
