@@ -89,7 +89,10 @@ the four known divergences" while `tools/parity_baseline.json` pinned eleven.
 ## Commits
 
 - Conventional prefix in English: `fix(claims):`, `docs:`, `ci(parity):`, `feat(clip):`.
-- Subject and body in **Russian**; the body numbered, each item carrying what was measured.
+- Subject and body in **English**; the body numbered, each item carrying what was measured.
+  English because this repo is public and `git log` is the only record of *why* a change was
+  made: 54 of the 129 commits written under the previous rule are unreadable to the audience
+  the README, `GATES.md` and the issues are written for (issue #23). History is not rewritten.
 - A body that quotes a number quotes the command that produced it.
 - **The repo config and the history disagree on the author email:** `git config
   user.email` reads `leshchenko@gmail.com` while every commit is authored
