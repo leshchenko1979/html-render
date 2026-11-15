@@ -157,6 +157,15 @@ jobs:
         # raises the canvas to the document and never shrinks it.
         run: python3 tools/test_full_page.py --bin target/release/render
 
+      - name: Test non-Latin shaping
+        # The corpus reports text rows but does not gate them, because without an
+        # identical embedded font they measure font availability as much as
+        # layout. These properties need no reference renderer: RTL-script text is
+        # ordered right-to-left, and combining marks stack without adding advance
+        # width. Each leg carries a control in the same run, so a predicate that
+        # always passes fails one of them.
+        run: python3 tools/test_scripts.py --bin target/release/render
+
       - name: Test the published artefact
         # Every other step here tests the binary THIS JOB BUILT, so before this
         # one existed no CI had ever run the contract against a tarball a user

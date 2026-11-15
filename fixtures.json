@@ -222,5 +222,33 @@
     "width": 400,
     "height": 200,
     "text": false
+  },
+  {
+    "name": "arabic-joining",
+    "file": "arabic-joining.html",
+    "width": 320,
+    "height": 60,
+    "text": true
+  },
+  {
+    "name": "hebrew-rtl",
+    "file": "hebrew-rtl.html",
+    "width": 320,
+    "height": 60,
+    "text": true
+  },
+  {
+    "name": "combining-marks",
+    "file": "combining-marks.html",
+    "width": 320,
+    "height": 60,
+    "text": true
+  },
+  {
+    "name": "direction-rtl-latin",
+    "file": "direction-rtl-latin.html",
+    "width": 320,
+    "height": 60,
+    "text": true
   }
 ]

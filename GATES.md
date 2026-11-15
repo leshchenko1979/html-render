@@ -331,8 +331,38 @@ table layout, up to 18 px out
 ([#9](https://github.com/leshchenko1979/html-render/issues/9)). The remaining 42
 rows land where Chromium puts them.
 
-Six further boxes involve text and are reported separately, because without an
-identical embedded font they measure font availability rather than layout.
+Fourteen further boxes involve text and are reported separately, because without an
+identical embedded font they measure font availability rather than layout. Four
+of those fixtures were added because the corpus was otherwise 32 of 32
+ASCII-only and could say nothing about shaping. The census that motivated it was
+a byte grep, so three carry literal non-ASCII bytes — **3 of 36 fixtures** —
+rather than HTML entities that would render the same text while leaving that
+grep reading zero; the fourth is Latin words in an RTL container, which is
+ASCII and still isolates a property no other fixture reaches.
+
+| fixture | what its geometry reveals |
+|---|---|
+| `arabic-joining` | two coloured Arabic words in `direction: rtl`: joining changes each run's width, and the first word must land **right** of the second |
+| `hebrew-rtl` | the same shape in Hebrew, so an engine that loses bidi ordering puts the runs in the wrong order |
+| `combining-marks` | `e` + U+0301 + U+0300 against a bare `e`: the marks must stack **above** (taller box) without adding advance width |
+| `direction-rtl-latin` | LTR words inside `direction: rtl`: isolates the **CSS property** from bidi, which the two fixtures above cannot — measured, removing `direction:rtl` from `arabic-joining` changes no pixel |
+
+The last row is the one that separates two things the corpus previously
+conflated. Arabic and Hebrew are ordered right-to-left by the Unicode bidi
+algorithm because of the characters themselves, so their geometry is unchanged
+when `direction` is removed or flipped. Only LTR text in an RTL container can
+show whether the CSS property is honoured, and on `0.3.0-beta.8` the line
+right-aligns while the span order stays LTR: `Alpha` at x=168, `Beta` at x=259.
+That is reported by the harness as a text row, not gated, because gating it
+would pin whichever behaviour the engine currently has.
+
+**CJK is deliberately absent.** No font on the runner covers it, and a character
+with no covering font renders as a tofu box: measured here, `日`, `本` and `語` at
+40 px produce **byte-identical PNGs**, so a CJK fixture would measure the absence
+of a font rather than line breaking or full-width punctuation. Making it
+measurable needs a CJK font in CI, and a CJK font also covers Latin, which would
+move font resolution for every existing fixture and perturb the pinned corpus
+verdict. That is a separate change with its own baseline move, not a fixture.
 
 **This is a gate, not a report.** `tools/parity_baseline.json` pins every
 divergent box by `fixture:colour` with its measured delta, and `run_parity.py`

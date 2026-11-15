@@ -134,7 +134,7 @@ That figure comes from the same external deck as the performance rows, so it is
 history too: it needs a browser to reproduce and the document is not here.
 
 **The reproducible fidelity number is the corpus**, not the deck. Geometry is
-measured over 32 fixtures, every run, against Chromium at the same viewport:
+measured over 36 fixtures, every run, against Chromium at the same viewport:
 **42 of the 54 text-free rows land exactly** where Chromium puts them, 11
 diverge and 1 asserts a shared absence. The 11 are pinned per box in
 `tools/parity_baseline.json`, so a further regression fails the build while the
