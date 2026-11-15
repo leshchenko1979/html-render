@@ -69,7 +69,7 @@ produces for the same element.
 |---|---|
 | result | **PASS** |
 | slides | 12/12 at 2560×1440 |
-| whole deck | 4.5462 % of pixels off by >16, over 29,491,200 pixels |
+| whole deck | 4.7083 % of pixels off by >16, over 29,491,200 pixels |
 
 Two structural checks, because a gate that passes on a wrong mechanism is worse
 than no gate:
@@ -120,32 +120,38 @@ engine's tree**, which is what a container limit counts:
 
 | engine | peak tree RSS | wall |
 |---|---|---|
-| Chromium, one tall screenshot cut into eight slides | 2431.3 MiB | 3.101 s |
-| `--full` | **37.7 MiB** | 2.042 s |
-| `--clip` (banded, one PNG per frame) | 75.3 MiB | 2.067 s |
-| `--clip --per-element` | 47.2 MiB | 2.039 s |
+| Chromium, one tall screenshot cut into eight slides | 2350.8 MiB | 1.604 s |
+| `--full` | **37.6 MiB** | 1.011 s |
+| `--clip` (banded, one PNG per frame) | 75.5 MiB | 1.039 s |
+| `--clip --per-element` | 47.4 MiB | 1.011 s |
 
-**The advertised claim is memory: at least 51× less than Chromium**, taking the
-least favourable of the three modes. Memory is the one quantity here that is
-steady enough to carry a claim — html-render's peak held inside 0.5 % across
-four runs of the probe on one runner image, while Chromium's moved 21.7 % and
-its wall clock 18.5 %.
+**The advertised claim is memory: at least 31× less than Chromium**, taking the
+least favourable of the three modes (49× in the advertised `--per-element`
+mode). Memory is the one quantity here that is steady enough to carry a claim —
+html-render's `--full` peak held between 37.6 MiB and 37.9 MiB across five runs
+of the probe on one runner image, while Chromium's moved 21.7 % and its wall
+clock 18.5 %.
 
 Wall clock is measured, printed and gated, and that is all it is. The drift
 check fails if it moves past 35 %, so a regression is caught; the ratio is not
-advertised, because over those same four runs it ranged 1.42× to 1.60× and most
+advertised, because over the four runs on one deck it ranged 1.42× to 1.60× and most
 of that movement was the browser's, not ours. A figure that mostly reports how
 fast the other program happened to be that day is not a property of this one.
 
-A record, not a gate — same runner image, same deck (`deck.html` md5
-`b77aac2d…` in every row below):
+A record, not a gate — same runner image throughout. The first four rows
+measured the previous deck (`deck.html` md5 `5c71602d…`), the last one the deck
+that ships today (`b77aac2d…`); both are 2560×11520, but they are different
+documents and the drift check refuses to compare them. That the memory ratio
+barely moved across the deck change is the useful part: it is a property of the
+architecture, not of the page.
 
-| run | Chromium tree RSS | html-render tree RSS | Chromium wall | html-render wall |
-|---|---|---|---|---|
-| 43744837000 | 2336.1 MiB | 37.9 MiB | 3.186 s | 2.240 s |
-| 43746767310 | 2452.6 MiB | 37.7 MiB | 3.774 s | 2.352 s |
-| 43752965645 | 2389.6 MiB | 37.8 MiB | 3.250 s | 2.292 s |
-| 43754284965 | 2431.3 MiB | 37.7 MiB | 3.101 s | 2.042 s |
+| run | deck | Chromium tree RSS | html-render tree RSS | Chromium wall | html-render wall |
+|---|---|---|---|---|---|
+| 43744837000 | `5c71602d` | 2336.1 MiB | 37.9 MiB | 3.186 s | 2.240 s |
+| 43746767310 | `5c71602d` | 2452.6 MiB | 37.7 MiB | 3.774 s | 2.352 s |
+| 43752965645 | `5c71602d` | 2389.6 MiB | 37.8 MiB | 3.250 s | 2.292 s |
+| 43754284965 | `5c71602d` | 2431.3 MiB | 37.7 MiB | 3.101 s | 2.042 s |
+| 43762042304 | `b77aac2d` | 2350.8 MiB | 37.6 MiB | 1.604 s | 1.011 s |
 
 Two things this section does not claim.
 
@@ -478,7 +484,7 @@ Whole-deck, every pixel, no sampling:
 | probe deck, scale 2, 2560×11520 | |
 |---|---|
 | pixels compared | **29,491,200** |
-| pixels off by >16 | **4.5462 %** |
+| pixels off by >16 | **4.7083 %** |
 | mean channel difference | 7.115 |
 | ink coverage | 19.4399 % engine vs 19.1282 % Chromium |
 

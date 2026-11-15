@@ -158,12 +158,12 @@ jobs:
           \`tools/bench.py\` renders a seeded eight-slide deck through both
           engines on a GitHub runner and writes \`bench/results.json\`, which is
           committed unedited. Against headless Chromium, peak process-tree RSS
-          is **at least 32x** smaller: 75.3 MiB against 2431.3 MiB for
-          \`--clip\`, 47.2 MiB for \`--clip --per-element\`, 37.7 MiB for
+          is **at least 31x** smaller: 75.5 MiB against 2350.8 MiB for
+          \`--clip\`, 47.4 MiB for \`--clip --per-element\`, 37.6 MiB for
           \`--full\`. Wall clock is measured and drift-gated but not advertised,
           because the browser's own wall moves 18-22% between runs and a ratio
           would mostly report how fast the browser happened to be that day.
-          4.5462% of pixels differ by more than 16 levels (glyph antialiasing,
+          4.7083% of pixels differ by more than 16 levels (glyph antialiasing,
           not layout), and three renders of the same input are byte-identical.
           Reproduce it:
           \`python3 tools/bench.py --bin <render> --chrome <chrome>\`.

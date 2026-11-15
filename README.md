@@ -141,15 +141,16 @@ the **sum of every process the engine spawned**:
 
 | measurement | Chromium | html-render | ratio |
 |---|---|---|---|
-| peak RSS, `--full` | 2431.3 MiB | 37.7 MiB | **64.49×** |
-| peak RSS, `--clip` | 2431.3 MiB | 75.3 MiB | **32.29×** |
-| peak RSS, `--per-element` | 2431.3 MiB | 47.2 MiB | **51.51×** |
+| peak RSS, `--full` | 2350.8 MiB | 37.6 MiB | **62.52×** |
+| peak RSS, `--clip` | 2350.8 MiB | 75.5 MiB | **31.14×** |
+| peak RSS, `--per-element` | 2350.8 MiB | 47.4 MiB | **49.59×** |
 
-**Memory is the claim.** At least 32× less in the least favourable mode, and
-51× in the advertised one. It is steady enough to carry a claim: across four
+**Memory is the claim.** At least 31× less in the least favourable mode, and
+49× in the advertised one. It is steady enough to carry a claim: across five
 runs of this probe on one GitHub runner image (43744837000, 43746767310,
-43752965645, 43754284965) html-render's `--full` peak held between 37.7 MiB and
-37.9 MiB, 0.5 %, while Chromium's moved between 2336 MiB and 2453 MiB.
+43752965645, 43754284965, 43762042304) html-render's `--full` peak held between
+37.6 MiB and 37.9 MiB, 0.8 %, while Chromium's moved between 2336 MiB and
+2453 MiB.
 Earlier figures of 9.19× compared html-render's whole footprint against
 Chromium's *fattest single process*; the probe sums the entire process tree on
 both sides, which is what a container limit actually counts.
@@ -168,7 +169,7 @@ Host, method and the run behind these figures: [GATES.md](GATES.md#cost).
 ## Fidelity against Chromium
 
 Diffed pixel for pixel against Chromium at the same viewport and scale, the
-probe's deck comes out **4.5462 % of pixels differing by more than 16 levels**
+probe's deck comes out **4.7083 % of pixels differing by more than 16 levels**
 over all 29,491,200 pixels — antialiasing and glyph rasterisation, not layout:
 mean channel difference 7.115, and both engines ink 19.1–19.4 % of the canvas.
 That is the whole deck at full resolution, not a sample, and

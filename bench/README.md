@@ -8,9 +8,9 @@ edited by hand: every figure the README advertises is read from it by
 
 | | |
 |---|---|
-| Workflow run | [43754284965](https://github.com/leshchenko1979/html-render/actions/runs/43754284965) (`parity`, `7bfc62e`) |
+| Workflow run | [43762042304](https://github.com/leshchenko1979/html-render/actions/runs/43762042304) (`parity`, `4b22e6a`) |
 | Artefact | `bench-results`, step *Benchmark against Chromium* |
-| Measured | 2026-11-15T19:48:44Z |
+| Measured | 2026-11-15T21:10:29Z |
 | Host | `runnervmy75tu`, Ubuntu 24.04, glibc 2.35, 4 vCPU, 15,989 MiB |
 | Probe | `html-render 0.3.0-beta.10`, `sha256 de69ad53…` |
 | Browser | Google Chrome 157.0.8103.78 |

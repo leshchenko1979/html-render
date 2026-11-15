@@ -318,11 +318,17 @@ def main():
             # verify. Its LAST row is this run, and that row must agree with the
             # receipt — it is the row a refresh forgets, and the one that read
             # 1.61x for a measurement of 1.6046.
+            # The row carries the deck it was measured on, because the table
+            # spans a deck change: four rows on one document, the last on
+            # another. A refresh that moved the figures but left the deck cell
+            # behind would make the table read as a like-for-like comparison of
+            # two different documents, which is the one thing it must not do.
             claim("GATES", gates,
-                  "| %s | %s MiB | %s MiB | %s s | %s s |"
-                  % (receipt["run"]["id"], num(chrome["peak_tree_mib"]),
-                     num(doc["peak_tree_mib"]), num(chrome["wall_median_s"]),
-                     num(doc["wall_median_s"])),
+                  "| %s | `%s` | %s MiB | %s MiB | %s s | %s s |"
+                  % (receipt["run"]["id"],
+                     (receipt["deck"].get("html_md5") or "")[:8],
+                     num(chrome["peak_tree_mib"]), num(doc["peak_tree_mib"]),
+                     num(chrome["wall_median_s"]), num(doc["wall_median_s"])),
                   "history table, this run")
 
 

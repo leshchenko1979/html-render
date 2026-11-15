@@ -9,7 +9,7 @@
       11520
     ],
     "generator": "tools/bench_deck.py",
-    "html_md5": "5c71602d1dd6c259ea3e3ba316da5233",
+    "html_md5": "b77aac2de5931588dfa01eb5af418bc5",
     "plates_md5": {
       "plate-a.png": "5dea3bb009d5e51fee1ce649575fd5b9",
       "plate-b.png": "d809f7dbfe5031937dc82dbdef9af9a9",
@@ -22,66 +22,66 @@
   },
   "determinism": {
     "distinct_md5": 1,
-    "md5": "676825b4c0a9911e1a7bb8a9d2d55c9a",
+    "md5": "5af754b35b730f2b6335ca193b9e3aa6",
     "renders": 3,
     "shape": "--full"
   },
   "engines": {
     "chromium": {
       "command": "/usr/bin/google-chrome --headless --incognito --disable-gpu --no-sandbox --hide-scrollbars --force-device-scale-factor=2 --window-size=1280,5760 --screenshot=chromium.png file:///home/runner/work/html-render/html-render/bench/deck/deck.html",
-      "peak_tree_mib": 2431.3,
-      "peak_tree_mib_max": 2456.5,
+      "peak_tree_mib": 2350.8,
+      "peak_tree_mib_max": 2474.1,
       "png": "bench/deck/chromium.png",
-      "png_md5": "32aeac32b3f608638deba62d947ad163",
+      "png_md5": "c25e97bb85d66ea61b34d6c7f766694f",
       "png_md5_all": [
-        "32aeac32b3f608638deba62d947ad163",
-        "32aeac32b3f608638deba62d947ad163",
-        "32aeac32b3f608638deba62d947ad163"
+        "c25e97bb85d66ea61b34d6c7f766694f",
+        "c25e97bb85d66ea61b34d6c7f766694f",
+        "c25e97bb85d66ea61b34d6c7f766694f"
       ],
       "png_md5_distinct": 1,
       "repeats": 3,
       "status": "measured",
       "version": "Google Chrome 157.0.8103.78",
-      "wall_median_s": 3.101,
+      "wall_median_s": 1.604,
       "wall_s": [
-        3.1,
-        3.332,
-        3.101
+        1.536,
+        1.613,
+        1.604
       ]
     },
     "html-render": {
       "command": "/home/runner/work/html-render/html-render/target/release/render deck.html blitz.png 1280 5760 2 --full",
-      "peak_tree_mib": 37.7,
-      "peak_tree_mib_max": 37.8,
+      "peak_tree_mib": 37.6,
+      "peak_tree_mib_max": 38.0,
       "png": "bench/deck/blitz.png",
-      "png_md5": "676825b4c0a9911e1a7bb8a9d2d55c9a",
+      "png_md5": "5af754b35b730f2b6335ca193b9e3aa6",
       "png_md5_all": [
-        "676825b4c0a9911e1a7bb8a9d2d55c9a",
-        "676825b4c0a9911e1a7bb8a9d2d55c9a",
-        "676825b4c0a9911e1a7bb8a9d2d55c9a"
+        "5af754b35b730f2b6335ca193b9e3aa6",
+        "5af754b35b730f2b6335ca193b9e3aa6",
+        "5af754b35b730f2b6335ca193b9e3aa6"
       ],
       "png_md5_distinct": 1,
       "repeats": 3,
       "status": "measured",
-      "wall_median_s": 2.042,
+      "wall_median_s": 1.011,
       "wall_s": [
-        2.062,
-        2.042,
-        2.039
+        1.011,
+        1.03,
+        1.011
       ]
     }
   },
   "fidelity": {
     "decoder": "pillow",
     "height": 11520,
-    "ink_engine_pct": 19.4399,
-    "ink_ref_pct": 19.1282,
-    "mean_diff": 7.115,
-    "over16_pct": 4.5462,
+    "ink_engine_pct": 17.073,
+    "ink_ref_pct": 16.6941,
+    "mean_diff": 8.2889,
+    "over16_pct": 4.7083,
     "pixels": 29491200,
     "width": 2560
   },
-  "generated_at": "2026-11-15T19:48:44Z",
+  "generated_at": "2026-11-15T21:10:29Z",
   "host": {
     "cpu_count": 4,
     "glibc": "ldd (Ubuntu GLIBC 2.35-0ubuntu3.15) 2.35",
@@ -97,10 +97,10 @@
   },
   "run": {
     "attempt": "1",
-    "id": "43754284965",
+    "id": "43762042304",
     "ref": "refs/heads/main",
     "repository": "leshchenko1979/html-render",
-    "sha": "7bfc62e8be47439d95cf6686bf9d4b57154f0803"
+    "sha": "4b22e6a135e1af06a5383396c626eac809d717c1"
   },
   "schema": 1,
   "shapes": {
@@ -108,15 +108,15 @@
       "chromium": {
         "derived_from": "engines.chromium",
         "note": "one tall screenshot, cut into slides; no extra render",
-        "peak_tree_mib": 2431.3,
+        "peak_tree_mib": 2350.8,
         "pngs": 8,
         "status": "measured",
-        "wall_median_s": 3.101
+        "wall_median_s": 1.604
       },
       "html-render-clip": {
         "command": "/home/runner/work/html-render/html-render/target/release/render --clip deck.html slides 1280 5760 2 .slide --document",
-        "peak_tree_mib": 75.3,
-        "peak_tree_mib_max": 75.5,
+        "peak_tree_mib": 75.5,
+        "peak_tree_mib_max": 75.6,
         "png_px": [
           2560,
           1440
@@ -124,16 +124,16 @@
         "pngs": 8,
         "repeats": 3,
         "status": "measured",
-        "wall_median_s": 2.067,
+        "wall_median_s": 1.039,
         "wall_s": [
-          2.101,
-          2.067,
-          2.066
+          1.04,
+          1.039,
+          1.031
         ]
       },
       "html-render-per-element": {
         "command": "/home/runner/work/html-render/html-render/target/release/render --clip deck.html slides-pe 1280 5760 2 .slide --document --per-element",
-        "peak_tree_mib": 47.2,
+        "peak_tree_mib": 47.4,
         "peak_tree_mib_max": 47.4,
         "png_px": [
           2560,
@@ -142,11 +142,11 @@
         "pngs": 8,
         "repeats": 3,
         "status": "measured",
-        "wall_median_s": 2.039,
+        "wall_median_s": 1.011,
         "wall_s": [
-          2.04,
-          2.039,
-          2.037
+          1.005,
+          1.011,
+          1.013
         ]
       }
     }
