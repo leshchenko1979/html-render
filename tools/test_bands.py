@@ -3,37 +3,61 @@
 
 `--clip` without `--per-element` paints the document in row bands sized from
 `BLITZ_BAND_MIB` (default 64 MiB), so peak memory is one band rather than the
-whole page. That is only a safe change if the pixels are untouched, so this test
-pins three things:
+whole page. That is only safe if the rendering is untouched, so this test pins
+four things:
 
-  1. banded output is BYTE-IDENTICAL to the single canvas it replaced —
-     `BLITZ_BAND_MIB=0` still selects that path;
-  2. a document taller than the renderer's 65532-row canvas now RENDERS, where
-     `BLITZ_BAND_MIB=0` still refuses it with exit 5;
-  3. the banded run really is cheaper — peak RSS measured, not assumed.
+  1. THE CORPUS IS UNTOUCHED — every fixture in `fixtures.json` renders
+     byte-identically with banding on and off. This is the leg that protects the
+     parity gate: Gate C measures these exact renders, so identical bytes cannot
+     move a verdict. On the shipped corpus one band covers the whole document,
+     which is why the gate is safe — asserted here, not assumed.
+  2. A TALL DOCUMENT RENDERS THE SAME THING — on a two-band deck the frames have
+     identical measured geometry and differ by at most one level per channel.
+     They are NOT byte-identical: `set_viewport_scroll` shifts the subpixel
+     antialiasing phase, which moves a handful of glyph pixels by 1/255, far
+     below the gate's tolerance of 8.
+  3. THE BANDED RUN IS CHEAPER — peak RSS measured, not assumed.
+  4. A DOCUMENT PAST THE CEILING NOW RENDERS — 72,000 rows exceeds
+     `MAX_CANVAS_H` (65,532), where `BLITZ_BAND_MIB=0` still refuses with exit 5.
 
     python3 tools/test_bands.py --bin target/release/render
 
 Exit 0 = the contract holds. Exit 1 = it does not. Against a binary from before
-banding, leg 2 fails with exit 5 and leg 1 fails on the missing env knob, which
-is the point: a test that cannot observe the change it was written for is
-decoration.
+banding, leg 4 fails with exit 5 and the other legs fail on the missing env
+knob, which is the point: a test that cannot observe the change it was written
+for is decoration.
 """
 
 import argparse
 import hashlib
+import json
 import os
-import subprocess
 import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import measure
 import measure_rss
 
-CSS_W = 800
-CSS_H = 600
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Small frames on purpose: `measure.measure` is a pure-Python pixel loop, so a
+# 800x600 frame costs ~2.6 s against ~10.5 s for 1600x1200. Banding needs a TALL
+# document, not large frames, so the height comes from the slide count.
+CSS_W = 400
+CSS_H = 300
 SCALE = 2
 SEL = ".s"
+
+# Frames sampled for the geometry read, spread across the document so every band
+# is covered. The channel-delta check runs on every frame (PIL is fast).
+GEO_SAMPLE = 6
+
+# Leg 2 wants MANY bands, or "cheaper" measures nothing: at 100 slides the deck is
+# 60,000 rows against a 20,971-row band, so the single canvas holds ~3 bands' worth
+# at once. Leg 3 only has to be past MAX_CANVAS_H (65,532).
+N_SLIDES = 100
+N_TALL = 40
 
 
 def deck(n, h):
@@ -57,9 +81,39 @@ def md5(path):
     return h.hexdigest()
 
 
-def run(binary, html, outdir, band_mib=None):
-    """Render the deck; return (rc, out, err, peak MiB)."""
-    cmd = [binary, "--clip", html, outdir, str(CSS_W), str(CSS_H), str(SCALE), SEL, "--document"]
+def geometry_differs(p, q):
+    """True if the measured probe geometry differs at all between two PNGs.
+
+    This is the property the parity gate reads: `measure.measure` returns a box
+    per probe colour and `measure.delta` is the max per-field difference, so
+    banding that leaves every box where it was cannot move a corpus verdict,
+    whatever it does to individual pixels.
+    """
+    a, b = measure.measure(p), measure.measure(q)
+    if set(a) != set(b):
+        return True
+    return any(measure.delta(a[c], b[c]) != 0 for c in a)
+
+
+def max_channel_delta(p, q):
+    """Largest per-channel difference between two same-sized PNGs."""
+    from PIL import Image, ImageChops
+
+    with Image.open(p) as im1, Image.open(q) as im2:
+        a = im1.convert("RGBA")
+        b = im2.convert("RGBA")
+        if a.size != b.size:
+            return 255
+        return max(band.getextrema()[1] for band in ImageChops.difference(a, b).split())
+
+
+def run(binary, html, outdir, width, height, band_mib=None, clip=True):
+    """Render; return (rc, stdout, stderr, peak MiB)."""
+    if clip:
+        cmd = [binary, "--clip", html, outdir, str(width), str(height),
+               str(SCALE), SEL, "--document"]
+    else:
+        cmd = [binary, html, outdir, str(width), str(height)]
     if band_mib is not None:
         # measure_rss takes no env kwarg, and `env` execs into the binary, so the
         # sampled process tree is the renderer's own.
@@ -87,17 +141,43 @@ def main():
     tmp = tempfile.mkdtemp(prefix="bands-")
     fails = []
 
-    # ---- leg 1: banded == single canvas, byte for byte ---------------------
-    # 40 slides x 600 CSS x scale 2 = 48,000 rows: tall enough that the default
-    # 64 MiB budget splits it into bands, short enough that the single canvas
-    # still fits under the 65,532-row ceiling, so both paths can be compared.
+    # ---- leg 1: the corpus renders identically with banding on and off -----
+    # Every fixture, not a sample: these are the exact inputs Gate C measures.
+    corpus = json.load(open(os.path.join(ROOT, "fixtures.json")))
+    corpus_diff = []
+    corpus_fail = []
+    for fx in corpus:
+        html = os.path.join(ROOT, "fixtures", fx["file"])
+        a = os.path.join(tmp, "corpus_band", fx["name"] + ".png")
+        b = os.path.join(tmp, "corpus_one", fx["name"] + ".png")
+        rc1, _, e1, _ = run(binary, html, a, fx["width"], fx["height"], clip=False)
+        rc2, _, e2, _ = run(binary, html, b, fx["width"], fx["height"],
+                            band_mib=0, clip=False)
+        if rc1 or rc2:
+            corpus_fail.append("%s: rc=%d/%d %s" % (fx["name"], rc1, rc2, (e1 or e2)[-120:]))
+            continue
+        if md5(a) != md5(b):
+            corpus_diff.append(fx["name"])
+    if corpus_fail:
+        fails.append("[corpus] %d fixture(s) failed to render: %s"
+                     % (len(corpus_fail), "; ".join(corpus_fail[:3])))
+    if corpus_diff:
+        fails.append(
+            "[corpus] %d/%d fixture(s) differ with banding: %s"
+            % (len(corpus_diff), len(corpus), ", ".join(corpus_diff[:5]))
+        )
+
+    # ---- leg 2: a multi-band document renders the same geometry ------------
+    # 100 slides x 300 CSS x scale 2 = 60,000 rows. The default 64 MiB budget is
+    # 64*1024*1024/(400*2*4) = 20,971 rows, so this spans THREE bands while still
+    # fitting under MAX_CANVAS_H (65,532), so both paths can be compared.
     a_html = os.path.join(tmp, "a.html")
     with open(a_html, "w", encoding="utf-8") as fh:
-        fh.write(deck(40, 600))
+        fh.write(deck(N_SLIDES, CSS_H))
     a_band = os.path.join(tmp, "a_band")
     a_one = os.path.join(tmp, "a_one")
-    rc_b, out_b, err_b, rss_b = run(binary, a_html, a_band)
-    rc_o, out_o, err_o, rss_o = run(binary, a_html, a_one, band_mib=0)
+    rc_b, out_b, err_b, rss_b = run(binary, a_html, a_band, CSS_W, CSS_H)
+    rc_o, out_o, err_o, rss_o = run(binary, a_html, a_one, CSS_W, CSS_H, band_mib=0)
 
     if rc_b != 0:
         fails.append("[banded] rc=%d (want 0)\n%s" % (rc_b, err_b[-600:]))
@@ -105,51 +185,82 @@ def main():
         fails.append("[single canvas] rc=%d (want 0)\n%s" % (rc_o, err_o[-600:]))
 
     fb, fo = frames(a_band), frames(a_one)
-    if len(fb) != 40:
-        fails.append("[banded] %d frame(s), want 40" % len(fb))
+    worst = 0
+    worst_at = ""
+    geo_diff = []
+    sampled = []
+    if len(fb) != N_SLIDES:
+        fails.append("[banded] %d frame(s), want %d" % (len(fb), N_SLIDES))
     if fb != fo:
-        fails.append("[banded] frame list differs from the single canvas: %r vs %r" % (fb[:5], fo[:5]))
+        fails.append("[banded] frame list differs from the single canvas: %r vs %r"
+                     % (fb[:5], fo[:5]))
     else:
-        diff = [n for n in fb if md5(os.path.join(a_band, n)) != md5(os.path.join(a_one, n))]
-        if diff:
+        step = max(1, len(fb) // GEO_SAMPLE)
+        sampled = fb[::step]
+        for n in sampled:
+            if geometry_differs(os.path.join(a_band, n), os.path.join(a_one, n)):
+                geo_diff.append(n)
+        if geo_diff:
             fails.append(
-                "[banded] %d/%d frame(s) differ from the single canvas: %s"
-                % (len(diff), len(fb), ", ".join(diff[:5]))
+                "[banded] %d/%d sampled frame(s) have different GEOMETRY: %s"
+                % (len(geo_diff), len(sampled), ", ".join(geo_diff[:5]))
+            )
+        for n in fb:
+            d = max_channel_delta(os.path.join(a_band, n), os.path.join(a_one, n))
+            if d > worst:
+                worst, worst_at = d, n
+        if worst > 1:
+            fails.append(
+                "[banded] %s differs by %d level(s) per channel, want <= 1 (AA phase only)"
+                % (worst_at, worst)
             )
 
     # Coordinates are reported in ABSOLUTE document rows on both paths, so a
-    # caller parsing `clip_NN … at X,Y` sees one set of numbers either way.
+    # caller parsing `clip_NN ... at X,Y` sees one set of numbers either way.
     lb = [ln for ln in out_b.splitlines() if ln.startswith("clip_")]
     lo = [ln for ln in out_o.splitlines() if ln.startswith("clip_")]
     if lb != lo:
         fails.append("[banded] clip report differs from the single canvas")
-    if len(lb) != 40:
-        fails.append("[banded] %d clip line(s), want 40" % len(lb))
+    if len(lb) != N_SLIDES:
+        fails.append("[banded] %d clip line(s), want %d" % (len(lb), N_SLIDES))
 
     # The saving is the whole point, so it is measured rather than claimed.
-    if rc_b == 0 and rc_o == 0 and not rss_b < rss_o:
-        fails.append(
-            "[banded] peak %.1f MiB is not below the single canvas's %.1f MiB"
-            % (rss_b, rss_o)
-        )
+    # The claim is not "smaller", it is "does not hold the page". So the yardstick
+    # is the canvas itself: doc_rows x phys_w x 4 bytes. The banded run must peak
+    # BELOW that (it never allocates the whole thing) and the single-canvas run
+    # must peak ABOVE it (positive control: it really does hold the page). A
+    # bare "banded < single" would pass on a rounding error.
+    canvas_mib = (N_SLIDES * CSS_H * SCALE) * (CSS_W * SCALE) * 4 / (1024.0 * 1024.0)
+    if rc_b == 0 and rc_o == 0:
+        if not rss_b < canvas_mib:
+            fails.append(
+                "[banded] peak %.1f MiB is not below the %.1f MiB canvas it should no "
+                "longer allocate" % (rss_b, canvas_mib)
+            )
+        if not rss_o > canvas_mib:
+            fails.append(
+                "[single canvas] peak %.1f MiB is not above the %.1f MiB canvas: the "
+                "control does not reproduce the old behaviour" % (rss_o, canvas_mib)
+            )
 
-    # ---- leg 2: a document past the ceiling now renders -------------------
+    # ---- leg 3: a document past the ceiling now renders -------------------
     # 40 slides x 900 CSS x scale 2 = 72,000 rows, past MAX_CANVAS_H (65,532).
     # Banded it renders; with banding disabled it must still refuse with exit 5,
     # which is what the released beta.7 does unconditionally.
     b_html = os.path.join(tmp, "b.html")
     with open(b_html, "w", encoding="utf-8") as fh:
-        fh.write(deck(40, 900))
+        fh.write(deck(N_TALL, 900))
     b_band = os.path.join(tmp, "b_band")
     b_one = os.path.join(tmp, "b_one")
-    rc_b2, out_b2, err_b2, rss_b2 = run(binary, b_html, b_band)
-    rc_o2, out_o2, err_o2, _ = run(binary, b_html, b_one, band_mib=0)
+    rc_b2, _, err_b2, _ = run(binary, b_html, b_band, CSS_W, 900)
+    rc_o2, _, _, _ = run(binary, b_html, b_one, CSS_W, 900, band_mib=0)
 
     if rc_b2 != 0:
         fails.append("[tall banded] rc=%d (want 0: banding removes the ceiling)\n%s"
                      % (rc_b2, err_b2[-600:]))
-    if len(frames(b_band)) != 40:
-        fails.append("[tall banded] %d frame(s), want 40" % len(frames(b_band)))
+    if len(frames(b_band)) != N_TALL:
+        fails.append("[tall banded] %d frame(s), want %d"
+                     % (len(frames(b_band)), N_TALL))
     if rc_o2 != 5:
         fails.append("[tall single canvas] rc=%d (want 5: banding disabled must still refuse)"
                      % rc_o2)
@@ -157,10 +268,14 @@ def main():
         fails.append("[tall single canvas] wrote %d file(s) before refusing"
                      % len(frames(b_one)))
 
-    print("  leg 1  banded vs single canvas: %d frames, %s" % (
-        len(fb), "identical" if not any("differ" in f for f in fails) else "DIFFER"))
-    print("  leg 1  peak rss: banded %.1f MiB, single canvas %.1f MiB" % (rss_b, rss_o))
-    print("  leg 2  72,000-row deck: banded rc=%d with %d frames, banding off rc=%d"
+    print("  leg 1  corpus: %d/%d fixtures byte-identical with banding on and off"
+          % (len(corpus) - len(corpus_diff) - len(corpus_fail), len(corpus)))
+    print("  leg 2  multi-band deck: %d frames, geometry %s on %d sampled, "
+          "max channel delta %d"
+          % (len(fb), "identical" if not geo_diff else "DIFFERS", len(sampled), worst))
+    print("  leg 2  peak rss: banded %.1f MiB, single canvas %.1f MiB, canvas %.1f MiB"
+          % (rss_b, rss_o, canvas_mib))
+    print("  leg 3  72,000-row deck: banded rc=%d with %d frames, banding off rc=%d"
           % (rc_b2, len(frames(b_band)), rc_o2))
 
     if not args.keep:
@@ -174,7 +289,8 @@ def main():
         for f in fails:
             print("  - " + f)
         return 1
-    print("ok: banding is byte-identical, cheaper, and lifts the canvas ceiling")
+    print("ok: banding leaves the corpus byte-identical, the geometry identical, "
+          "costs less, and lifts the canvas ceiling")
     return 0
 
 

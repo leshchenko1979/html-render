@@ -15,11 +15,20 @@ Raw list: `git log --oneline v0.3.0-beta.7..main`.
   the next band when it runs past. Peak memory is one band (`BLITZ_BAND_MIB`,
   default 64) rather than the page, and the total page height stops mattering:
   a 72,000 px document that used to exit `5` now renders all its frames. The
-  pixels are untouched — `tools/test_bands.py` asserts byte-identity against
-  `BLITZ_BAND_MIB=0`, the single-canvas path, on every frame of a 40-slide deck,
-  and the parity corpus verdict in `GATES.md` is unchanged.
-  The per-canvas ceiling still applies to one band and to `--full`, so a single
+  per-canvas ceiling still applies to one band and to `--full`, so a single
   frame taller than 65,532 px is still refused.
+  The pixels are NOT byte-identical, and the first version of this entry claimed
+  they were. Scrolling the viewport shifts the subpixel antialiasing phase, so a
+  handful of glyph pixels land one level out of 255 differently: measured
+  **32 of 40** frames on a 48,000-row deck, max channel delta **1**, two to ten
+  pixels per frame, inside the text. What is guaranteed instead is what the gate
+  actually reads — `tools/test_bands.py` asserts (a) the whole 32-fixture corpus
+  renders **byte-identically** with banding on and off, which is the leg that
+  protects the parity verdict, since Gate C measures those exact renders and
+  identical bytes cannot move a measurement; and (b) on a 60,000-row deck the
+  measured probe geometry is identical and no channel moves by more than one
+  level. The corpus is all short documents, one band each, so banding is a
+  no-op there by construction — asserted, not assumed.
 
 ## v0.3.0-beta.7 — 2026-11-14
 

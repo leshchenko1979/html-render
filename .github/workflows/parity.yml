@@ -100,9 +100,12 @@ jobs:
 
       - name: Test the banding contract
         # `--clip` paints the document in row bands so peak memory is one band,
-        # not the whole page. Only safe if the pixels are untouched, so this
-        # asserts byte-identity against the single canvas it replaced, then that
-        # a document past the 65,532-row ceiling renders where it used to exit 5.
+        # not the whole page. Only safe if the rendering is untouched, so this
+        # asserts the 32-fixture corpus is BYTE-identical with banding on and off
+        # (the leg that protects this gate: it measures those exact renders),
+        # that a multi-band deck keeps identical measured geometry, that peak RSS
+        # stays below the canvas it no longer allocates, and that a document past
+        # the 65,532-row ceiling renders where it used to exit 5.
         run: python3 tools/test_bands.py --bin target/release/render
 
       - name: Test the exit-code contract

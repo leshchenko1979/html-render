@@ -155,6 +155,20 @@ Each of these cost real time, and none of them raises an error.
    its own canvas — so the wall now applies to a single band or a single
    element: a frame taller than 65,532 px still hits it, in both modes.
 
+   **Banding costs one level of antialiasing, and only where it bands.** The
+   banded path scrolls the viewport (`set_viewport_scroll`) instead of offsetting
+   the paint origin, which moves the subpixel AA phase: on a 48,000-row deck 32
+   of 40 frames differed from the single canvas by **max channel delta 1**, two
+   to ten pixels each, inside the glyphs. That is not clipping — a clipped frame
+   loses whole regions, not single levels — and it is two orders below the gate's
+   tolerance of 8. What protects the parity verdict is not pixel identity but
+   that **the 32-fixture corpus renders byte-identically with banding on and
+   off**, because every corpus fixture is short enough to fit one band, where the
+   scroll is `(0,0)` and the paths are the same code. `tools/test_bands.py`
+   asserts that corpus identity as leg 1 and the geometry identity on a
+   multi-band deck as leg 2; the earlier claim of byte-identity on *every* frame
+   was wrong and the gate caught it.
+
 ## Withdrawn claims
 
 **"Blitz makes N line boxes where Chromium makes N−1."** Filed as
