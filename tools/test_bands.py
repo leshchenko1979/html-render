@@ -2,15 +2,19 @@
 """Banding is a memory optimisation, not a rendering change.
 
 `--clip` without `--per-element` paints the document in row bands sized from
-`BLITZ_BAND_MIB` (default 64 MiB), so peak memory is one band rather than the
+`BLITZ_BAND_MIB` (default 16 MiB), so peak memory is one band rather than the
 whole page. That is only safe if the rendering is untouched, so this test pins
 four things:
 
-  1. THE CORPUS IS UNTOUCHED — every fixture in `fixtures.json` renders
-     byte-identically with banding on and off. This is the leg that protects the
-     parity gate: Gate C measures these exact renders, so identical bytes cannot
-     move a verdict. On the shipped corpus one band covers the whole document,
-     which is why the gate is safe — asserted here, not assumed.
+  1. THE DEFAULT MODE IS UNTOUCHED — every fixture in `fixtures.json` renders
+     byte-identically with the knob at 1 MiB and at 0. This is a NEGATIVE
+     control, and it is worth saying so: `--clip` is the only path that bands, so
+     this leg passes because banding does not run here at all. What it catches is
+     banding leaking into the single-PNG path, not banding changing a verdict.
+     The 54-row corpus verdict is safe for a stronger reason: `run_parity.py`
+     renders fixtures with no `--clip`, so banding is structurally absent from
+     it. The banded path's real check is Gate C, which renders the deck with
+     `--clip` and requires every slide at Chromium's dimensions.
   2. A TALL DOCUMENT RENDERS THE SAME THING — on a multi-band deck the sampled
      frames have identical measured geometry and differ by at most one level per
      channel.
@@ -173,8 +177,8 @@ def main():
         )
 
     # ---- leg 2: a multi-band document renders the same geometry ------------
-    # 100 slides x 300 CSS x scale 2 = 60,000 rows. The default 64 MiB budget is
-    # 64*1024*1024/(400*2*4) = 20,971 rows, so this spans THREE bands while still
+    # 100 slides x 300 CSS x scale 2 = 60,000 rows. The default 16 MiB budget is
+    # 16*1024*1024/(400*2*4) = 5,242 rows, so this spans ~12 bands while still
     # fitting under MAX_CANVAS_H (65,532), so both paths can be compared.
     a_html = os.path.join(tmp, "a.html")
     with open(a_html, "w", encoding="utf-8") as fh:
@@ -273,7 +277,8 @@ def main():
         fails.append("[tall single canvas] wrote %d file(s) before refusing"
                      % len(frames(b_one)))
 
-    print("  leg 1  corpus: %d/%d fixtures byte-identical with banding on and off"
+    print("  leg 1  default mode: %d/%d fixtures byte-identical at 1 MiB and 0 "
+          "(negative control: this path never bands)"
           % (len(corpus) - len(corpus_diff) - len(corpus_fail), len(corpus)))
     print("  leg 2  multi-band deck: %d frames, geometry %s on %d sampled, "
           "max channel delta %d on the same %d"
@@ -295,8 +300,8 @@ def main():
         for f in fails:
             print("  - " + f)
         return 1
-    print("ok: banding leaves the corpus byte-identical, the geometry identical, "
-          "costs less, and lifts the canvas ceiling")
+    print("ok: banding leaves the geometry identical, costs less, lifts the canvas "
+          "ceiling, and never reaches the mode that does not band")
     return 0
 
 

@@ -84,7 +84,7 @@ fn help_text() -> String {
          \x20                 (no flag)      paint the document in row bands, then cut\n\
          \x20                                each frame out of the band that holds it.\n\
          \x20                                Peak memory is one band, not the page\n\
-         \x20                                (BLITZ_BAND_MIB, default 64).\n\
+         \x20                                (BLITZ_BAND_MIB, default 16).\n\
          \x20                 --per-element  paint each frame on its OWN element-sized\n\
          \x20                                canvas, viewport scrolled to it. Peak memory\n\
          \x20                                stays flat and total page height stops\n\
@@ -745,7 +745,7 @@ const MAX_CANVAS_H: u32 = 65532;
 
 /// Byte budget for one banded canvas, in MiB. `BLITZ_BAND_MIB=0` disables
 /// banding, which reproduces the single-canvas behaviour including its ceiling.
-const BAND_BUDGET_MIB_DEFAULT: usize = 64;
+const BAND_BUDGET_MIB_DEFAULT: usize = 16;
 
 /// Refuse a canvas the renderer cannot paint, naming the limit and the remedy.
 ///
@@ -767,8 +767,10 @@ fn refuse_oversized_canvas(w: u32, h: u32) {
 }
 
 /// Rows per band, derived from a byte budget so peak memory stays flat at any
-/// scale: at 2560 px wide a 64 MiB band is 6553 rows, and the same budget at
-/// scale 2 buys half as many rows instead of twice the memory.
+/// scale: at 2560 px wide a 16 MiB band is 1638 rows, and the same budget at
+/// scale 2 buys half as many rows instead of twice the memory. The budget is a
+/// target, not a cap: a single frame taller than one band gets a band of its
+/// own, so peak memory is the larger of one band and the tallest frame.
 fn band_height(phys_w: u32) -> u32 {
     let mib: usize = std::env::var("BLITZ_BAND_MIB")
         .ok()

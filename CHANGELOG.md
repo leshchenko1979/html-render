@@ -13,7 +13,7 @@ Raw list: `git log --oneline v0.3.0-beta.7..main`.
 - `--clip` paints the document in row bands instead of one document-height
   canvas, cutting each frame out of the band that contains it and scrolling to
   the next band when it runs past. Peak memory is one band (`BLITZ_BAND_MIB`,
-  default 64) rather than the page, and the total page height stops mattering:
+  default 16) rather than the page, and the total page height stops mattering:
   a 72,000 px document that used to exit `5` now renders all its frames. The
   per-canvas ceiling still applies to one band and to `--full`, so a single
   frame taller than 65,532 px is still refused.
@@ -22,13 +22,27 @@ Raw list: `git log --oneline v0.3.0-beta.7..main`.
   handful of glyph pixels land one level out of 255 differently: measured
   **32 of 40** frames on a 48,000-row deck, max channel delta **1**, two to ten
   pixels per frame, inside the text. What is guaranteed instead is what the gate
-  actually reads — `tools/test_bands.py` asserts (a) the whole 32-fixture corpus
-  renders **byte-identically** with banding on and off, which is the leg that
-  protects the parity verdict, since Gate C measures those exact renders and
-  identical bytes cannot move a measurement; and (b) on a 60,000-row deck the
+  actually reads. `tools/test_bands.py` asserts (a) on a 60,000-row deck the
   measured probe geometry is identical and no channel moves by more than one
-  level. The corpus is all short documents, one band each, so banding is a
-  no-op there by construction — asserted, not assumed.
+  level; and (b) a 72,000-row document renders where it used to be refused. The
+  54-row corpus verdict is safe for a structural reason rather than a measured
+  one: `run_parity.py` renders fixtures with no `--clip`, and `--clip` is the
+  only path that bands, so banding cannot enter that verdict at all. Gate C does
+  render the deck with `--clip`, so it is the leg that exercises the banded path
+  against Chromium, and it passed on this change. The test's third leg is a
+  negative control — the single-PNG path renders identically at 1 MiB and 0 —
+  which catches banding leaking into a mode that must not have it.
+- The band budget defaults to **16 MiB**, not the 64 first shipped, because
+  peak memory is flat below it and linear above it. On a 40-slide deck
+  (48,000 rows) the median of five runs per budget: 1 MiB / 471 bands /
+  61.3 MiB / 2.86 s, 4 MiB / 118 / 61.4 / 3.04, **16 MiB / 30 / 61.5 /
+  3.12**, 32 MiB / 15 / 85.0 / 3.17, 64 MiB / 8 / 155.6 / 2.88, 256 MiB /
+  2 / 509.9 / 2.91, off / 1 / 515.0 / 3.27. From 1 to 16 MiB the floor is
+  DOM and layout, so a smaller budget buys nothing and costs more bands;
+  above it every doubling adds its bytes to peak. Wall time shows no trend
+  (a 150-slide deck reads 11.60 / 11.21 / 10.83 / 11.26 s at 16 / 32 / 64 /
+  128 MiB), so 16 MiB is the frontier point: a quarter of the old peak at
+  the same speed.
 
 ## v0.3.0-beta.7 — 2026-11-14
 

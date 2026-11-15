@@ -151,7 +151,7 @@ Each of these cost real time, and none of them raises an error.
    so nothing is written. For `--full`, whose canvas IS the document: 45 slides
    at 1440p 1×, **22 at 2×, 15 at 3×**.
    Neither `--clip` strategy is bounded by the *total page* — it bands the
-   document (`BLITZ_BAND_MIB`, default 64) and `--per-element` gives each frame
+   document (`BLITZ_BAND_MIB`, default 16) and `--per-element` gives each frame
    its own canvas — so the wall now applies to a single band or a single
    element: a frame taller than 65,532 px still hits it, in both modes.
 
