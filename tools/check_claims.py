@@ -595,6 +595,19 @@ def main():
         if hits:
             fails.append("retired claim %r survives in %s" % (retired, ", ".join(hits)))
 
+    # --- every doc the README points at has to exist ------------------------
+    # A page that links a file nobody wrote is a broken promise, and this repo
+    # grew two docs (the probe's, and the research note) that nothing pointed
+    # at. Both directions are checked: the target exists, and the README says
+    # where it is.
+    for target in ("bench/README.md", "docs/why-html-first.md"):
+        checked += 1
+        if not os.path.exists(os.path.join(ROOT, target)):
+            fails.append("README.md links %s, which does not exist" % target)
+        elif "](%s)" % target not in readme:
+            fails.append("README.md no longer links %s: the doc is unreachable "
+                         "from the page" % target)
+
     # --- the drift bands, which live in code and are quoted in prose --------
     # Three files state the tolerances and `tools/bench_drift.py` enforces them.
     # Two copies of one fact drift apart, and the prose copy is the one a reader

@@ -235,6 +235,8 @@ The divergence is concentrated, not spread: **7 rows are one table** (#9) and
 | [CONTRIBUTING.md](CONTRIBUTING.md) | build requirements, the CI workflows, the rules a change must pass |
 | [SECURITY.md](SECURITY.md) | what rendering does to the machine, measured egress, reporting |
 | [CHANGELOG.md](CHANGELOG.md) | what moved between releases |
+| [bench/README.md](bench/README.md) | the probe: what it measures, how to re-run it, what the bands mean |
+| [docs/why-html-first.md](docs/why-html-first.md) | what HTML-and-CSS-first rendering is good for, with sources |
 
 ## Contributing
 
