@@ -4,7 +4,11 @@ Newest first. Every entry names its commit range, so it can be re-derived with
 `git log --oneline <prev>..<tag>` rather than trusted. Pre-1.0: flags and output
 names may change between minor versions, and this file is where that shows up.
 
-## Unreleased
+## v0.3.0-beta.10 — 2026-11-15
+
+Raw list: `git log --oneline v0.3.0-beta.9..v0.3.0-beta.10`. This cut carries the
+one behaviour change that landed after beta.9: the default clip canvas now follows
+the widest match instead of the viewport.
 
 ### Changed
 

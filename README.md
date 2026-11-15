@@ -3,7 +3,7 @@
 HTML and CSS in, PNG out, on a machine with no browser anywhere in the loop.
 Rust, one process, one binary.
 
-`0.3.0-beta.9`, one maintainer. Linux x86_64, glibc ≥ 2.35; no macOS, no Windows.
+`0.3.0-beta.10`, one maintainer. Linux x86_64, glibc ≥ 2.35; no macOS, no Windows.
 
 ![A 3200×1800 rendering of a slide headed "HTML + CSS → PNG, with no browser", with bar charts of wall time and peak memory against Chromium](assets/hero.png)
 
@@ -39,8 +39,8 @@ Linux x86_64, glibc ≥ 2.35 — Ubuntu 22.04+, Debian 12+, or a current Fedora.
 Anything else wants the container below.
 
 ```bash
-V=v0.3.0-beta.9
-N=html-render_0.3.0-beta.9_linux_amd64
+V=v0.3.0-beta.10
+N=html-render_0.3.0-beta.10_linux_amd64
 BASE="https://github.com/leshchenko1979/html-render/releases/download/$V"
 curl -fsSL -O "$BASE/$N.tar.gz" -O "$BASE/checksums.txt"
 sha256sum -c checksums.txt && tar xzf "$N.tar.gz"
@@ -79,7 +79,7 @@ docker run --rm --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-
 ```
 
 `--user` is required, not decorative: the image runs as uid 10001 and exits `101` without it.
-Tags are `latest` and `v0.3.0-beta.9`; pin a digest for reproducibility.
+Tags are `latest` and `v0.3.0-beta.10`; pin a digest for reproducibility.
 Building from source: [CONTRIBUTING.md](CONTRIBUTING.md#building).
 
 ## Usage
