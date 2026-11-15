@@ -10,7 +10,14 @@ gives it meaning was missing.
 
 This is a **drift** check, not a regression test with tight bounds: it answers
 "did something move so far that the published figures are now describing a
-different program?", not "is this run faster than the last?". The tolerances are
+different program?", not "is this run faster than the last?".
+
+It also refuses to compare two receipts that measured *different documents*.
+Every quantity below is a property of (renderer x document), so replacing the
+deck moves all of them for a reason that has nothing to do with the renderer —
+and the move can go either way, which is worse than a one-directional error: a
+cheaper deck would read as a performance win. Deck identity is therefore checked
+first, and a mismatch is reported as "the deck moved", never as drift. The tolerances are
 therefore set from the measured run-to-run spread of the probe itself, and they
 are deliberately loose, because a gate that fires on a quiet machine's noise
 gets disabled by whoever has to babysit it.
@@ -64,9 +71,51 @@ def get(receipt, dotted):
     return node
 
 
+# What makes two receipts describe the same document. `plates_md5` is here
+# because the HTML references its images by filename: re-generating a plate
+# changes every painted pixel while `html_md5` does not move at all, so the
+# document hash alone would call that "the same deck".
+DECK_FIELDS = (
+    ("html_md5", "the document"),
+    ("plates_md5", "the embedded images"),
+    ("slides", "the slide count"),
+    ("seed", "the generator seed"),
+    ("scale", "the device scale"),
+    ("expected_px", "the pixel grid"),
+)
+
+def deck_delta(committed, fresh):
+    """Return [(field, what_it_is, old, new)] for every deck identity mismatch.
+
+    A missing block counts as a mismatch: a receipt that never recorded its deck
+    cannot be shown to describe the same document, and "cannot be shown" is not
+    "is the same".
+    """
+    old, new = committed.get("deck"), fresh.get("deck")
+    if not isinstance(old, dict) or not isinstance(new, dict):
+        return [("<deck block>", "the deck identity", old, new)]
+    out = []
+    for field, what in DECK_FIELDS:
+        a, b = old.get(field), new.get(field)
+        if a != b:
+            out.append((field, what, a, b))
+    return out
+
 def compare(committed, fresh):
     """Return (rows, fails). Each row is (label, old, new, delta_pct, tol, ok)."""
     rows, fails = [], []
+
+    # Deck identity first, because everything after it assumes the two receipts
+    # measured the same document.
+    moved = deck_delta(committed, fresh)
+    if moved:
+        detail = "; ".join("%s (%s): %r -> %r" % (f, what, a, b)
+                           for f, what, a, b in moved)
+        fails.append(
+            "the deck moved: %s. The quantity rows above are two different "
+            "documents, so they are not evidence about the renderer in either "
+            "direction. Re-run tools/bench.py on the new deck and commit the "
+            "fresh receipt as bench/results.json." % detail)
 
     # A receipt where the browser did not run cannot back a ratio, and a CI that
     # silently stopped being able to launch Chromium would otherwise read as
@@ -159,7 +208,19 @@ def compare(committed, fresh):
     return rows, fails
 
 
-def report(rows, fails):
+def _md5(deck):
+    """The document hash, shortened, or a word for "no deck recorded"."""
+    if not isinstance(deck, dict):
+        return "<none>"
+    return str(deck.get("html_md5"))[:8]
+
+def report(rows, fails, deck=None):
+    if deck:
+        old, new = deck
+        same = "same" if deck_delta(old or {}, new or {}) == [] else "DIFFERENT"
+        print("deck  committed %s  fresh %s  (%s)"
+              % (_md5(old), _md5(new), same))
+        print()
     print("%-30s %12s %12s %8s %7s" % ("quantity", "committed", "fresh", "delta", "band"))
     for label, old, new, delta, tol, ok in rows:
         print("%-30s %12.4g %12.4g %+7.1f%% %6.0f%% %s"
@@ -181,16 +242,35 @@ def report(rows, fails):
 # missing key) are exactly the ones a real receipt will present.
 
 
+DECK_BASE = {
+    "generator": "tools/bench_deck.py",
+    "seed": 20261115,
+    "slides": 8,
+    "scale": 2,
+    "css_px": [1280, 5760],
+    "expected_px": [2560, 11520],
+    "html_md5": "5c71602d1dd6c259ea3e3ba316da5233",
+    "plates_md5": {"plate-a.png": "5dea3bb009d5e51fee1ce649575fd5b9"},
+}
+
 def _receipt(wall_c=3.774, wall_h=2.352, peak_c=2452.6, peak_h=37.7,
              fid=4.5462, status="measured", clip_wall=2.386, clip_peak=75.3,
-             pe_wall=2.349, pe_peak=47.1, derived_wall=None, derived_peak=None):
+             pe_wall=2.349, pe_peak=47.1, derived_wall=None, derived_peak=None,
+             deck=None):
     """A receipt shaped like the real one, including the three advertised shapes.
 
     `derived_*` lets a leg break the `shapes.slides.chromium` copy away from
     `engines.chromium` on purpose — the one field pair that is a duplicate rather
-    than a measurement.
+    than a measurement. `deck` defaults to `DECK_BASE`; pass a dict to alter one
+    identity field, or the string "absent" to model a receipt that never recorded
+    one.
     """
+    if deck is None:
+        deck = json.loads(json.dumps(DECK_BASE))
+    elif deck == "absent":
+        deck = None
     return {
+        "deck": deck,
         "engines": {
             "chromium": {"status": status, "wall_median_s": wall_c,
                          "peak_tree_mib": peak_c},
@@ -242,6 +322,17 @@ def self_test():
     leg("derived_copy_wall_disagrees_fails", _receipt(derived_wall=3.774 * 1.5), 1)
     leg("derived_copy_peak_disagrees_fails", _receipt(derived_peak=2452.6 * 1.5), 1)
     leg("chromium_unavailable_fails", _receipt(status="unavailable"), 1)
+    # Deck identity. A different document makes every quantity incomparable, and
+    # the failure has to say so rather than reporting it as renderer drift.
+    leg("deck_identical_passes", _receipt(), 0)
+    leg("deck_html_changed_fails",
+        _receipt(deck={**DECK_BASE, "html_md5": "0" * 32}), 1)
+    leg("deck_slides_changed_fails",
+        _receipt(deck={**DECK_BASE, "slides": 12}), 1)
+    leg("deck_plates_changed_fails",
+        _receipt(deck={**DECK_BASE,
+                       "plates_md5": {"plate-a.png": "f" * 32}}), 1)
+    leg("deck_absent_fails", _receipt(deck="absent"), 1)
     # A receipt that lost the field is a schema change, not a clean bill.
     missing = _receipt()
     del missing["fidelity"]
@@ -276,8 +367,9 @@ def main():
         return self_test()
     if not (args.committed and args.fresh):
         ap.error("--committed and --fresh are both required (or --self-test)")
-    rows, fails = compare(load(args.committed), load(args.fresh))
-    return report(rows, fails)
+    committed, fresh = load(args.committed), load(args.fresh)
+    rows, fails = compare(committed, fresh)
+    return report(rows, fails, (committed.get("deck"), fresh.get("deck")))
 
 
 if __name__ == "__main__":
