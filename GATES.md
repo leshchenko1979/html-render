@@ -132,15 +132,16 @@ Each of these cost real time, and none of them raises an error.
    blank slide. Neither case errors.
 3. **Never raise the viewport to document height.** A real deck resolves `vh`
    units and `height: 100%` against the viewport, so a taller viewport relayouts
-   the page and the comparison becomes meaningless. Paint one tall canvas and
-   crop, or use `--per-element`.
+   the page and the comparison becomes meaningless. `--clip` paints the document
+   in row bands and scrolls between them, so the tall canvas is never
+   materialised; `--per-element` scrolls to each match instead.
 4. **Know the document height.** A 12-slide deck with 24 px gaps is 8904 CSS px,
    not 8640. Guessing short makes the last slide read as 37.6 % wrong when the
    real figure is 1.41 %: the crop, not the renderer.
 5. **`--help` used to exit 2.** Usage went to stderr, so `set -euo pipefail` failed on a
    successful invocation. Use `|| true` in scripts.
-6. **A canvas past 65,532 px tall or 65,408 px wide panics, and leaves a dump
-   behind.** The renderer truncates the dimension through a `u16` and then indexes
+6. **A single canvas past 65,532 px tall or 65,408 px wide panics, and leaves a
+   dump behind.** The renderer truncates the dimension through a `u16` and then indexes
    past the buffer it actually got: a 72,000 px document produced a 6,464-row
    buffer and died on `range end index 20688000 out of range for slice of length
    20684800`, `rc=101`, with 34 of 80 frames already written. Both ceilings are
@@ -148,9 +149,10 @@ Each of these cost real time, and none of them raises an error.
    65,533 panics, 65,408 renders and 65,410 panics — and neither is derivable
    from the other. `refuse_oversized_canvas` refuses with `rc=5` before painting,
    so nothing is written. In slides: 45 at 1440p 1×, **22 at 2×, 15 at 3×**.
-   `--per-element` removes the *total page* limit (each frame gets its own
-   canvas) but not the per-canvas one: a single element taller than 65,532 px
-   still hits the same wall.
+   Neither mode is bounded by the *total page* any more — `--clip` bands the
+   document (`BLITZ_BAND_MIB`, default 64) and `--per-element` gives each frame
+   its own canvas — so the wall now applies to a single band or a single
+   element: a frame taller than 65,532 px still hits it, in both modes.
 
 ## Withdrawn claims
 

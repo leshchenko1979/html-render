@@ -4,6 +4,23 @@ Newest first. Every entry names its commit range, so it can be re-derived with
 `git log --oneline <prev>..<tag>` rather than trusted. Pre-1.0: flags and output
 names may change between minor versions, and this file is where that shows up.
 
+## Unreleased
+
+Raw list: `git log --oneline v0.3.0-beta.7..main`.
+
+**Changed**
+
+- `--clip` paints the document in row bands instead of one document-height
+  canvas, cutting each frame out of the band that contains it and scrolling to
+  the next band when it runs past. Peak memory is one band (`BLITZ_BAND_MIB`,
+  default 64) rather than the page, and the total page height stops mattering:
+  a 72,000 px document that used to exit `5` now renders all its frames. The
+  pixels are untouched — `tools/test_bands.py` asserts byte-identity against
+  `BLITZ_BAND_MIB=0`, the single-canvas path, on every frame of a 40-slide deck,
+  and the parity corpus verdict in `GATES.md` is unchanged.
+  The per-canvas ceiling still applies to one band and to `--full`, so a single
+  frame taller than 65,532 px is still refused.
+
 ## v0.3.0-beta.7 — 2026-11-14
 
 Raw list: `git log --oneline v0.3.0-beta.6..v0.3.0-beta.7`. This cut exists

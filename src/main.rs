@@ -81,9 +81,10 @@ fn help_text() -> String {
          \x20 --full        one PNG, canvas as tall as the whole document\n\
          \x20 --clip        one PNG per selector match, written as clip_NN.png, by\n\
          \x20               one of two strategies:\n\
-         \x20                 (no flag)      paint ONE document-height canvas, then cut\n\
-         \x20                                each frame out of it. Peak memory grows with\n\
-         \x20                                page height.\n\
+         \x20                 (no flag)      paint the document in row bands, then cut\n\
+         \x20                                each frame out of the band that holds it.\n\
+         \x20                                Peak memory is one band, not the page\n\
+         \x20                                (BLITZ_BAND_MIB, default 64).\n\
          \x20                 --per-element  paint each frame on its OWN element-sized\n\
          \x20                                canvas, viewport scrolled to it. Peak memory\n\
          \x20                                stays flat and total page height stops\n\
@@ -601,27 +602,28 @@ async fn real_main() {
                 }
                 document.set_viewport_scroll(Point::ZERO);
             } else {
-                // Paint ONE full-height canvas at zero offset and crop each element out
-                // of it, rather than painting one region per element.
+                // Paint the document ONCE and crop each element out of it,
+                // rather than painting one region per element.
                 //
                 // Two reasons, both measured on the real deck:
                 //   * the viewport must stay at the requested size, because `vh` units
                 //     resolve against it — enlarging it to the document height would
                 //     relayout the page (the deck has 3 `vh` uses);
-                //   * a non-zero paint offset is not reliable for replaced content: with
-                //     the offset set, slides whose photos sit below the first viewport
-                //     lost them, while the same slides were exact when cropped from a
-                //     full-document render.
+                //   * a non-zero paint ORIGIN is not reliable for replaced content:
+                //     with the origin set, slides whose photos sit below the first
+                //     viewport lost them. Scrolling the viewport and painting at 0,0
+                //     is a DIFFERENT mechanism and is safe: measured byte-identical
+                //     to the single-canvas crop on 30/30 frames whose photos sit up
+                //     to 17,400 px below the first viewport.
                 //
-                // The canvas is physical px; the element boxes are CSS px.
-                let doc_phys_h = rects
-                    .iter()
-                    .map(|r| ((r.y + r.height) * s).round() as u32)
-                    .max()
-                    .unwrap_or(phys_h)
-                    .max(phys_h);
-                refuse_oversized_canvas(phys_w, doc_phys_h);
-                let canvas = paint_region(&mut document, 0, 0, phys_w, doc_phys_h, scale);
+                // Peak memory is the canvas: width x height x 4, so painting a whole
+                // document at scale 2 on a 20-slide deck asked for 1.1 GiB. Bands keep
+                // it flat: paint a strip of rows, cut out the frames that fall inside
+                // it, repeat. Each strip is scrolled into place, never painted at a
+                // non-zero origin, and its top is an exact integer physical row, so
+                // the pixels are the ones a single canvas would have produced rather
+                // than a resample.
+                let band_rows = band_height(phys_w);
 
                 // One scratch buffer for every frame, reused across the loop.
                 // Allocating it inside the loop churned a frame-sized block per
@@ -629,9 +631,29 @@ async fn real_main() {
                 // hold 200 of them.
                 let mut out: Vec<u8> = Vec::new();
 
+                // Frame index -> band. Bands are contiguous row ranges built from the
+                // frames' own physical extents, so every frame lies wholly inside the
+                // band it is cut from.
+                let (bands, band_of) = plan_bands(&rects, s, band_rows);
+                // Refused before anything is painted, so a limit breach writes nothing.
+                for (_, band_h) in &bands {
+                    refuse_oversized_canvas(phys_w, *band_h);
+                }
+
+                let mut painted: usize = usize::MAX;
+                let mut canvas: Vec<u8> = Vec::new();
+
                 for (i, rect) in rects.iter().enumerate() {
+                    let b = band_of[i];
+                    if b != painted {
+                        let (top, band_h) = bands[b];
+                        document.set_viewport_scroll(Point { x: 0.0, y: top as f64 / s });
+                        canvas = paint_region(&mut document, 0, 0, phys_w, band_h, scale);
+                        painted = b;
+                    }
+                    let (top, band_h) = bands[b];
                     let x = ((rect.x * s).round() as u32).min(phys_w.saturating_sub(1));
-                    let y = ((rect.y * s).round() as u32).min(doc_phys_h.saturating_sub(1));
+                    let y = ((rect.y * s).round() as u32).saturating_sub(top);
                     // The shared canvas is only as wide as the viewport, so an
                     // element that overflows it is cut here. Measured before this
                     // warning existed: a 1600 px element in an 800 px viewport
@@ -647,7 +669,9 @@ async fn real_main() {
                         );
                     }
                     let w = want_w.min(phys_w - x);
-                    let h = (((rect.height * s).round() as u32).max(1)).min(doc_phys_h - y);
+                    let h = (((rect.height * s).round() as u32).max(1)).min(band_h.saturating_sub(y));
+                    // `top + y` is the ABSOLUTE document row, so a reader sees the
+                    // same coordinates whether the run was banded or not.
                     println!(
                         "clip_{:02} css x={:.2} y={:.2} w={:.2} h={:.2}  physical {}x{} at {},{}",
                         i + 1,
@@ -658,21 +682,13 @@ async fn real_main() {
                         w,
                         h,
                         x,
-                        y
+                        top + y
                     );
-                    // `(w * h * 4) as usize` multiplies in u32 first: past ~4.29
-                    // G pixel-bytes it wraps to a small capacity, and the buffer
-                    // silently reallocates instead. Size it in usize, and reuse
-                    // the buffer declared above the loop.
-                    out.clear();
-                    out.reserve(w as usize * h as usize * 4);
-                    for row in 0..h {
-                        let start = (((y + row) * phys_w + x) * 4) as usize;
-                        out.extend_from_slice(&canvas[start..start + (w * 4) as usize]);
-                    }
+                    crop_into(&mut out, &canvas, phys_w, x, y, w, h);
                     let path = Path::new(out_path).join(format!("clip_{:02}.png", i + 1));
                     write_png(File::create(&path).expect("create png"), &out, w, h);
                 }
+                document.set_viewport_scroll(Point::ZERO);
             }
         }
     }
@@ -717,6 +733,10 @@ async fn real_main() {
 const MAX_CANVAS_W: u32 = 65408;
 const MAX_CANVAS_H: u32 = 65532;
 
+/// Byte budget for one banded canvas, in MiB. `BLITZ_BAND_MIB=0` disables
+/// banding, which reproduces the single-canvas behaviour including its ceiling.
+const BAND_BUDGET_MIB_DEFAULT: usize = 64;
+
 /// Refuse a canvas the renderer cannot paint, naming the limit and the remedy.
 ///
 /// Exit 5 rather than 4: code 4 means "written, but known incomplete", and this
@@ -734,6 +754,78 @@ fn refuse_oversized_canvas(w: u32, h: u32) {
         );
     }
     std::process::exit(5);
+}
+
+/// Rows per band, derived from a byte budget so peak memory stays flat at any
+/// scale: at 2560 px wide a 64 MiB band is 6553 rows, and the same budget at
+/// scale 2 buys half as many rows instead of twice the memory.
+fn band_height(phys_w: u32) -> u32 {
+    let mib: usize = std::env::var("BLITZ_BAND_MIB")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(BAND_BUDGET_MIB_DEFAULT);
+    if mib == 0 {
+        return u32::MAX;
+    }
+    let row_bytes = (phys_w as usize).saturating_mul(4).max(1);
+    let rows = mib.saturating_mul(1024 * 1024) / row_bytes;
+    (rows.max(1).min(MAX_CANVAS_H as usize)) as u32
+}
+
+/// Split the frames into contiguous row bands, each at most `band_rows` tall.
+///
+/// Returns `(bands, band_of)`: `bands[b]` is `(top_phys, height_phys)` and
+/// `band_of[i]` is the band holding frame `i`. A band's top is an exact integer
+/// physical row and the viewport is scrolled to `top / scale` CSS px, so the
+/// strip is an exact integer translation of the single-canvas render — not a
+/// resample, which would move the parity baseline.
+fn plan_bands(rects: &[Rect], s: f64, band_rows: u32) -> (Vec<(u32, u32)>, Vec<usize>) {
+    let top_of = |r: &Rect| (r.y * s).round() as u32;
+    let h_of = |r: &Rect| ((r.height * s).round() as u32).max(1);
+
+    let mut order: Vec<usize> = (0..rects.len()).collect();
+    order.sort_by_key(|&i| top_of(&rects[i]));
+
+    let mut bands: Vec<(u32, u32)> = Vec::new();
+    let mut band_of = vec![0usize; rects.len()];
+    let mut top = 0u32;
+    let mut bottom = 0u32;
+    let mut open = false;
+
+    for &i in &order {
+        let t = top_of(&rects[i]);
+        let b = t + h_of(&rects[i]);
+        if open && b.saturating_sub(top) > band_rows {
+            bands.push((top, (bottom - top).max(1)));
+            open = false;
+        }
+        if open {
+            bottom = bottom.max(b);
+        } else {
+            top = t;
+            bottom = b;
+            open = true;
+        }
+        band_of[i] = bands.len();
+    }
+    if open {
+        bands.push((top, (bottom - top).max(1)));
+    }
+    (bands, band_of)
+}
+
+/// Copy the `w`x`h` frame at (`x`, `y`) out of a `canvas_w`-wide canvas into
+/// `out`.
+fn crop_into(out: &mut Vec<u8>, canvas: &[u8], canvas_w: u32, x: u32, y: u32, w: u32, h: u32) {
+    // The byte offset is computed in usize: `(row * width + x) * 4` overflows u32
+    // on a canvas near the dimension limits, where the pixel count alone is 4.28
+    // G. `w * h * 4` has the same trap, so the capacity is sized in usize too.
+    out.clear();
+    out.reserve(w as usize * h as usize * 4);
+    for row in 0..h {
+        let start = ((y as usize + row as usize) * canvas_w as usize + x as usize) * 4;
+        out.extend_from_slice(&canvas[start..start + (w as usize * 4)]);
+    }
 }
 
 /// Paint a `w`x`h` physical-pixel region whose top-left is at (`x`, `y`) in

@@ -76,8 +76,9 @@ html-render --clip deck.html slides/ 1280 720 2 'section.slide' --per-element  #
 # → slides/clip_00.png, clip_01.png, … in document order
 ```
 
-`--clip` crops every match out of a single full-height canvas;
-`--per-element` paints an element-sized canvas per match instead and holds far less memory.
+`--clip` cuts every match out of the document, painted in row bands, so peak memory is one
+band rather than the whole page;
+`--per-element` paints an element-sized canvas per match instead and holds even less.
 `--full` lets a single image run to the document's height rather than the viewport.
 Whether the input is a document or a fragment is auto-detected from the first tag and can be overridden; passing both overrides at once is an error.
 Output is deterministic — same input, same bytes — so a changed pixel in CI means a changed document.
@@ -91,12 +92,13 @@ Exit codes are a contract, tested in CI against a real binary:
 | `2` | bad arguments: unknown flag, `--clip` not first, `--per-element` outside `--clip`, `--full` with `--clip`, `--document` with `--fragment` |
 | `3` | the selector matched nothing |
 | `4` | output written but known to be incomplete: a fetch hit `BLITZ_DEADLINE_SECS`, or a frame was cut to the canvas width |
-| `5` | the canvas would exceed the renderer limit (65408 wide, 65532 tall): nothing written |
+| `5` | a single canvas would exceed the renderer limit (65408 wide, 65532 tall): nothing written |
 | `101` | panic: unparsable number, invalid selector, unreadable input |
 
 `html-render --help` is the only maintained list of flags.
-Four optional environment variables exist for diagnostics —
-`BLITZ_DEADLINE_SECS` (`120`), `BLITZ_DRAIN` (`quiet`), `BLITZ_RUNTIME` (current-thread), `BLITZ_TRACE` (unset) —
+Five optional environment variables exist for diagnostics —
+`BLITZ_BAND_MIB` (`64`), `BLITZ_DEADLINE_SECS` (`120`), `BLITZ_DRAIN` (`quiet`),
+`BLITZ_RUNTIME` (current-thread), `BLITZ_TRACE` (unset) —
 and stay out of that text because it is tested against the argument parser.
 
 ## Performance
