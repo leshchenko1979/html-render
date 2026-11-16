@@ -185,10 +185,24 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p rel && cd rel
+          # The glob is deliberately name-agnostic. A rename makes the tree
+          # disagree with the release that predates it, and a name-specific
+          # glob turns that into a hard failure HERE -- before the version
+          # comparison below can say the disagreement is expected lag. That is
+          # what happened when the project became pageplate: the only published
+          # release still carried html-render_*.tar.gz, the glob fetched
+          # nothing, and `sha256sum -c` failed on a file the release names and
+          # the glob never downloaded. checksums.txt is published beside the
+          # tarball it names, so it verifies whatever actually shipped; the
+          # name the README promises is asserted separately below.
           gh release download --repo "$GITHUB_REPOSITORY" \
-            -p 'pageplate_*.tar.gz' -p checksums.txt -D .
+            -p '*.tar.gz' -p checksums.txt -D .
           sha256sum -c checksums.txt
-          tar xzf pageplate_*.tar.gz
+          tar xzf ./*.tar.gz
+          # The shipped binary is named by the release, not by this tree.
+          bin=$(tar tzf ./*.tar.gz | head -1)
+          bin=$(basename "$bin")
+          echo "published tarball carries ./$bin"
 
           # Hard gate when the tarball claims to BE the version this tree
           # documents. Same version number means the page and the artefact are
@@ -203,25 +217,25 @@ jobs:
           rel_ver=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
           rel_ver=${rel_ver#v}
 
-          # The README names one exact asset, and the glob above accepts any
-          # spelling of it: `pageplate_*.tar.gz` keeps matching if a release
-          # renames the platform suffix from `linux_amd64` to `linux-x86_64`,
-          # and `sha256sum -c` keeps passing because checksums.txt is published
-          # beside the tarball it names. So the install snippet could 404 while
-          # this job stayed green -- the same class of drift as the version
-          # mismatch it was built to catch, one field over. Assert the filename
-          # the page tells people to download, and list what actually shipped.
+          # The README names one exact asset while the download glob accepts
+          # any name and any spelling of it, so the two can disagree in silence:
+          # the install snippet could 404 while this job stayed green -- the
+          # same class of drift as the version mismatch it was built to catch,
+          # one field over. Assert the filename the page tells people to
+          # download, and list what actually shipped. This leg is where a
+          # rename is supposed to surface: it warns while the tree is ahead of
+          # the release, and errors once they carry the same version.
           want="pageplate_${main_ver}_linux_amd64.tar.gz"
           if [ -f "$want" ]; then
             echo "README install snippet names $want and the release carries it"
           elif [ "$main_ver" = "$rel_ver" ]; then
-            echo "::error::README install snippet downloads $want; the $rel_ver release carries: $(ls pageplate_*.tar.gz | tr '\n' ' ')"
+            echo "::error::README install snippet downloads $want; the $rel_ver release carries: $(ls ./*.tar.gz | tr '\n' ' ')"
             exit 1
           else
             echo "::warning::README documents $main_ver, not yet released; latest is $rel_ver"
           fi
 
-          if python3 ../tools/test_exit_codes.py --bin ./pageplate; then
+          if python3 ../tools/test_exit_codes.py --bin "./$bin"; then
             echo "published $rel_ver satisfies the contract this tree documents"
           elif [ "$main_ver" = "$rel_ver" ]; then
             echo "::error::published $rel_ver IS the version this tree documents ($main_ver) and it fails the contract"
