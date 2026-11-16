@@ -399,6 +399,25 @@ def main():
             claim("README", readme, "{:,}".format(fid["pixels"]),
                   "receipt fidelity pixel count")
 
+            # The fidelity paragraph is FIVE numbers, and for two releases only
+            # over16_pct and pixels were gated. The other three drifted back to
+            # the PREVIOUS receipt's values -- mean_diff 7.115 against 8.2889,
+            # ink 19.1-19.4 % against 17.07/16.69 -- while the gate read 91
+            # claims green. A guard that covers the paragraph's first and last
+            # number proves nothing about the middle of it: gate all five.
+            claim("README", readme, num(fid["mean_diff"]),
+                  "receipt fidelity, mean channel difference")
+            claim("GATES", gates, num(fid["mean_diff"]),
+                  "receipt fidelity, mean channel difference")
+            claim("README", readme, num(fid["ink_engine_pct"]),
+                  "receipt fidelity, engine ink coverage")
+            claim("GATES", gates, num(fid["ink_engine_pct"]),
+                  "receipt fidelity, engine ink coverage")
+            claim("README", readme, num(fid["ink_ref_pct"]),
+                  "receipt fidelity, Chromium ink coverage")
+            claim("GATES", gates, num(fid["ink_ref_pct"]),
+                  "receipt fidelity, Chromium ink coverage")
+
             # The asset HTMLs bake the same two ratios by hand, as a tile and
             # as a bar width. Same rule: derive from the receipt — but print the
             # FLOOR, not the ratio. The tile is the one surface with no room to
