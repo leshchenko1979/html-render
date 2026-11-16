@@ -1,0 +1,70 @@
+name: claims
+
+# The claim guard reads README.md, GATES.md and the release template, and
+# recomputes every derived figure from bench/results.json. `parity` runs it —
+# but parity's path filter deliberately excludes docs, so a README-only commit
+# never invoked the guard that validates it.
+#
+# Measured 2026-11-16: d2c1110 (README.md only, 4 lines) produced no run at
+# all, while ce817f0 (README + tools/) did. The guard fired on the tools edit,
+# not on the prose — the pass that "verified" the README verified it by
+# accident, and the next prose-only edit would have shipped unread.
+#
+# Second gap, worse than the first: `bench/**` appears in NO workflow's path
+# filter, so bench/results.json — the receipt every number in README and GATES
+# is derived from — could be replaced without any gate re-reading the docs.
+#
+# No Rust build: `--bin` is optional and only the asset re-render uses it, so
+# 122 of 124 claims (every prose claim) run in 0.22 s on the runner's python3.
+# The two that need a built binary stay in `parity`, which is why that job still
+# passes `--bin`.
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      # The documents that carry the claims.
+      - "README.md"
+      - "GATES.md"
+      - "docs/**"
+      - "AGENTS.md"
+      - "CONTRIBUTING.md"
+      # The receipt the claims are derived from. In no other workflow's filter.
+      - "bench/**"
+      # `Cargo.toml` (version) and `assets/**` (the committed asset PNGs are
+      # re-rendered and required byte-identical) are also read by the guard.
+      # `parity` covers both, so this is redundancy on purpose: the invariant
+      # this file holds is "every file the guard opens is matched here", and an
+      # invariant that depends on another workflow's path filter is one edit
+      # away from being false.
+      - "Cargo.toml"
+      - "assets/**"
+      # The guard itself, and the template it checks. A guard edited without a
+      # run is a guard whose new expectation nobody has seen hold.
+      - "tools/check_claims.py"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/claims.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Unlike `parity` and `release`, this job is 0.3 s: a superseded run costs
+  # nothing to cancel and nothing to keep. Cancel, so the check on the newest
+  # commit is the one reported.
+  cancel-in-progress: true
+
+jobs:
+  claims:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Prove the guard can fail
+        # A guard nobody has seen fail is indistinguishable from a guard that
+        # cannot fail. These are the negative controls, including the historical
+        # README L559 defect the spelled-count check was written for.
+        run: python3 tools/check_claims.py --selftest
+
+      - name: Check the documented numbers
+        run: python3 tools/check_claims.py
