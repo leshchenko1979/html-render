@@ -144,7 +144,7 @@ h1 span{color:var(--blue)}
         <div class="cap"><i></i>transforms, CSS variables</div>
         <div class="cap"><i></i>absolute positioning</div>
         <div class="cap"><i></i>aspect-ratio, <code>overflow: clip</code></div>
-        <div class="cap"><i></i>byte-identical output</div>
+        <div class="cap"><i></i>reproducible on one host</div>
       </div>
 
       <div class="stats">
@@ -200,8 +200,8 @@ h1 span{color:var(--blue)}
         </div>
 
         <div class="pfoot">
-          Fidelity: <b>4.7083 %</b> of pixels off by more than 16 — antialiasing,
-          not layout. Every photo region shifts <b>0 px</b>.
+          Fidelity: <b>4.7083 %</b> of pixels off by more than 16 against Chromium;
+          how much is layout is not quantified.
         </div>
       </div>
 
@@ -215,7 +215,7 @@ h1 span{color:var(--blue)}
           <div class="i2">1280 5760 2 'section.slide' --document --per-element</div>
           <div class="sp"></div>
           <div class="o">clip_01 css x=0.00 y=0.00 w=1280.00 h=720.00</div>
-          <div class="o i2">physical 2560x11520 (per-element)</div>
+          <div class="o i2">physical 2560x1440 (per-element)</div>
           <div class="o d">… 7 more, in document order</div>
         </div>
         <div class="tfoot">

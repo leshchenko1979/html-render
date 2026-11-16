@@ -146,7 +146,9 @@ somewhere to fail.
 A record, not a gate — same runner image throughout. The first four rows
 measured the previous deck (`deck.html` md5 `5c71602d…`), the last one the deck
 that ships today (`b77aac2d…`); both are 2560×11520, but they are different
-documents and the drift check refuses to compare them. That the memory ratio
+documents and the drift check refuses to compare them. The fifth row is the
+receipt's own run, and it concluded `failure` on exactly that refusal — the
+drift gate doing its job, not the figures failing. That the memory ratio
 barely moved across the deck change is the useful part: it is a property of the
 architecture, not of the page.
 

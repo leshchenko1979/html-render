@@ -4,11 +4,12 @@ Turns HTML and CSS into a PNG without a browser in the loop. One Rust binary, on
 
 `0.3.0-beta.10`, one maintainer. Linux x86_64, glibc ≥ 2.35.
 
-![The 3200×1800 hero render: a slide titled "HTML + CSS → PNG, with no browser", beside bar charts of wall time and peak memory against Chromium](assets/hero.png)
+![The 3200×1800 hero render: a slide titled "HTML + CSS → PNG, with no browser", beside bar charts of peak memory and install size against Chromium](assets/hero.png)
 
 ```bash
 printf '<h1>hello</h1>' > t.html   # the argument is a path, not a URL; a missing file panics (101)
-html-render assets/hero.html hero.png 1600 900 2 --document   # the PNG above
+html-render t.html hello.png 1280 720 2                      # exit 0, hello.png written
+html-render assets/hero.html hero.png 1600 900 2 --document  # the PNG above; needs this repo cloned
 ```
 
 [![parity](https://github.com/leshchenko1979/html-render/actions/workflows/parity.yml/badge.svg)](https://github.com/leshchenko1979/html-render/actions/workflows/parity.yml)
@@ -94,24 +95,32 @@ shapes differ in memory: `--full` holds least, 37.6 MiB, then `--per-element` at
 document's full height, in row bands, streamed to the encoder, so page height is not a memory limit and has no
 ceiling; a `position:fixed` element forces one canvas instead, and says so.
 
-On one host the output is reproducible: hold the document, the font stack and the host fixed and the bytes repeat.
-Vary any of the three and the digest moves, so a changed pixel in CI is one of them. For a 1280×640 card at
-scale 2, the shape of `assets/og.png` at 2560×1280, change the numbers and nothing else.
+On one host the output is reproducible: hold the document, the font stack, the renderer version, the band budget
+(`BLITZ_BAND_MIB`) and the host fixed and the bytes repeat. Vary any of these and the digest moves, so a changed
+pixel in CI is one of them. For a 1280×640 card at scale 2 — the shape of `assets/og.png`, 2560×1280 — change
+the numbers and nothing else.
 
 The exit code is part of the contract, and CI tests it against a real binary:
 
 | code | meaning |
 |---|---|
 | `0` | a PNG was written, or `--help` / `--version` was printed |
-| `2` | bad arguments: unknown flag, `--clip` not first, `--per-element` outside `--clip`, `--full` with `--clip`, `--document` with `--fragment` |
-| `3` | the selector matched nothing |
+| `2` | bad arguments: unknown flag, too few arguments, `--clip` not first, `--per-element` outside `--clip`, `--full` with `--clip`, `--document` with `--fragment` |
+| `3` | the selector matched nothing, or every match had no layout box |
 | `4` | output written but known to be incomplete: a sub-resource failed to fetch (`404`, DNS, connection refused), was refused as too large, a fetch hit `BLITZ_DEADLINE_SECS`, or a frame past 65,408 px was cut |
-| `5` | one canvas would exceed the renderer limit (65,408 wide, 65,532 tall) and nothing was written; with banding on, that means one band or one element is too large, or banding was disabled with `BLITZ_BAND_MIB=0` |
-| `101` | panic: unparsable number, invalid selector, unreadable input |
+| `5` | one canvas would exceed the renderer limit (65,408 wide, 65,532 tall) and nothing was written; with banding on, that means one band or one element is too large, banding was disabled with `BLITZ_BAND_MIB=0`, or a `position:fixed` element forces one canvas that exceeds it |
+| `101` | panic: unparsable number, invalid selector, unreadable input, unwritable output path |
 
-`html-render --help` is the maintained list of flags. Six environment variables exist. Three change what is rendered: `BLITZ_BAND_MIB` (`4`), `BLITZ_DEADLINE_SECS` (`120`), `BLITZ_MAX_IMAGE_MP` (`128`). Three are diagnostics: `BLITZ_DRAIN` (`quiet`), `BLITZ_RUNTIME` (current-thread), `BLITZ_TRACE` (unset). `--help` also names `BLITZ_BAND_MIB`, in the passage that explains a refused band.
+A killed process returns none of these: the shell reports `128+signal` (137 on `SIGKILL`, 143 on `SIGTERM`), and the output may hold a truncated PNG ([#26](https://github.com/leshchenko1979/html-render/issues/26)).
 
-No `--json`, no manifest ([#28](https://github.com/leshchenko1979/html-render/issues/28)). Two surfaces are machine-readable, and they sit on different streams: `TIMING` (parse, layout, paint, total, scale, mode, plus `content_h=`/`canvas_h=` when a document was cut) on stderr, and one line per frame on stdout under `--clip`:
+`html-render --help` is the maintained list of flags. Six environment variables exist. `BLITZ_MAX_IMAGE_MP` (`128`)
+refuses an oversized decode; `BLITZ_DEADLINE_SECS` (`120`) cuts the render at the deadline; `BLITZ_BAND_MIB` (`4`)
+sets the band size — the peak follows it, and on a banded document so can the bytes. `BLITZ_DRAIN`, `BLITZ_RUNTIME`
+and `BLITZ_TRACE` steer shutdown, runtime flavour and logging; `BLITZ_DRAIN=naive` drops images that were fetched
+but not yet ingested when the paint loop exits (`tools/drain_probe.py` has the measured table). `--help` names
+`BLITZ_BAND_MIB` twice, beside the banded modes.
+
+No `--json`, no manifest ([#28](https://github.com/leshchenko1979/html-render/issues/28)). Two surfaces are machine-readable, and they sit on different streams: `TIMING` (parse, layout, paint, total, scale, mode, plus `content_h=`/`canvas_h=` when a document was cut) on stderr, and one line per frame on stdout under `--clip` — under `--per-element` that line ends `(per-element)`. Stdout stays empty otherwise, and the output path is never echoed:
 
 ```
 clip_01 css x=0.00 y=21.44 w=400.00 h=38.00  physical 400x38 at 0,21
@@ -138,10 +147,13 @@ Eight slides at 1280×5760 CSS px, scale 2, three renders per engine; peak RSS s
 | peak RSS, `--clip` | 2350.8 MiB | 75.5 MiB | **31.14×** |
 | peak RSS, `--per-element` | 2350.8 MiB | 47.4 MiB | **49.59×** |
 
-**Memory carries the claim.** At least 31× less in the least favourable mode, and 49× in the advertised one.
-The band repeats: five runs of the probe on one runner image (43744837000, 43746767310, 43752965645,
-43754284965, 43762042304) kept html-render's `--full` peak inside 37.6 MiB to 37.9 MiB, a 0.8 % spread,
-while Chromium ranged over 2336 MiB to 2453 MiB.
+**Memory carries the claim.** At least 31× less in the least favourable mode, and 49× in the advertised one —
+`--per-element`, the figure the hero quotes. The band repeats: five runs of the probe on one runner image
+(43744837000, 43746767310, 43752965645, 43754284965, 43762042304) kept html-render's `--full` peak inside
+37.6 MiB to 37.9 MiB, a 0.8 % spread, while Chromium ranged over 2336 MiB to 2453 MiB. Four of the five
+measured the previous deck (same canvas, different document — [GATES.md](GATES.md#cost) has the table); the
+published figure is the per-run median of sampled peaks, and the widest single samples reached 38.0 and
+2474.1 MiB.
 
 **Wall clock is measured, gated, and not advertised.** The receipt carries it for both engines, and the drift
 check gates the wall *ratio* at a deliberately coarse 45 %: a 1.85× slowdown of this renderer trips it, a 1.80×
@@ -165,7 +177,9 @@ is one of the known divergences below.
 **The reproducible number is the corpus.** Every run measures geometry over 36 fixtures at one viewport,
 against Chromium: **the corpus agrees on 42 of its 54 text-free rows**; 11 diverge and 1 asserts a shared
 absence. `tools/parity_baseline.json` pins all 11 box by box, so a regression reddens the build while the
-current defects stay visible. The divergence is not spread: one table accounts for **7 rows** (#9), one
+current defects stay visible. The reference engine is the runner image's Chrome, not a pinned build —
+157.0.8103.78 when measured — so a runner refresh moves the baseline with it ([#34](https://github.com/leshchenko1979/html-render/issues/34)).
+The divergence is not spread: one table accounts for **7 rows** (#9), one
 `<br>` run for **4** (#15).
 
 ## Limits
@@ -181,8 +195,12 @@ current defects stay visible. The divergence is not spread: one table accounts f
 - **Nothing sandboxes the input.** Sub-resources are fetched with no allowlist, and `file://` can be read
   ([SECURITY.md](SECURITY.md#what-rendering-does-to-the-machine)). No offline mode: a document controls its own outbound HTTP ([#29](https://github.com/leshchenko1979/html-render/issues/29)).
 - **Peak memory follows canvas area, not page length.** The figures above count the whole process tree, but on one
-  deck. One 128 MP decode costs about 512 MiB of RGBA, and `clip_oversized_frame` in
+  deck, one render: there is no daemon and no queue, and N parallel renders multiply the peak by N. One 128 MP
+  decode costs about 488 MiB of RGBA, and `clip_oversized_frame` in
   `tools/memory_baseline.json` peaks at **809.5 MiB**, 21× the 37.6 MiB headline. Budget a container from that.
+- **A tagged release is not gated on the parity suite.** `release.yml` runs a smoke render only; the corpus gate
+  runs on branches ([#30](https://github.com/leshchenko1979/html-render/issues/30)). Check a tag against
+  [GATES.md](GATES.md#published-artefacts) before you build on it.
 - **Three defects exit `0` with wrong pixels**, all reproduced on `0.3.0-beta.10`: table layout, off by up to 18px
   and painting the table taller than Chromium does, 104 px against 86 (#9); `<br>` runs shifting content 16px per
   break (#15); and a `200` whose body is not an image, which fails to decode inside Blitz after the bytes were
@@ -201,7 +219,11 @@ current defects stay visible. The divergence is not spread: one table accounts f
   widest match, so a 1600 px element in an 800 px viewport comes out 1600 px wide, at a peak of one band. Beyond
   the renderer's 65,408 px limit no paint happens, so that residual case is still a cut, at exit `4`.
 - **A killed render leaves a truncated PNG at the output path**: no temp file, no rename
-  ([#26](https://github.com/leshchenko1979/html-render/issues/26)). No SBOM is generated and no dependency
+  ([#26](https://github.com/leshchenko1979/html-render/issues/26)). At exit `4` the PNG is complete and valid, so
+  an "is it an image?" check passes — decode and compare, and delete on a non-zero exit. Under `--clip` the sweep
+  that clears a previous run's frames runs before painting, so a failed clip run — exit `3` with all-boxless
+  matches, exit `4` with a dead asset — can leave you neither the new frames nor the last good ones: the same
+  verify-by-decoding rule is the only defence. No SBOM is generated and no dependency
   advisory scan runs in CI ([#25](https://github.com/leshchenko1979/html-render/issues/25)).
 
 ## Where the detail lives

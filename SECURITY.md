@@ -31,7 +31,7 @@ the largest attack surface a headless browser has.
    because the decode failure happens inside Blitz, after the bytes were
    accepted. A `404`, a refused redirect and a missed deadline are loud — exit
    `4`, with the resource named on stderr. Decoded size is capped at 128 MP by
-   `BLITZ_MAX_IMAGE_MP`, so one image cannot expand past roughly 512 MiB of
+   `BLITZ_MAX_IMAGE_MP`, so one image cannot expand past roughly 488 MiB of
    RGBA; the whole render can, and `tools/memory_baseline.json` pins the
    measured worst case at 809.5 MiB. Verify the artefact, not the status code.
 2. **`file://` is readable.** The document's base URL is `file://` of its own
