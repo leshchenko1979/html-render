@@ -88,10 +88,12 @@ that visual commits were flaky at 3.7 ‰ against 0.8 ‰ for non-visual ones
 
 Two properties of a non-browser renderer follow directly:
 
-- **The font stack is the document's, not the host's.** Fonts are the first
-  cause anyone names for cross-platform screenshot drift. A renderer that takes
-  its fonts from an explicit configuration has removed that variable rather than
-  pinned it.
+- **The font stack is the document's, and a substitution is reported.** Fonts are
+  the first cause anyone names for cross-platform screenshot drift. This renderer
+  resolves the document's stack against the host's fontconfig, so on its own it
+  pins nothing — but a family it could not find is named on stderr instead of
+  being swapped in silently, and a container with a fixed font set removes the
+  variable rather than hiding it.
 - **The renderer is a binary, not a service.** No GPU process to fail, no
   browser download in CI, no sandbox to configure.
 
