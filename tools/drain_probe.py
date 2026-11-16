@@ -13,7 +13,7 @@ distribution, not a single observation: one lucky run proves nothing.
 The fixture paints a data-URI PNG at a known position, so "did the image arrive"
 is a measurement of where the blue box is, not an eyeball judgement.
 
-Usage: python3 tools/drain_probe.py --bin ./render [--runs 8]
+Usage: python3 tools/drain_probe.py --bin ./pageplate [--runs 8]
 """
 
 import argparse

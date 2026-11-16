@@ -22,7 +22,7 @@ so the test has to prove it can tell the two outcomes apart:
       the flag has to be able to both fire and not fire.
   (g) a real shipped asset runs end to end.
 
-    python3 tools/test_css_audit.py --bin target/release/render
+    python3 tools/test_css_audit.py --bin target/release/pageplate
 
 Exit 0 = the contract holds. Exit 1 = it does not, and the message names the leg.
 """

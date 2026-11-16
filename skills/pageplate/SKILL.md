@@ -1,9 +1,9 @@
 ---
-name: html-render
-description: Project procedure for the html-render repo — CI-only build gate, the Python contract suite, the prose-number guard, and the commit/release conventions. Load before touching README.md, GATES.md, src/, tools/ or any workflow.
+name: pageplate
+description: Project procedure for the pageplate repo — CI-only build gate, the Python contract suite, the prose-number guard, and the commit/release conventions. Load before touching README.md, GATES.md, src/, tools/ or any workflow.
 ---
 
-# html-render — project procedure
+# pageplate — project procedure
 
 Instructions for an agent working in this repository.
 Everything here is a fact about the tree, not a preference.
@@ -61,8 +61,8 @@ That is the allowlist working, not a broken trigger — do not widen it to "make
 
 | File | Produced by | Guarded by |
 |---|---|---|
-| `assets/hero.png` | `html-render assets/hero.html hero.png 1600 900 2 --document` | `check_claims.py` re-renders it and compares bytes; README states its real 3200×1800 |
-| `assets/og.png` | `html-render assets/og.html og.png 1280 640 2 --document` | same |
+| `assets/hero.png` | `pageplate assets/hero.html hero.png 1600 900 2 --document` | `check_claims.py` re-renders it and compares bytes; README states its real 3200×1800 |
+| `assets/og.png` | `pageplate assets/og.html og.png 1280 640 2 --document` | same |
 | `Cargo.lock` | resolved by `lockfile.yml`, committed back when it moves | that workflow |
 
 ## Prose numbers
@@ -110,7 +110,7 @@ git -c user.name="Alexey Leshchenko" \
 ## Releases
 
 - A `v*` tag fires `release.yml` and `container.yml`; both publish.
-- The asset is `html-render_<version>_linux_amd64.tar.gz` — **no `v` prefix** on the
+- The asset is `pageplate_<version>_linux_amd64.tar.gz` — **no `v` prefix** on the
   version — and `parity.yml` asserts the README's install snippet names exactly that file.
 - Never retag a published version. Publish a new one; a downloaded asset cannot be recalled.
 - **A release RUNS THE PROBE, then lands its output on every surface that states
@@ -142,7 +142,7 @@ git -c user.name="Alexey Leshchenko" \
   records `chromium: unavailable` and the guard then refuses to back a single
   ratio. Re-run the probe in CI rather than committing a local file.
 - **The assets carry the same facts and are regenerated, never edited.** After
-  the prose moves: `html-render assets/hero.html hero.png 1600 900 2 --document`
+  the prose moves: `pageplate assets/hero.html hero.png 1600 900 2 --document`
   and the same for `og.html` at `1280 640`. `check_claims.py --bin` re-renders
   both and compares bytes, so a stale PNG fails. The version kickers inside the
   HTMLs are asserted too: they once read `v0.3.0-beta.6` for four releases with
@@ -156,7 +156,7 @@ tree is unguarded, and it goes stale silently:
 
 | Surface | Read it with | Set it with |
 |---|---|---|
-| GitHub repo description | `gh repo view leshchenko1979/html-render --json description` | `gh repo edit leshchenko1979/html-render --description "…"` |
+| GitHub repo description | `gh repo view leshchenko1979/pageplate --json description` | `gh repo edit leshchenko1979/pageplate --description "…"` |
 | Repo topics | `gh repo view … --json repositoryTopics` | `gh repo edit --add-topic …` |
 | Release notes | the release body | the `release.yml` template |
 
@@ -174,7 +174,7 @@ four releases: the guard checks what it can read, and it cannot read GitHub.
 
 ## Issues
 
-This repository's own tracker is `leshchenko1979/html-render`.
+This repository's own tracker is `leshchenko1979/pageplate`.
 The OpenCrabs fork and factory trackers govern a different project and are not this one.
 File a defect with the measurement that exposes it, not with an adjective.
 

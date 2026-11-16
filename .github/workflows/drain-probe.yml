@@ -59,13 +59,13 @@ jobs:
           cargo build --release --locked 2>&1 | tail -40
 
       - name: Run the drain probe
-        run: python3 tools/drain_probe.py --bin target/release/render --runs 8 --show-trace
+        run: python3 tools/drain_probe.py --bin target/release/pageplate --runs 8 --show-trace
 
       - name: Upload the built renderer
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: html-render-drain
-          path: target/release/render
+          name: pageplate-drain
+          path: target/release/pageplate
           if-no-files-found: error
 
       - name: Upload the probe report

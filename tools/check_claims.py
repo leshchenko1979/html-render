@@ -15,7 +15,7 @@ in by hand, so prose and gate cannot agree on a figure the receipt does not
 contain.
 
     python3 tools/check_claims.py
-    python3 tools/check_claims.py --bin target/release/render   # also re-render assets
+    python3 tools/check_claims.py --bin target/release/pageplate   # also re-render assets
 
 Exit 0 = every quoted number is the one the inputs produce.
 """
@@ -450,7 +450,7 @@ def main():
                   "right-panel Chromium tree RSS")
             claim(hero, hero_text,
                   '<span class="bv win">%s MiB</span>' % num(per_el["peak_tree_mib"]),
-                  "right-panel html-render tree RSS")
+                  "right-panel pageplate tree RSS")
             claim(hero, hero_text,
                   "<b>%s MiB</b> peak." % num(per_el["peak_tree_mib"]),
                   "terminal footer summary")
@@ -592,7 +592,7 @@ def main():
 
     # The usage line quoted beside the hero image must be the one that produced it.
     checked += 1
-    hero_cmd = "html-render assets/hero.html hero.png 1600 900 2 --document"
+    hero_cmd = "pageplate assets/hero.html hero.png 1600 900 2 --document"
     if hero_cmd not in readme:
         fails.append("README does not quote the hero command verbatim: %r" % hero_cmd)
 
@@ -666,7 +666,7 @@ def main():
     else:
         claim("README", readme, "`%s`, one maintainer" % version, "Cargo.toml version")
         claim("README", readme, "V=v%s" % version, "Cargo.toml version, install tag")
-        claim("README", readme, "N=html-render_%s_linux_amd64" % version,
+        claim("README", readme, "N=pageplate_%s_linux_amd64" % version,
               "Cargo.toml version, asset name")
 
         # --- the asset HTML's version kicker --------------------------------

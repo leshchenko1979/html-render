@@ -3,14 +3,14 @@
 Every flag, every environment variable, the exit-code contract and the two streams that carry
 machine-readable output. The README shows the three shapes; this page is the rest.
 
-`html-render --help` prints the flag list. Its EXIT CODES block predates the wide-`--clip` change, so the
-table below is the authoritative one ([#33](https://github.com/leshchenko1979/html-render/issues/33)).
+`pageplate --help` prints the flag list. Its EXIT CODES block predates the wide-`--clip` change, so the
+table below is the authoritative one ([#33](https://github.com/leshchenko1979/pageplate/issues/33)).
 
 ## Synopsis
 
 ```
-html-render <html> <out.png> <width> <height> [scale] [--document] [--fragment] [--full]
-html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--per-element]
+pageplate <html> <out.png> <width> <height> [scale] [--document] [--fragment] [--full]
+pageplate --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--per-element]
 ```
 
 ## Arguments
@@ -86,7 +86,7 @@ CI tests these against a real binary, not against this table (`tools/test_exit_c
 
 A killed process returns none of them: the shell reports `128+signal` (`137` on `SIGKILL`, `143` on
 `SIGTERM`), and the output path may hold a truncated PNG
-([#26](https://github.com/leshchenko1979/html-render/issues/26)).
+([#26](https://github.com/leshchenko1979/pageplate/issues/26)).
 
 ## Streams
 
@@ -111,7 +111,7 @@ clip_01 css x=0.00 y=21.44 w=400.00 h=38.00  physical 400x38 at 0,21
 not. Stdout stays empty in every other mode, and the output path is never echoed.
 
 There is no `--json` and no manifest
-([#28](https://github.com/leshchenko1979/html-render/issues/28)).
+([#28](https://github.com/leshchenko1979/pageplate/issues/28)).
 
 ## Determinism
 
@@ -135,9 +135,9 @@ renders the same bytes.
   the widest match, so a 1600 px element in an 800 px viewport comes out 1600 px wide, at a peak of one
   band. Past 65,408 px no paint happens, so that residual case is a cut, at exit `4`.
 - **Sub-resources are fetched with no allowlist**, so an untrusted document reaches the network. There is no
-  offline mode ([#29](https://github.com/leshchenko1979/html-render/issues/29));
+  offline mode ([#29](https://github.com/leshchenko1979/pageplate/issues/29));
   [SECURITY.md](../SECURITY.md) measures what rendering does to the machine.
 - **Verify the output before using it.** On a non-zero exit, decode the PNG and compare before publishing:
-  a killed render can leave a truncated file ([#26](https://github.com/leshchenko1979/html-render/issues/26)),
+  a killed render can leave a truncated file ([#26](https://github.com/leshchenko1979/pageplate/issues/26)),
   and a `--clip` run that fails after its sweep has already removed the previous run's frames
-  ([#35](https://github.com/leshchenko1979/html-render/issues/35)).
+  ([#35](https://github.com/leshchenko1979/pageplate/issues/35)).

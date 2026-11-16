@@ -36,7 +36,7 @@ absence of a font. Measured: `日`, `本` and `語` at 40 px produce byte-identi
 PNGs. Recorded in GATES.md §Corpus rather than claimed as tested.
 
 Usage:
-    python3 tools/test_scripts.py --bin /path/to/html-render
+    python3 tools/test_scripts.py --bin /path/to/pageplate
 """
 
 import argparse
@@ -71,7 +71,7 @@ LTR_CONTROL = (
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--bin", required=True, help="path to the html-render binary")
+    ap.add_argument("--bin", required=True, help="path to the pageplate binary")
     ap.add_argument("--keep", action="store_true", help="keep the temp dir")
     args = ap.parse_args()
 

@@ -8,7 +8,7 @@ edited by hand: every figure the README advertises is read from it by
 
 | | |
 |---|---|
-| Workflow run | [43762042304](https://github.com/leshchenko1979/html-render/actions/runs/43762042304) (`parity`, `4b22e6a`) |
+| Workflow run | [43762042304](https://github.com/leshchenko1979/pageplate/actions/runs/43762042304) (`parity`, `4b22e6a`) |
 | Artefact | `bench-results`, step *Benchmark against Chromium* |
 | Measured | 2026-11-15T21:10:29Z |
 | Host | `runnervmy75tu`, Ubuntu 24.04, glibc 2.35, 4 vCPU, 15,989 MiB |
@@ -24,11 +24,11 @@ holds rather than being the only copy of them.
 ## Reproduce it
 
 ```sh
-git clone https://github.com/leshchenko1979/html-render
-cd html-render
+git clone https://github.com/leshchenko1979/pageplate
+cd pageplate
 cargo build --release          # or download a release tarball
 python3 -m pip install -r tools/requirements.txt
-python3 tools/bench.py --bin ./target/release/render --repeats 3
+python3 tools/bench.py --bin ./target/release/pageplate --repeats 3
 ```
 
 Chromium must be on `PATH` (or pass `--chrome`) for the comparison half. On a
@@ -101,11 +101,11 @@ Identically, deliberately:
   doubling, not an instrument. Absolute seconds are not gated at all, since the
   same host and binary read Chromium 1.604 s then 3.120 s. The ratio is not
   published, because across those runs it ranged 1.42× to 1.85× while
-  html-render's own wall held to 15.2 % and Chromium's moved 21.7 % — most of the
+  pageplate's own wall held to 15.2 % and Chromium's moved 21.7 % — most of the
   movement was the browser having a different day. A number that mostly measures the other program is not
   a property of this one.
 - The **memory** ratio is larger than figures published before this probe, for a
-  method reason: earlier rows compared html-render against Chromium's *largest
+  method reason: earlier rows compared pageplate against Chromium's *largest
   single process*, which flatters a multi-process browser. Tree RSS is what a
   host has to hold.
 - **Fidelity** is a share of pixels off by more than 16/255 against Chromium's

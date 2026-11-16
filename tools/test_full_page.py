@@ -27,7 +27,7 @@ always prints would pass on any document, so the shorter-than-canvas case proves
 the field is conditional rather than constant.
 
 Usage:
-    python3 tools/test_full_page.py --bin /path/to/html-render
+    python3 tools/test_full_page.py --bin /path/to/pageplate
     python3 tools/test_full_page.py --bin /path/to/old-binary   # a passes, b fails
 """
 
@@ -74,7 +74,7 @@ def red_pixels(path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--bin", required=True, help="path to the html-render binary")
+    ap.add_argument("--bin", required=True, help="path to the pageplate binary")
     ap.add_argument("--keep", action="store_true", help="keep the temp dir")
     args = ap.parse_args()
 

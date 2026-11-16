@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Measure this renderer against Chromium on a document anyone can rebuild.
 
-    python3 tools/bench.py --bin ./html-render
+    python3 tools/bench.py --bin ./pageplate
 
 Every figure the README advertises is supposed to be checkable by a reader. The
 deck those figures came from was not in this repo, so nobody could check them;
@@ -25,13 +25,13 @@ Three honesty rules, because each one has already bitten this repo:
      fails if they differ.
   2. **Chromium unavailable is recorded, never skipped.** No binary, a crash or
      a wrong-sized screenshot all become `chromium.status = unavailable` with
-     the measured reason. html-render is still measured, and the JSON says so
+     the measured reason. pageplate is still measured, and the JSON says so
      in a field rather than in a comment.
   3. **Fidelity comes from the same two files.** `tools/bench_compare.py`
      compares them pixel by pixel; nothing is transcribed by hand.
 
 Writes `bench/results.json` (host metadata, every figure, every command line)
-and prints a markdown table. Exit 0 when html-render was measured, 1 when it
+and prints a markdown table. Exit 0 when pageplate was measured, 1 when it
 was not: a probe that cannot measure its own engine must not report success.
 """
 
@@ -364,11 +364,11 @@ def probe(args):
         "sha256": sha256(args.bin) if os.path.exists(args.bin) else None,
         "version": binary_version(os.path.abspath(args.bin)),
     }
-    results["engines"]["html-render"] = run_engine(
-        "html-render", blitz_cmd, deckdir, blitz_png, want, args.repeats
+    results["engines"]["pageplate"] = run_engine(
+        "pageplate", blitz_cmd, deckdir, blitz_png, want, args.repeats
     )
-    if results["engines"]["html-render"]["status"] != "measured":
-        results["engines"]["html-render"]["deck_dir"] = deckdir
+    if results["engines"]["pageplate"]["status"] != "measured":
+        results["engines"]["pageplate"]["deck_dir"] = deckdir
         return results, deckdir, html
 
     # --- the slides shape: what a caller with a deck actually asks for -------
@@ -402,8 +402,8 @@ def probe(args):
     # whichever number flattered it.
     results["shapes"] = {
         "slides": {
-            "html-render-clip": run_slides(
-                "html-render --clip",
+            "pageplate-clip": run_slides(
+                "pageplate --clip",
                 clip_cmd("slides", False),
                 deckdir,
                 os.path.join(deckdir, "slides"),
@@ -411,8 +411,8 @@ def probe(args):
                 slide_px,
                 args.repeats,
             ),
-            "html-render-per-element": run_slides(
-                "html-render --clip --per-element",
+            "pageplate-per-element": run_slides(
+                "pageplate --clip --per-element",
                 clip_cmd("slides-pe", True),
                 deckdir,
                 os.path.join(deckdir, "slides-pe"),
@@ -461,7 +461,7 @@ def probe(args):
             .run([chrome, "--version"], capture_output=True, text=True, timeout=60)
             .stdout.strip()
         )
-    block = determinism_block(results["engines"].get("html-render"))
+    block = determinism_block(results["engines"].get("pageplate"))
     if block is not None:
         results["determinism"] = block
     return results, deckdir, html
@@ -469,7 +469,7 @@ def probe(args):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--bin", default="./html-render", help="the html-render binary to measure")
+    ap.add_argument("--bin", default="./pageplate", help="the pageplate binary to measure")
     ap.add_argument("--chrome", default=None, help="Chromium binary (default: discover)")
     ap.add_argument("--seed", type=int, default=bench_deck.SEED_DEFAULT)
     ap.add_argument("--scale", type=int, default=SCALE)
@@ -503,8 +503,8 @@ def main(argv=None):
     print("\nwrote %s" % args.out)
     print("deck kept in %s" % deckdir)
 
-    if results["engines"]["html-render"]["status"] != "measured":
-        print("error: html-render was not measured: %s" % results["engines"]["html-render"]["reason"])
+    if results["engines"]["pageplate"]["status"] != "measured":
+        print("error: pageplate was not measured: %s" % results["engines"]["pageplate"]["reason"])
         return 1
     if args.require_both:
         chrome = results["engines"].get("chromium", {})

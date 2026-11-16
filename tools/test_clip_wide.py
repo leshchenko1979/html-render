@@ -8,7 +8,7 @@ wider than the viewport was written half-rendered: a 1600 px element in an
 canvas is now widened to the widest frame, which costs memory proportional to
 that frame and nothing else.
 
-    python3 tools/test_clip_wide.py --bin target/release/render
+    python3 tools/test_clip_wide.py --bin target/release/pageplate
 
 Exit 0 = the contract holds. Exit 1 = it does not (the message says which part).
 

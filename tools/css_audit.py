@@ -16,7 +16,7 @@ honoured and still invisible — a `color` whose text all lives inside a child
 that overrides it — so claiming "unsupported" from a pixel diff would be a
 confident wrong cause, which is the error this repo keeps having to withdraw.
 
-    python3 tools/css_audit.py --bin target/release/render assets/demo-deck.html
+    python3 tools/css_audit.py --bin target/release/pageplate assets/demo-deck.html
 
 Cost is one render per declaration (~0.3 s each), so a 60-declaration card
 takes about 20 s: cheaper than a human audit and it needs no knowledge of

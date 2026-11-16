@@ -83,7 +83,7 @@ jobs:
         # will not start on hosts we own, so fail here rather than at runtime.
         run: |
           set -euo pipefail
-          MAX=$(objdump -T target/release/render \
+          MAX=$(objdump -T target/release/pageplate \
                 | grep -o 'GLIBC_[0-9][0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1)
           echo "required glibc floor: $MAX"
           if [ "$(printf '%s\n2.35\n' "$MAX" | sort -V | tail -1)" != "2.35" ]; then
@@ -96,7 +96,7 @@ jobs:
         # Regression for #1: `--clip … '*'` used to abort on the first `<br>`.
         # Cheap (no browser, ~1 s), and it runs against the binary this job just
         # built, so a regression fails here rather than on someone's deck.
-        run: python3 tools/test_clip_void.py --bin target/release/render
+        run: python3 tools/test_clip_void.py --bin target/release/pageplate
 
       - name: Test the wide-clip contract
         # Regression for #17: the shared canvas used to be the viewport's width,
@@ -104,7 +104,7 @@ jobs:
         # exit 0. The canvas is now as wide as the widest match, and this asserts
         # the overflow is PAINTED, not merely allocated: the frame's right half
         # must carry the ink of a child that sits entirely past the viewport.
-        run: python3 tools/test_clip_wide.py --bin target/release/render
+        run: python3 tools/test_clip_wide.py --bin target/release/pageplate
 
       - name: Test the banding contract
         # `--clip` paints the document in row bands so peak memory is one band,
@@ -114,7 +114,7 @@ jobs:
         # that a multi-band deck keeps identical measured geometry, that peak RSS
         # stays below the canvas it no longer allocates, and that a document past
         # the 65,532-row ceiling renders where it used to exit 5.
-        run: python3 tools/test_bands.py --bin target/release/render
+        run: python3 tools/test_bands.py --bin target/release/pageplate
 
       - name: Test the memory gate
         # Every other step here asserts behaviour; none asserted what it costs in
@@ -127,13 +127,13 @@ jobs:
         # the thing a green run is otherwise unable to demonstrate.
         run: |
           python3 tools/test_memory.py --self-test
-          python3 tools/test_memory.py --bin target/release/render
+          python3 tools/test_memory.py --bin target/release/pageplate
 
       - name: Test the exit-code contract
         # The README documents 0/2/3/101, so every one is asserted here. An
         # unknown flag used to exit 0 and render anyway: a typo produced the
         # wrong picture with nothing on stderr.
-        run: python3 tools/test_exit_codes.py --bin target/release/render
+        run: python3 tools/test_exit_codes.py --bin target/release/pageplate
 
       - name: Test redirected sub-resources
         # Blitz reports the FINAL url after a redirect while the document keys
@@ -141,14 +141,14 @@ jobs:
         # decode successfully and then be dropped: blank box, exit 0, nothing on
         # stderr. The direct-URL leg is the control that proves this harness can
         # paint at all; the 404 leg pins the other silent failure.
-        run: python3 tools/test_redirect.py --bin target/release/render
+        run: python3 tools/test_redirect.py --bin target/release/pageplate
 
       - name: Test failed and oversized sub-resources
         # A failed fetch used to leave a blank box at exit 0, and a 60-byte PNG
         # header could demand gigabytes before any pixel decoded. Leg (a) is the
         # control that proves the pipeline paints at all; (d) is the control that
         # proves the refusal in (c) is the cap and not the fixture.
-        run: python3 tools/test_assets.py --bin target/release/render
+        run: python3 tools/test_assets.py --bin target/release/pageplate
 
       - name: Test font substitution reporting
         # fontconfig always resolves something, so a missing family used to
@@ -156,14 +156,14 @@ jobs:
         # the control that a generic keyword is NOT reported, and (d) fails if
         # the check ran blind -- an empty collection cannot tell a clean document
         # from a broken instrument.
-        run: python3 tools/test_fonts.py --bin target/release/render
+        run: python3 tools/test_fonts.py --bin target/release/pageplate
 
       - name: Test the full-page escape hatch
         # Single-image mode paints exactly the viewport, so a taller document is
         # cut with exit 0 and nothing on stderr. Leg (a) pins that trap so a
         # future change to the default is visible; (b) and (c) prove `--full`
         # raises the canvas to the document and never shrinks it.
-        run: python3 tools/test_full_page.py --bin target/release/render
+        run: python3 tools/test_full_page.py --bin target/release/pageplate
 
       - name: Test non-Latin shaping
         # The corpus reports text rows but does not gate them, because without an
@@ -172,7 +172,7 @@ jobs:
         # ordered right-to-left, and combining marks stack without adding advance
         # width. Each leg carries a control in the same run, so a predicate that
         # always passes fails one of them.
-        run: python3 tools/test_scripts.py --bin target/release/render
+        run: python3 tools/test_scripts.py --bin target/release/pageplate
 
       - name: Test the published artefact
         # Every other step here tests the binary THIS JOB BUILT, so before this
@@ -186,9 +186,9 @@ jobs:
           set -euo pipefail
           mkdir -p rel && cd rel
           gh release download --repo "$GITHUB_REPOSITORY" \
-            -p 'html-render_*.tar.gz' -p checksums.txt -D .
+            -p 'pageplate_*.tar.gz' -p checksums.txt -D .
           sha256sum -c checksums.txt
-          tar xzf html-render_*.tar.gz
+          tar xzf pageplate_*.tar.gz
 
           # Hard gate when the tarball claims to BE the version this tree
           # documents. Same version number means the page and the artefact are
@@ -204,24 +204,24 @@ jobs:
           rel_ver=${rel_ver#v}
 
           # The README names one exact asset, and the glob above accepts any
-          # spelling of it: `html-render_*.tar.gz` keeps matching if a release
+          # spelling of it: `pageplate_*.tar.gz` keeps matching if a release
           # renames the platform suffix from `linux_amd64` to `linux-x86_64`,
           # and `sha256sum -c` keeps passing because checksums.txt is published
           # beside the tarball it names. So the install snippet could 404 while
           # this job stayed green -- the same class of drift as the version
           # mismatch it was built to catch, one field over. Assert the filename
           # the page tells people to download, and list what actually shipped.
-          want="html-render_${main_ver}_linux_amd64.tar.gz"
+          want="pageplate_${main_ver}_linux_amd64.tar.gz"
           if [ -f "$want" ]; then
             echo "README install snippet names $want and the release carries it"
           elif [ "$main_ver" = "$rel_ver" ]; then
-            echo "::error::README install snippet downloads $want; the $rel_ver release carries: $(ls html-render_*.tar.gz | tr '\n' ' ')"
+            echo "::error::README install snippet downloads $want; the $rel_ver release carries: $(ls pageplate_*.tar.gz | tr '\n' ' ')"
             exit 1
           else
             echo "::warning::README documents $main_ver, not yet released; latest is $rel_ver"
           fi
 
-          if python3 ../tools/test_exit_codes.py --bin ./html-render; then
+          if python3 ../tools/test_exit_codes.py --bin ./pageplate; then
             echo "published $rel_ver satisfies the contract this tree documents"
           elif [ "$main_ver" = "$rel_ver" ]; then
             echo "::error::published $rel_ver IS the version this tree documents ($main_ver) and it fails the contract"
@@ -236,7 +236,7 @@ jobs:
         # reset, so a `body`-coloured page comes out white — identical geometry,
         # nothing on stderr. The legs that pin that fail against the r2 release
         # binary, which is why this runs against the freshly built one.
-        run: python3 tools/test_document_detect.py --bin target/release/render
+        run: python3 tools/test_document_detect.py --bin target/release/pageplate
 
       - name: Test the CSS audit
         # `tools/css_audit.py` answers "which declarations did you drop?" by
@@ -245,7 +245,7 @@ jobs:
         # load-bearing one must never. Without the second leg a tool that
         # called everything inert would pass the first and be worse than
         # useless.
-        run: python3 tools/test_css_audit.py --bin target/release/render
+        run: python3 tools/test_css_audit.py --bin target/release/pageplate
 
       - name: Check the documented numbers
         # README, GATES and the release template quote ratios derived from a
@@ -255,7 +255,7 @@ jobs:
         # derived figure and fails on a mismatch. It also re-renders the two
         # committed asset PNGs and requires them byte-identical, so a renderer
         # change that alters the hero image cannot pass unnoticed.
-        run: python3 tools/check_claims.py --bin target/release/render
+        run: python3 tools/check_claims.py --bin target/release/pageplate
 
       - name: Test the corpus gate
         # The gate's logic is a pure function, so it is tested here without a
@@ -305,7 +305,7 @@ jobs:
           # committed receipt is the reference this run is compared against, and
           # a probe that overwrites its own baseline turns the next comparison
           # into "does this run match itself".
-          python3 tools/bench.py --bin target/release/render \
+          python3 tools/bench.py --bin target/release/pageplate \
             --deck bench/deck --out bench/fresh.json --repeats 3 --require-both
 
       - name: Upload the benchmark receipt
@@ -338,8 +338,8 @@ jobs:
         # So the binary can be run on documents that must not be committed.
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: html-render
-          path: target/release/render
+          name: pageplate
+          path: target/release/pageplate
           if-no-files-found: error
 
       - name: Upload results

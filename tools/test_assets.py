@@ -30,7 +30,7 @@ format -- a parser that reads the wrong field states the wrong dimensions and
 fails.
 
 Usage:
-    python3 tools/test_assets.py --bin /path/to/html-render
+    python3 tools/test_assets.py --bin /path/to/pageplate
     python3 tools/test_assets.py --bin /path/to/beta.8   # b, c, e and g fail
 """
 
@@ -158,7 +158,7 @@ def painted(path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--bin", required=True, help="path to the html-render binary")
+    ap.add_argument("--bin", required=True, help="path to the pageplate binary")
     ap.add_argument("--keep", action="store_true", help="keep the temp dir")
     args = ap.parse_args()
 

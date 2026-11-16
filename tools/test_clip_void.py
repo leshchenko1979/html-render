@@ -6,7 +6,7 @@ and `*` matches `<br>`, `<wbr>`, `<script>` and `<style>` in every real document
 The fix skips them and reports the count; this test pins that — and pins that the
 skip stays narrow, since `<hr>` is a block box with a border and must survive.
 
-    python3 tools/test_clip_void.py --bin target/release/render
+    python3 tools/test_clip_void.py --bin target/release/pageplate
 
 Exit 0 = the contract holds. Exit 1 = it does not (the message says which part).
 Run it against an OLD binary and it fails, which is the point: a test that cannot

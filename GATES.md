@@ -1,6 +1,6 @@
 # Gates
 
-The three gates that decide whether `html-render` can stand in for a browser
+The three gates that decide whether `pageplate` can stand in for a browser
 for static slide rendering, plus the receipts behind every number this repo
 advertises.
 
@@ -18,7 +18,7 @@ the receipt, so a number here would move on every refresh and trip the drift
 check it sits beside.
 
 ```bash
-git clone https://github.com/leshchenko1979/html-render && cd html-render
+git clone https://github.com/leshchenko1979/pageplate && cd pageplate
 python3 tools/bench.py --bin <render> --chrome <chrome> --out /tmp/mine.json
 ```
 
@@ -107,7 +107,7 @@ The residual is antialiasing and image resampling, not layout:
   at scale 2 they read 0.3-3.9 % off, which is the 2x upscale filter rather
   than a displacement, since the shift stays 0 px.
 
-So `html-render` will never match Chromium at 99 % of pixels, and that is not
+So `pageplate` will never match Chromium at 99 % of pixels, and that is not
 the useful target: determinism means it can be diffed against **itself**
 byte-exactly, which is what a CI gate needs.
 
@@ -128,7 +128,7 @@ engine's tree**, which is what a container limit counts:
 **The advertised claim is memory: at least 31× less than Chromium**, taking the
 least favourable of the three modes (49× in the advertised `--per-element`
 mode). Memory is the one quantity here that is steady enough to carry a claim —
-html-render's `--full` peak held between 37.6 MiB and 37.9 MiB across five runs
+pageplate's `--full` peak held between 37.6 MiB and 37.9 MiB across five runs
 of the probe on one runner image, while Chromium's moved 21.7 % and its wall
 clock 18.5 %.
 
@@ -153,7 +153,7 @@ not the figures failing. That the memory ratio
 barely moved across the deck change is the useful part: it is a property of the
 architecture, not of the page.
 
-| run | deck | Chromium tree RSS | html-render tree RSS | Chromium wall | html-render wall |
+| run | deck | Chromium tree RSS | pageplate tree RSS | Chromium wall | pageplate wall |
 |---|---|---|---|---|---|
 | 43744837000 | `5c71602d` | 2336.1 MiB | 37.9 MiB | 3.186 s | 2.240 s |
 | 43746767310 | `5c71602d` | 2452.6 MiB | 37.7 MiB | 3.774 s | 2.352 s |
@@ -169,7 +169,7 @@ error at decreasing size: a ratio whose denominator is a browser having a noisy
 day. The withdrawal is recorded in §Withdrawn claims.
 
 **The memory ratio is larger than what was published before, for a method
-reason, not a code change.** Earlier rows compared html-render's footprint with
+reason, not a code change.** Earlier rows compared pageplate's footprint with
 Chromium's *largest single process* (858 MiB). Summing the tree gives 2389.6 MiB
 on the same engine, because the browser, GPU and renderer processes all hold
 memory at once. The undercount was measured before the probe existed: on
@@ -177,7 +177,7 @@ memory at once. The undercount was measured before the probe existed: on
 largest process read 297.1–299.2 MiB.
 
 `--clip` costs more than `--per-element` because it keeps one full-height canvas
-per band alive. Both are `html-render` against itself, so neither is a
+per band alive. Both are `pageplate` against itself, so neither is a
 cross-engine claim: no ratio in this section pits the two modes against each
 other.
 
@@ -403,7 +403,7 @@ still unidentified and unfiled.
 **"2.49× faster than Chromium."** Withdrawn, along with the 1.94× that replaced it
 and the 1.4–1.6× range that replaced that. Three sizes of one error: a ratio
 whose denominator is a browser's wall clock. Across four probe runs on one
-runner image the ratio read 1.42×, 1.60×, 1.42× and 1.52× while html-render's own
+runner image the ratio read 1.42×, 1.60×, 1.42× and 1.52× while pageplate's own
 wall held to 15.2 % and Chromium's moved 21.7 % — the figure mostly reported how
 fast the browser happened to be that day. The original 2.49× additionally came
 from a private deck where the Chromium harness paid 2.94 s of settle sleeps that
@@ -425,9 +425,9 @@ text-free (54 rows): 42 exact, 0 within 1px, 11 divergent, 0 missing, 1 absence
 
 All 11 divergent boxes are two open defects: four from consecutive `<br>` runs
 inside a `font-size:0` context
-([#15](https://github.com/leshchenko1979/html-render/issues/15)), seven from
+([#15](https://github.com/leshchenko1979/pageplate/issues/15)), seven from
 table layout, up to 18 px out
-([#9](https://github.com/leshchenko1979/html-render/issues/9)). The remaining 42
+([#9](https://github.com/leshchenko1979/pageplate/issues/9)). The remaining 42
 rows land where Chromium puts them.
 
 Fourteen further boxes involve text and are reported separately, because without an
@@ -498,7 +498,7 @@ Whole-deck, every pixel, no sampling:
 
 The residual is antialiasing, not layout: wrap points match, boxes sit at
 Chromium's coordinates, and images are sampled at zero offset. Vello's
-glyph AA is slightly softer than Skia's, so **you cannot diff html-render
+glyph AA is slightly softer than Skia's, so **you cannot diff pageplate
 against Chromium at 99 %** — and you don't need to, because against *itself* it
 is exact.
 
@@ -531,7 +531,7 @@ python3 tools/deck_check.py --html your-deck.html --chrome "$(which google-chrom
 ```
 
 It needs Chromium (`--chrome`, auto-detected if omitted) and a built binary
-(`--blitz`, default `target/release/render`), so it is a local instrument rather
+(`--blitz`, default `target/release/pageplate`), so it is a local instrument rather
 than a CI gate; the corpus gate that does run in CI is
 [`tools/run_parity.py`](tools/run_parity.py), which compares per-element boxes
 across 32 fixtures instead of whole pages.
@@ -546,7 +546,7 @@ then re-renders once per declaration with exactly that declaration removed, and
 diffs the PNGs.
 
 ```bash
-python3 tools/css_audit.py --bin target/release/render your-card.html \
+python3 tools/css_audit.py --bin target/release/pageplate your-card.html \
     --width 794 --height 1123 --scale 3.123
 ```
 
@@ -585,7 +585,7 @@ a hand-written summary:
 
 | Published asset | Contract | Because |
 |---|---|---|
-| `v0.3.0-beta.10` | **all 26 legs hold** | the version this page documents |
+| `v0.3.0-beta.10` | **all 26 legs hold** | the last release under the former name |
 | `v0.3.0-beta.6` | all 21 legs hold | cut from the commit the README then documented; the contract has grown five legs since |
 | `v0.3.0-beta.5` | 8 failed assertions | `--help` only at `argv[1]`; `-V` panics (`rc=101`); no code `4`; `--scroll` silently ignored; stale frames kept; `--full` unknown |
 | `v0.3.0-beta.4-r2` | 22 failed assertions | all of the above plus `--help` exits `2`, `--version` exits `2`, and a single image into a missing directory panics |

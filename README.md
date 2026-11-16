@@ -1,20 +1,20 @@
-# html-render
+# pageplate
 
 Turns HTML and CSS into a PNG without a browser in the loop. One Rust binary, one process.
 
-`0.3.0-beta.10`, one maintainer. Linux x86_64, glibc ≥ 2.35.
+`0.4.0`, one maintainer. Linux x86_64, glibc ≥ 2.35.
 
 ![The 3200×1800 hero render: a slide titled "HTML + CSS → PNG, with no browser", beside bar charts of peak memory and install size against Chromium](assets/hero.png)
 
 ```bash
 printf '<h1>hello</h1>' > t.html   # the argument is a path, not a URL; a missing file panics (101)
-html-render t.html hello.png 1280 720 2                      # exit 0, hello.png written
-html-render assets/hero.html hero.png 1600 900 2 --document  # the PNG above; needs this repo cloned
+pageplate t.html hello.png 1280 720 2                      # exit 0, hello.png written
+pageplate assets/hero.html hero.png 1600 900 2 --document  # the PNG above; needs this repo cloned
 ```
 
-[![parity](https://github.com/leshchenko1979/html-render/actions/workflows/parity.yml/badge.svg)](https://github.com/leshchenko1979/html-render/actions/workflows/parity.yml)
-[![release](https://img.shields.io/github/v/release/leshchenko1979/html-render)](https://github.com/leshchenko1979/html-render/releases)
-[![licence](https://img.shields.io/github/license/leshchenko1979/html-render)](https://github.com/leshchenko1979/html-render/blob/main/LICENSE)
+[![parity](https://github.com/leshchenko1979/pageplate/actions/workflows/parity.yml/badge.svg)](https://github.com/leshchenko1979/pageplate/actions/workflows/parity.yml)
+[![release](https://img.shields.io/github/v/release/leshchenko1979/pageplate)](https://github.com/leshchenko1979/pageplate/releases)
+[![licence](https://img.shields.io/github/license/leshchenko1979/pageplate)](https://github.com/leshchenko1979/pageplate/blob/main/LICENSE)
 
 ## Why it exists
 
@@ -31,12 +31,12 @@ Decks, social cards, report one-pagers, CI visual diffs: HTML plus CSS in, an im
 Linux x86_64 with glibc ≥ 2.35: Ubuntu 22.04+, Debian 12+, or a current Fedora. Anything else wants the container below.
 
 ```bash
-V=v0.3.0-beta.10
-N=html-render_0.3.0-beta.10_linux_amd64
-BASE="https://github.com/leshchenko1979/html-render/releases/download/$V"
+V=v0.4.0
+N=pageplate_0.4.0_linux_amd64
+BASE="https://github.com/leshchenko1979/pageplate/releases/download/$V"
 curl -fsSL -O "$BASE/$N.tar.gz" -O "$BASE/checksums.txt"
 sha256sum -c checksums.txt && tar xzf "$N.tar.gz"
-install -m755 html-render /usr/local/bin/ && html-render --version
+install -m755 pageplate /usr/local/bin/ && pageplate --version
 ```
 
 Provenance is checkable without a key: each release asset is attested by the release workflow's own
@@ -44,8 +44,8 @@ OIDC identity, with GitHub as issuer. The checksum catches a damaged download; t
 names the repository, commit and workflow behind the build. Both need the `gh` CLI.
 
 ```bash
-gh attestation verify "$N.tar.gz" --repo leshchenko1979/html-render
-gh attestation verify checksums.txt --repo leshchenko1979/html-render
+gh attestation verify "$N.tar.gz" --repo leshchenko1979/pageplate
+gh attestation verify checksums.txt --repo leshchenko1979/pageplate
 ```
 
 The release job attests both assets, publishes them, then downloads the published files back and runs these same two
@@ -57,31 +57,31 @@ pulls freetype, expat, libpng, bzip2, brotli and zlib through fontconfig, so `ld
 on jammy. A slim Debian or Ubuntu host needs one extra package line:
 `apt-get install -y libssl3 libfontconfig1 libfreetype6 libpng16-16 libbz2-1.0 libbrotli1 ca-certificates`
 
-The image carries those libraries and a font, but no network policy: a document's sub-resources are fetched at render time, so the container does not isolate egress ([#29](https://github.com/leshchenko1979/html-render/issues/29)).
+The image carries those libraries and a font, but no network policy: a document's sub-resources are fetched at render time, so the container does not isolate egress ([#29](https://github.com/leshchenko1979/pageplate/issues/29)).
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges \
-    -v "$PWD:/work" ghcr.io/leshchenko1979/html-render:v0.3.0-beta.10 \
+    -v "$PWD:/work" ghcr.io/leshchenko1979/pageplate:v0.4.0 \
     /work/card.html /work/card.png 1280 720 2
 ```
 
 `--user` is not decorative: the image's own uid is 10001, and omitting the flag exits `101`. Two tags
-exist, `v0.3.0-beta.10` and `latest`. A moving tag lets two builds of one commit disagree, so pin the
+exist, `v0.4.0` and `latest`. A moving tag lets two builds of one commit disagree, so pin the
 version, or the digest when the image itself must be frozen. The tarball's attestation does not extend to the image,
-so verify that one by digest ([#31](https://github.com/leshchenko1979/html-render/issues/31)).
+so verify that one by digest ([#31](https://github.com/leshchenko1979/pageplate/issues/31)).
 Building from source: [CONTRIBUTING.md](CONTRIBUTING.md#building).
 
 The image is built on a tag push, a `workflow_dispatch`, or a commit touching `src/`, `Cargo.toml`, `Cargo.lock`,
 `Dockerfile` or `assets/`; it has no scheduled rebuild, so pin the digest when base-image patches matter
-([#31](https://github.com/leshchenko1979/html-render/issues/31)). The tarball is the other way round: it links your
+([#31](https://github.com/leshchenko1979/pageplate/issues/31)). The tarball is the other way round: it links your
 host's `libssl.so.3`, so your distro patches it, which makes the tarball the better artifact for TLS patch latency.
 
 ## Usage
 
 ```bash
-html-render page.html out.png 1280 720 2                            # one PNG
-html-render --clip deck.html slides/ 1280 720 2 'section.slide'    # one PNG per match
-html-render --clip deck.html slides/ 1280 720 2 'section.slide' --per-element   # element-sized canvases
+pageplate page.html out.png 1280 720 2                            # one PNG
+pageplate --clip deck.html slides/ 1280 720 2 'section.slide'    # one PNG per match
+pageplate --clip deck.html slides/ 1280 720 2 'section.slide' --per-element   # element-sized canvases
 ```
 
 The viewport is given in CSS pixels and `scale` multiplies the output; a single-image run may leave it out. A
@@ -100,7 +100,7 @@ Nothing below is typed by hand: `bench/results.json` is a receipt that `tools/be
 runner, and the repo commits it unedited. The deck comes from a seed, so one command reproduces this document anywhere:
 
 ```bash
-git clone https://github.com/leshchenko1979/html-render && cd html-render
+git clone https://github.com/leshchenko1979/pageplate && cd pageplate
 python3 tools/bench.py --bin <path-to-render> --chrome <path-to-chrome> --out /tmp/mine.json
 ```
 
@@ -109,7 +109,7 @@ digest means the generator moved, and the rows below describe a different docume
 
 Eight slides at 1280×5760 CSS px, scale 2, three renders per engine; peak RSS sums every process the engine spawned:
 
-| measurement | Chromium | html-render | ratio |
+| measurement | Chromium | pageplate | ratio |
 |---|---|---|---|
 | peak RSS, `--full` | 2350.8 MiB | 37.6 MiB | **62.52×** |
 | peak RSS, `--clip` | 2350.8 MiB | 75.5 MiB | **31.14×** |
@@ -117,7 +117,7 @@ Eight slides at 1280×5760 CSS px, scale 2, three renders per engine; peak RSS s
 
 **Memory carries the claim.** At least 31× less in the least favourable mode, and 49× in the advertised one —
 `--per-element`, the figure the hero quotes. The band repeats: five runs of the probe on one runner image
-(43744837000, 43746767310, 43752965645, 43754284965, 43762042304) kept html-render's `--full` peak inside
+(43744837000, 43746767310, 43752965645, 43754284965, 43762042304) kept pageplate's `--full` peak inside
 37.6 MiB to 37.9 MiB, a 0.8 % spread, while Chromium ranged over 2336 MiB to 2453 MiB. Four of the five
 measured the previous deck (same canvas, different document — [GATES.md](GATES.md#cost) has the table); the
 published figure is the per-run median of sampled peaks, and the widest single samples reached 38.0 and
@@ -151,7 +151,7 @@ is one of the known divergences below.
 against Chromium: **the corpus agrees on 42 of its 54 text-free rows**; 11 diverge and 1 asserts a shared
 absence. `tools/parity_baseline.json` pins all 11 box by box, so a regression reddens the build while the
 current defects stay visible. The reference engine is the runner image's Chrome, not a pinned build —
-157.0.8103.78 when measured — so a runner refresh moves the baseline with it ([#34](https://github.com/leshchenko1979/html-render/issues/34)).
+157.0.8103.78 when measured — so a runner refresh moves the baseline with it ([#34](https://github.com/leshchenko1979/pageplate/issues/34)).
 The divergence is not spread: one table accounts for **7 rows** (#9), one
 `<br>` run for **4** (#15).
 
@@ -165,7 +165,7 @@ what a reader sees is a declaration with no effect.
 ## Known defects
 
 Defects and gaps are tracked as issues, not restated here:
-**[open limitations](https://github.com/leshchenko1979/html-render/issues?q=is%3Aissue+is%3Aopen+label%3Alimitation)**.
+**[open limitations](https://github.com/leshchenko1979/pageplate/issues?q=is%3Aissue+is%3Aopen+label%3Alimitation)**.
 That list is authoritative and current; this page describes what the tool does, not what is wrong with it.
 
 ## Where the detail lives

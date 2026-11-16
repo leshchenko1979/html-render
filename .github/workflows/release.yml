@@ -4,7 +4,7 @@ name: release
 # installs from a versioned URL with a checksum instead of a CI artifact that
 # expires and cannot be verified by anyone else.
 #
-#   curl -fsSL -O https://github.com/leshchenko1979/html-render/releases/download/vX/html-render_X_linux_amd64.tar.gz
+#   curl -fsSL -O https://github.com/leshchenko1979/pageplate/releases/download/vX/pageplate_X_linux_amd64.tar.gz
 #
 # Triggered by a version tag only: the artifact is a binary, and a binary that
 # silently changes under a fixed URL is not pinnable.
@@ -96,7 +96,7 @@ jobs:
         # on the box that needs it.
         run: |
           set -euo pipefail
-          MAX=$(objdump -T target/release/render \
+          MAX=$(objdump -T target/release/pageplate \
                 | grep -o 'GLIBC_[0-9][0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1)
           echo "required glibc floor: $MAX"
           if [ "$(printf '%s\n2.35\n' "$MAX" | sort -V | tail -1)" != "2.35" ]; then
@@ -112,7 +112,7 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME:-${{ inputs.tag }}}"
-          REPORTED=$(./target/release/render --version | head -1 | awk '{print $NF}')
+          REPORTED=$(./target/release/pageplate --version | head -1 | awk '{print $NF}')
           echo "tag: $TAG   binary reports: $REPORTED"
           if [ "$REPORTED" != "${TAG#v}" ]; then
             echo "::error::binary reports $REPORTED but the tag is $TAG"
@@ -126,11 +126,11 @@ jobs:
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME:-${{ inputs.tag }}}"
           [ -n "$VERSION" ] || { echo "::error::no tag"; exit 1; }
-          NAME="html-render_${VERSION#v}_linux_amd64"
+          NAME="pageplate_${VERSION#v}_linux_amd64"
           mkdir -p dist
-          cp target/release/render dist/html-render
-          chmod 755 dist/html-render
-          tar -C dist -czf "dist/${NAME}.tar.gz" html-render
+          cp target/release/pageplate dist/pageplate
+          chmod 755 dist/pageplate
+          tar -C dist -czf "dist/${NAME}.tar.gz" pageplate
           # The tarball is what gets downloaded, so the checksum is of the tarball.
           ( cd dist && sha256sum "${NAME}.tar.gz" > checksums.txt )
           cat dist/checksums.txt
@@ -138,7 +138,7 @@ jobs:
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           # Read from the artefact rather than typed into the body: a hardcoded
           # size goes stale on the first dependency bump and nobody notices.
-          echo "size=$(du -h dist/html-render | cut -f1)" >> "$GITHUB_OUTPUT"
+          echo "size=$(du -h dist/pageplate | cut -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Attest the release artefacts
         # Signed by the workflow's OIDC identity, not by a key in a secret: the
@@ -169,7 +169,7 @@ jobs:
           | | |
           |---|---|
           | Asset | \`${NAME}.tar.gz\` |
-          | Binary | \`html-render\`, ${SIZE}, single file |
+          | Binary | \`pageplate\`, ${SIZE}, single file |
           | Runtime deps | 13 system libraries: glibc, libssl/libcrypto, freetype, fontconfig, expat, png, zlib, bz2, brotli |
           | glibc floor | 2.35 (asserted at build time) |
           | Built on | ubuntu-22.04 |
@@ -182,7 +182,7 @@ jobs:
           curl -fsSL -O "https://github.com/${GITHUB_REPOSITORY}/releases/download/\$V/${NAME}.tar.gz"
           sha256sum -c <(curl -fsSL "https://github.com/${GITHUB_REPOSITORY}/releases/download/\$V/checksums.txt")
           tar xzf "${NAME}.tar.gz"
-          install -m755 html-render /usr/local/bin/html-render
+          install -m755 pageplate /usr/local/bin/pageplate
           \`\`\`
 
           Not a browser: renders JS-free HTML/CSS to PNG.
@@ -241,8 +241,8 @@ jobs:
           curl -fsSL -O "$BASE/checksums.txt"
           sha256sum -c checksums.txt
           tar xzf "${NAME}.tar.gz"
-          BUILT=$(md5sum "../dist/html-render" | cut -d' ' -f1)
-          FETCHED=$(md5sum html-render | cut -d' ' -f1)
+          BUILT=$(md5sum "../dist/pageplate" | cut -d' ' -f1)
+          FETCHED=$(md5sum pageplate | cut -d' ' -f1)
           echo "built:   $BUILT"
           echo "fetched: $FETCHED"
           [ "$BUILT" = "$FETCHED" ] || { echo "::error::published asset differs from the build"; exit 1; }
@@ -250,9 +250,9 @@ jobs:
           # below is what proves the build. The `--help` line is a cheap smoke check, which
           # `pipefail` would turn into a failed step. The render below is the
           # real liveness check, so tolerate the usage exit.
-          ./html-render --help 2>&1 | head -3 || true
+          ./pageplate --help 2>&1 | head -3 || true
           printf '<html><body style="margin:0"><div style="width:20px;height:10px;background:#f00"></div></body></html>' > t.html
-          ./html-render t.html t.png 20 10 1 --document
+          ./pageplate t.html t.png 20 10 1 --document
           # Assert the IHDR dimensions, not a file-size floor: a 20x10 solid
           # colour legitimately compresses to 93 bytes.
           python3 -c "import struct;d=open('t.png','rb').read();assert d[:8]==b'\x89PNG\r\n\x1a\n','not a PNG';w,h=struct.unpack('>II',d[16:24]);assert (w,h)==(20,10),(w,h);print('renders: ok',w,'x',h,len(d),'bytes')"

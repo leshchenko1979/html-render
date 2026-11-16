@@ -10,8 +10,8 @@
 # This image discharges all three host duties once: libraries, fonts, and a glibc
 # floor (2.35, asserted by the build guard; bookworm ships 2.36).
 #
-#   docker build -t html-render .
-#   docker run --rm -v "$PWD:/work" html-render /work/card.html /work/card.png 1280 720 2
+#   docker build -t pageplate .
+#   docker run --rm -v "$PWD:/work" pageplate /work/card.html /work/card.png 1280 720 2
 
 # ---- build ---------------------------------------------------------------
 FROM rust:1-bookworm AS build
@@ -23,7 +23,7 @@ COPY Cargo.toml Cargo.lock ./
 RUN mkdir -p src \
  && echo 'fn main() { println!("stub"); }' > src/main.rs \
  && cargo build --release --locked \
- && rm -rf src target/release/render target/release/deps/render-*
+ && rm -rf src target/release/pageplate target/release/deps/pageplate-*
 
 COPY src ./src
 # `touch` is not tidiness, it is the fix for a trap that shipped a stub binary
@@ -46,9 +46,9 @@ RUN find src -name '*.rs' -exec touch {} +
 # distinguishes this binary from the stub.
 RUN cargo build --release --locked \
  && printf '<div style="width:4px;height:4px;background:#000"></div>' > /tmp/smoke.html \
- && ./target/release/render /tmp/smoke.html /tmp/smoke.png 4 4 1 \
+ && ./target/release/pageplate /tmp/smoke.html /tmp/smoke.png 4 4 1 \
  && test "$(od -An -tx1 -N4 /tmp/smoke.png | tr -d ' ')" = "89504e47" \
- && test "$(ldd target/release/render | grep -c '=>')" -gt 5
+ && test "$(ldd target/release/pageplate | grep -c '=>')" -gt 5
 
 # ---- runtime -------------------------------------------------------------
 FROM debian:bookworm-slim
@@ -81,15 +81,15 @@ RUN apt-get update \
  && fc-cache -f \
  && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /src/target/release/render /usr/local/bin/html-render
+COPY --from=build /src/target/release/pageplate /usr/local/bin/pageplate
 
 # Not root, not a writable home: the renderer only reads its input and writes
 # the path it is given.
-RUN useradd --system --create-home --uid 10001 render
-USER render
+RUN useradd --system --create-home --uid 10001 pageplate
+USER pageplate
 WORKDIR /work
 
-ENTRYPOINT ["html-render"]
+ENTRYPOINT ["pageplate"]
 # A bare `docker run image` prints usage and exits 0, which is what `--help` is
 # for. Before the flag existed this had to be left empty: a CMD naming a flag the
 # binary did not implement turned a bare run into "unknown flag" and exit 2.

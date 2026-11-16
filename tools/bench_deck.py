@@ -280,8 +280,8 @@ def deck_html(seed):
         "download a release, and run it.</p>"
         + _mono(
             [
-                "git clone https://github.com/leshchenko1979/html-render",
-                "python3 tools/bench.py --bin ./render --repeats 3",
+                "git clone https://github.com/leshchenko1979/pageplate",
+                "python3 tools/bench.py --bin ./pageplate --repeats 3",
                 "python3 tools/bench_selftest.py",
             ]
         )

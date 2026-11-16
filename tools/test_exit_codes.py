@@ -6,7 +6,7 @@ rendered a fragment of a full document and wrote a plausible PNG of the wrong
 thing, with nothing on stderr. Every code below is documented, so every code is
 tested here — one scripted pass, against the binary CI just built.
 
-    python3 tools/test_exit_codes.py --bin target/release/render
+    python3 tools/test_exit_codes.py --bin target/release/pageplate
 
 Exit 0 = the contract holds. Exit 1 = it does not (the message says which leg).
 Run it against the published r2 binary and most legs fail — the point being that
@@ -163,7 +163,7 @@ def main():
             if needle not in out:
                 fails.append("--help stdout lacks %r" % needle)
                 print("FAIL --help stdout lacks %r" % needle)
-        if not out.startswith("html-render "):
+        if not out.startswith("pageplate "):
             fails.append("--help does not start with the program name and version")
             print("FAIL --help does not start with the program name and version")
 
@@ -215,7 +215,7 @@ def main():
 
         # 2 — arity. `scale` is optional, so four positionals is the floor.
         check("2 usage: too few args", [doc, os.path.join(tmp, "x.png")], 2,
-              want_err="usage: html-render")
+              want_err="usage: pageplate")
 
         # 2 — an unknown flag. This leg is the regression: it used to exit 0 and
         # render anyway, so a typo silently produced the wrong picture.

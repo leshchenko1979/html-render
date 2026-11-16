@@ -24,7 +24,7 @@ gets disabled by whoever has to babysit it.
 
 **Absolute wall clock is not compared at all.** Two runs on the same runner
 (`runnervmy75tu`, 4 vCPU, 15,989 MiB, same deck `b77aac2d`, same binary) read
-Chromium 1.604 s then 3.120 s and html-render 1.011 s then 1.689 s: both engines
+Chromium 1.604 s then 3.120 s and pageplate 1.011 s then 1.689 s: both engines
 roughly doubled while memory moved 0.2-0.4 % and the ratios moved 16 %. The
 machine was busy; the program was not slower. Gating an absolute second on a
 shared runner gates the neighbour's load, and a check that fails for reasons
@@ -153,10 +153,10 @@ def compare(committed, fresh):
     # clock stays in the receipt and stays gated as a RATIO, below.
     plan = [
         ("chromium peak tree RSS", "engines.chromium.peak_tree_mib", MEM_TOL),
-        ("--full peak tree RSS", "engines.html-render.peak_tree_mib", MEM_TOL),
-        ("--clip peak tree RSS", "shapes.slides.html-render-clip.peak_tree_mib", MEM_TOL),
+        ("--full peak tree RSS", "engines.pageplate.peak_tree_mib", MEM_TOL),
+        ("--clip peak tree RSS", "shapes.slides.pageplate-clip.peak_tree_mib", MEM_TOL),
         ("--per-element peak tree RSS",
-         "shapes.slides.html-render-per-element.peak_tree_mib", MEM_TOL),
+         "shapes.slides.pageplate-per-element.peak_tree_mib", MEM_TOL),
         ("fidelity, pixels off by >16", "fidelity.over16_pct", FIDELITY_TOL),
     ]
     for label, path, tol in plan:
@@ -198,9 +198,9 @@ def compare(committed, fresh):
 
     # The ratios, one wall and one memory figure for each advertised shape.
     for shape, renderer in (
-        ("--full", "engines.html-render"),
-        ("--clip", "shapes.slides.html-render-clip"),
-        ("--per-element", "shapes.slides.html-render-per-element"),
+        ("--full", "engines.pageplate"),
+        ("--clip", "shapes.slides.pageplate-clip"),
+        ("--per-element", "shapes.slides.pageplate-per-element"),
     ):
         for unit, field, tol in (
             ("wall ratio", "wall_median_s", WALL_TOL),
@@ -295,7 +295,7 @@ def _receipt(wall_c=3.774, wall_h=2.352, peak_c=2452.6, peak_h=37.7,
         "engines": {
             "chromium": {"status": status, "wall_median_s": wall_c,
                          "peak_tree_mib": peak_c},
-            "html-render": {"status": "measured", "wall_median_s": wall_h,
+            "pageplate": {"status": "measured", "wall_median_s": wall_h,
                             "peak_tree_mib": peak_h},
         },
         "shapes": {
@@ -305,11 +305,11 @@ def _receipt(wall_c=3.774, wall_h=2.352, peak_c=2452.6, peak_h=37.7,
                     "wall_median_s": wall_c if derived_wall is None else derived_wall,
                     "peak_tree_mib": peak_c if derived_peak is None else derived_peak,
                 },
-                "html-render-clip": {
+                "pageplate-clip": {
                     "status": "measured", "wall_median_s": clip_wall,
                     "peak_tree_mib": clip_peak,
                 },
-                "html-render-per-element": {
+                "pageplate-per-element": {
                     "status": "measured", "wall_median_s": pe_wall,
                     "peak_tree_mib": pe_peak,
                 },
@@ -374,7 +374,7 @@ def self_test():
     leg("missing_field_fails", missing, 1)
     # Zero in the denominator would divide by zero if it were trusted.
     zero = _receipt()
-    zero["engines"]["html-render"]["peak_tree_mib"] = 0
+    zero["engines"]["pageplate"]["peak_tree_mib"] = 0
     leg("zero_denominator_fails", zero, 1)
 
     # The header must agree with the verdict. It printed DIFFERENT on two

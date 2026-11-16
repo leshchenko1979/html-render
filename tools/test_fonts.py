@@ -32,7 +32,7 @@ failure mode is a spurious warning on a document that renders correctly, not a
 wrong render. Recorded here rather than claimed as tested.
 
 Usage:
-    python3 tools/test_fonts.py --bin /path/to/html-render
+    python3 tools/test_fonts.py --bin /path/to/pageplate
     python3 tools/test_fonts.py --bin /path/to/beta.8   # b fails
 """
 
@@ -70,7 +70,7 @@ CASES = [
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--bin", required=True, help="path to the html-render binary")
+    ap.add_argument("--bin", required=True, help="path to the pageplate binary")
     ap.add_argument("--keep", action="store_true", help="keep the temp directory")
     args = ap.parse_args()
 

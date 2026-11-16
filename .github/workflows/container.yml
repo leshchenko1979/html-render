@@ -76,7 +76,7 @@ jobs:
         with:
           context: .
           load: true
-          tags: html-render:test
+          tags: pageplate:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -85,7 +85,7 @@ jobs:
         # builder but absent from the runtime image still lets the image build.
         run: |
           set -euo pipefail
-          out=$(docker run --rm --entrypoint ldd html-render:test /usr/local/bin/html-render)
+          out=$(docker run --rm --entrypoint ldd pageplate:test /usr/local/bin/pageplate)
           echo "$out"
           missing=$(echo "$out" | grep -c 'not found' || true)
           libs=$(echo "$out" | grep -c '=>' || true)
@@ -118,7 +118,7 @@ jobs:
         # looks plausible, which is the failure class this repo keeps hitting.
         run: |
           set -euo pipefail
-          fc=$(docker run --rm --entrypoint fc-match html-render:test "DejaVu Sans")
+          fc=$(docker run --rm --entrypoint fc-match pageplate:test "DejaVu Sans")
           echo "fc-match: $fc"
           case "$fc" in
             *DejaVuSans*) echo "ok: DejaVu Sans is present" ;;
@@ -143,7 +143,7 @@ jobs:
           mkdir -p out
           docker run --rm --user "$(id -u):$(id -g)" \
             -v "$PWD/assets:/work:ro" -v "$PWD/out:/out" \
-            html-render:test /work/og.html /out/og.png 1280 640 2
+            pageplate:test /work/og.html /out/og.png 1280 640 2
           test -s out/og.png || { echo "::error::no PNG written"; exit 1; }
           echo "output owned by: $(stat -c '%u:%g' out/og.png)"
           python3 - <<'PY'

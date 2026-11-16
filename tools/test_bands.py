@@ -47,7 +47,7 @@ seven things:
      boundary ever became a discontinuity, overlapping the bands would be the
      remedy, and this leg is what would say so.
 
-    python3 tools/test_bands.py --bin target/release/render
+    python3 tools/test_bands.py --bin target/release/pageplate
 
 Exit 0 = the contract holds. Exit 1 = it does not. Against a binary from before
 banding, leg 4 fails with exit 5 and the other legs fail on the missing env

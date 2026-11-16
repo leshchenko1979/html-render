@@ -37,8 +37,8 @@ tolerance that no longer describes the tree. This repo has already produced one
 such drop: `--full` on the 20,000 px document read 422.6 MiB before it streamed
 and 28.2 MiB after, so that fix had to move this baseline in its own commit.
 
-    python3 tools/test_memory.py --bin target/release/render
-    python3 tools/test_memory.py --update-baseline --bin target/release/render
+    python3 tools/test_memory.py --bin target/release/pageplate
+    python3 tools/test_memory.py --update-baseline --bin target/release/pageplate
     python3 tools/test_memory.py --self-test
 
 Exit 0 = every shape is within its pin.

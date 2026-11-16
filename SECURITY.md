@@ -45,7 +45,7 @@ wherever that user can write.
 
 ## Reporting
 
-Open a [private security advisory](https://github.com/leshchenko1979/html-render/security/advisories/new)
+Open a [private security advisory](https://github.com/leshchenko1979/pageplate/security/advisories/new)
 rather than a public issue. One maintainer, no SLA. Worth reporting: a crash on
 input that is not obviously malformed, unbounded memory or CPU from a small
 document, a path that writes outside the requested output, and anything that

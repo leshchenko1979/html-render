@@ -4,6 +4,40 @@ Newest first. Every entry names its commit range, so it can be re-derived with
 `git log --oneline <prev>..<tag>` rather than trusted. Pre-1.0: flags and output
 names may change between minor versions, and this file is where that shows up.
 
+## v0.4.0 — 2026-11-16
+
+Raw list: `git log --oneline v0.3.0-beta.10..v0.4.0` (35 commits). A rename and a
+version scheme; no renderer change, so the pixels this release paints are the ones
+`v0.3.0-beta.10` painted.
+
+### Breaking
+
+- **Renamed `html-render` to `pageplate`; the binary is `pageplate`.** The tarball,
+  the container image and the crate take the new name. `render` is **not** kept as
+  an alias: a script that calls it must be updated. Published tags and their assets
+  are untouched, and the old URLs redirect.
+- **No more `-beta.N` or `-rN` in a version string.** `0.3.0-beta.4-r2` sorted
+  *above* `0.3.0-beta.10` under SemVer §11, because an alphanumeric identifier
+  outranks a numeric one, so any tool resolving "latest" picked an eleven-day-old
+  release. A published number is now final; a re-cut takes a new number.
+
+### Added
+
+- `release.yml` refuses a tag that disagrees with `Cargo.toml` before the build,
+  and reads the built binary's `--version` back before publishing.
+- `docs/USAGE.md`: every flag, every environment variable, the exit contract and
+  both machine-readable streams, with a test that fails if the flag list and
+  `--help` disagree. The README now points at it instead of carrying it.
+- A `limitation` label on the tracker; the README's known-defect list became a
+  filter link, so a defect is tracked once and closed once.
+
+### Changed
+
+- `--help` and `--version` print the name from `CARGO_PKG_NAME`, so the crate name
+  and the printed name cannot drift apart.
+- The advertised images state the new name and `v0.4.0`, re-rendered from their
+  source HTML with the binary the receipt names (`sha256 de69ad53…`).
+
 ## v0.3.0-beta.10 — 2026-11-15
 
 Raw list: `git log --oneline v0.3.0-beta.9..v0.3.0-beta.10`. This cut carries one

@@ -2,10 +2,10 @@
 //! per-element clipping, so Blitz can be measured against Chromium the way the
 //! deck pipeline actually uses it.
 //!
-//! Usage (the crate builds `target/release/render`; the release renames it to
-//! `html-render`, which is the name both strings below use):
-//!   html-render <html> <out.png> <width> <height> [scale] [--document] [--fragment]
-//!   html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--per-element]
+//! Usage (the crate builds `target/release/pageplate`; the release renames it to
+//! `pageplate`, which is the name both strings below use):
+//!   pageplate <html> <out.png> <width> <height> [scale] [--document] [--fragment]
+//!   pageplate --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--per-element]
 //!
 //! A file that declares its own document root (`<!doctype>`, `<html>`, `<head>`
 //! or `<body>` as its first tag) is rendered as a complete document, verbatim.
@@ -71,12 +71,12 @@ fn main() {
 /// every flag named here is accepted, and that `--help` exits 0.
 fn help_text() -> String {
     format!(
-        "html-render {version}\n\
+        "{name} {version}\n\
          HTML + CSS to PNG, with no browser.\n\
          \n\
          USAGE:\n\
-         \x20 html-render <html> <out.png> <width> <height> [scale] [--document] [--fragment] [--full]\n\
-         \x20 html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--per-element]\n\
+         \x20 pageplate <html> <out.png> <width> <height> [scale] [--document] [--fragment] [--full]\n\
+         \x20 pageplate --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--per-element]\n\
          \n\
          MODES:\n\
          \x20 (default)     one PNG of the viewport\n\
@@ -124,6 +124,7 @@ fn help_text() -> String {
          \x20 5    the canvas would exceed the renderer limit (65408 wide, 65532 tall);\n\
          \x20      nothing was written\n\
          \x20 101  a panic: an unparsable number, an invalid selector, an unreadable input\n",
+        name = env!("CARGO_PKG_NAME"),
         version = env!("CARGO_PKG_VERSION")
     )
 }
@@ -515,7 +516,7 @@ async fn real_main() {
     // run image --help` and every `cmd --help | head` pipeline reads as broken.
     //
     // Scanned over EVERY argument, not just argv[1]: a reader who types
-    // `html-render in.html out.png 794 900 --help` is asking for the same text,
+    // `pageplate in.html out.png 794 900 --help` is asking for the same text,
     // and honouring it only in first position made the flag look broken from
     // the one place it is easiest to type. No positional is a flag, so a scan
     // cannot steal one; `--help` wins if both are present.
@@ -524,7 +525,7 @@ async fn real_main() {
         std::process::exit(0);
     }
     if args.iter().skip(1).any(|a| a == "--version" || a == "-V") {
-        println!("html-render {}", env!("CARGO_PKG_VERSION"));
+        println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
         std::process::exit(0);
     }
 
@@ -552,9 +553,9 @@ async fn real_main() {
         .collect();
 
     let usage = if clip {
-        "usage: html-render --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--per-element]"
+        "usage: pageplate --clip <html> <outdir> <width> <height> <scale> <selector> [--document] [--fragment] [--per-element]"
     } else {
-        "usage: html-render <html> <out.png> <width> <height> [scale] [--document] [--fragment] [--full]"
+        "usage: pageplate <html> <out.png> <width> <height> [scale] [--document] [--fragment] [--full]"
     };
 
     // A flag we do not implement is an error, not noise to be filtered away.

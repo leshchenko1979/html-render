@@ -1,6 +1,6 @@
 # Third-party packages the tools in this directory need.
 #
-# Nothing here is required to *use* the renderer: html-render is a single binary
+# Nothing here is required to *use* the renderer: pageplate is a single binary
 # and the PNG decoder in measure.py is stdlib-only. These are for the harness
 # that measures it.
 #

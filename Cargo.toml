@@ -1,13 +1,13 @@
 [package]
-name = "html-render"
-version = "0.3.0-beta.10"
+name = "pageplate"
+version = "0.4.0"
 edition = "2021"
 publish = false
 license = "Apache-2.0"
 description = "Render HTML+CSS to PNG with no browser, via Blitz (Stylo + Taffy + Vello)"
 
 [[bin]]
-name = "render"
+name = "pageplate"
 path = "src/main.rs"
 
 # Pinned to one Blitz release: the API is pre-1.0 and moves between betas, so an

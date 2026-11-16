@@ -13,7 +13,7 @@ identical geometry and nothing on stderr to say so. Measured on the r2 release
 binary: 70.4 % of pixels differ for a `body`-coloured document, 89.9 % for a
 file that opens at `<body>`.
 
-    python3 tools/test_document_detect.py --bin target/release/render
+    python3 tools/test_document_detect.py --bin target/release/pageplate
 
 Exit 0 = the contract holds. Exit 1 = it does not (the message names the leg).
 Legs (a) and (b) FAIL against the r2 binary, which is the point: a test that
