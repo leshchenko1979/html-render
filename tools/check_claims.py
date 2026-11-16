@@ -485,6 +485,21 @@ def main():
                 fails.append("%d of %d divergent rows name no fixture family"
                              % (n_diverge - n_family, n_diverge))
 
+            # The concentration split -- "one table accounts for 7 rows (#9),
+            # one <br> run for 4 (#15)" -- is the only place the page says HOW
+            # the eleven diverge, and it was deleted once in a prose rewrite
+            # with every other figure intact. Both counts are derived from the
+            # baseline, and each is anchored to its issue number so the pair
+            # cannot drift apart: the row count and the issue that explains it
+            # are the same claim.
+            fam = {}
+            for k in parity["divergent"]:
+                fam[k.split(":", 1)[0]] = fam.get(k.split(":", 1)[0], 0) + 1
+            claim("README", readme, "**%d rows** (#9)" % fam.get("table-collapse", 0),
+                  "rows in the table-collapse family, pinned as issue #9")
+            claim("README", readme, "**%d** (#15)" % fam.get("br-run-blocks", 0),
+                  "rows in the br-run family, pinned as issue #15")
+
             # The band is a range over six RECORDED runs, so it is read from
             # the history table itself, not from this receipt: parse the rows,
             # take min and max, and require the prose to quote what it finds.
