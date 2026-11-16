@@ -478,7 +478,12 @@ every CLI fix below, so its tarball disagreed with the README on `--help`,
   recipes run from a fresh clone.
 - Workflow trigger table corrected to match the workflows.
 
-## v0.3.0-beta.4-r2 — 2026-11-05
+## v0.3.0-beta.4-r2 — 2026-11-05 [YANKED]
+
+> Yanked 2026-11-16: this tag and `-r1` encode a rebuild into the version string, and
+> under SemVer §11 `0.3.0-beta.4-r2` outranks `0.3.0-beta.10` — so a resolver reads the
+> oldest release as the newest. The tag and its asset are left in place (published
+> numbers are immutable); this marker is the notice. Nothing here should be pinned.
 
 `git log --oneline v0.3.0-beta.4-r1..v0.3.0-beta.4-r2` — 10 commits.
 
@@ -503,7 +508,11 @@ name was ever published without one.
 - `GATES.md` cost table corrected after measuring both tokio runtime flavours.
 - `__pycache__` untracked.
 
-## v0.3.0-beta.4-r1 — 2026-11-04
+## v0.3.0-beta.4-r1 — 2026-11-04 [YANKED]
+
+> Yanked 2026-11-16: tagged `0.3.0-beta.4-r1` while `Cargo.toml` still said `0.1.0`,
+> so `--version` and the tag disagreed on a shipped release. Superseded by `-r2` and
+> then by the `0.4.0` scheme. Tag and asset left in place; nothing here should be pinned.
 
 `git log --oneline v0.3.0-beta.4-r1` — 18 commits from the first spike.
 
