@@ -94,13 +94,16 @@ the four known divergences" while `tools/parity_baseline.json` pinned eleven.
   made: 54 of the 129 commits written under the previous rule are unreadable to the audience
   the README, `GATES.md` and the issues are written for (issue #23). History is not rewritten.
 - A body that quotes a number quotes the command that produced it.
-- **The repo config and the history disagree on the author email:** `git config
-  user.email` reads `leshchenko@gmail.com` while every commit is authored
-  `leshchenko1979@gmail.com`. Pass it explicitly:
+- **Author email is `leshchenko@gmail.com`** — the address linked to the GitHub
+  account, so those commits read *Verified*. `leshchenko1979@gmail.com` is linked
+  to no account (`verification.reason: no_user`) and every commit through
+  `96bdfd4` carries it; history is not rewritten, new commits use the linked
+  address. The global config already holds it — check `git config user.email`
+  before a batch of commits, because a clone inherits whatever the global holds:
 
 ```bash
 git -c user.name="Alexey Leshchenko" \
-    -c user.email="leshchenko1979@gmail.com" \
+    -c user.email="leshchenko@gmail.com" \
     commit -m "docs: ..."
 ```
 
