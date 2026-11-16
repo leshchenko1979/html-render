@@ -163,8 +163,9 @@ jobs:
           \`--full\`. Wall clock is measured and drift-gated but not advertised,
           because the browser's own wall moves 18-22% between runs and a ratio
           would mostly report how fast the browser happened to be that day.
-          4.7083% of pixels differ by more than 16 levels (glyph antialiasing,
-          not layout), and three renders of the same input are byte-identical.
+          4.7083% of pixels differ by more than 16 levels (glyph rasterisation and
+          antialiasing; how much is layout is not quantified). On one host, same
+          font stack, renderer version and band budget, three renders of the same input are byte-identical.
           Reproduce it:
           \`python3 tools/bench.py --bin <render> --chrome <chrome>\`.
           EOF

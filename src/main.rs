@@ -238,7 +238,7 @@ impl NetProvider for RequestedUrlProvider {
 /// Decoded-pixel cap for one sub-resource image, in pixels. Read from
 /// `BLITZ_MAX_IMAGE_MP` (megapixels, `0` disables the cap).
 ///
-/// 128 MP is ~512 MiB of RGBA. Above what a document plausibly embeds — a
+/// 128 MP is ~488 MiB of RGBA. Above what a document plausibly embeds — a
 /// 9000x9000 PNG is 81 MP and renders in 2.4 s on the released binary — and far
 /// below what a tiny file can demand: a 60-byte PNG header claiming 30000x30000
 /// allocates 3.6 GB before a single pixel is decoded, and on a host without the

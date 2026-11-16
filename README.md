@@ -97,8 +97,9 @@ ceiling; a `position:fixed` element forces one canvas instead, and says so.
 
 On one host the output is reproducible: hold the document, the font stack, the renderer version, the band budget
 (`BLITZ_BAND_MIB`) and the host fixed and the bytes repeat. Vary any of these and the digest moves, so a changed
-pixel in CI is one of them. For a 1280×640 card at scale 2 — the shape of `assets/og.png`, 2560×1280 — change
-the numbers and nothing else.
+pixel in CI is one of them — with one exception: the band budget changes nothing on a document that fits a
+single band, where every setting renders the same bytes. For a 1280×640 card at scale 2 — the shape of
+`assets/og.png`, 2560×1280 — change the numbers and nothing else.
 
 The exit code is part of the contract, and CI tests it against a real binary:
 
@@ -113,12 +114,15 @@ The exit code is part of the contract, and CI tests it against a real binary:
 
 A killed process returns none of these: the shell reports `128+signal` (137 on `SIGKILL`, 143 on `SIGTERM`), and the output may hold a truncated PNG ([#26](https://github.com/leshchenko1979/html-render/issues/26)).
 
-`html-render --help` is the maintained list of flags. Six environment variables exist. `BLITZ_MAX_IMAGE_MP` (`128`)
-refuses an oversized decode; `BLITZ_DEADLINE_SECS` (`120`) cuts the render at the deadline; `BLITZ_BAND_MIB` (`4`)
-sets the band size — the peak follows it, and on a banded document so can the bytes. `BLITZ_DRAIN`, `BLITZ_RUNTIME`
-and `BLITZ_TRACE` steer shutdown, runtime flavour and logging; `BLITZ_DRAIN=naive` drops images that were fetched
-but not yet ingested when the paint loop exits (`tools/drain_probe.py` has the measured table). `--help` names
-`BLITZ_BAND_MIB` twice, beside the banded modes.
+`html-render --help` is the maintained list of flags, though its EXIT CODES block predates the wide-`--clip`
+change, so the table above is authoritative ([#33](https://github.com/leshchenko1979/html-render/issues/33)).
+Six environment variables exist. `BLITZ_MAX_IMAGE_MP` (`128`) refuses an oversized decode; `BLITZ_DEADLINE_SECS`
+(`120`) cuts the wait for assets — the frame is still written, complete, at exit `4`; `BLITZ_BAND_MIB` (`4`)
+sets the band size — the peak follows it, and on a banded document so can the bytes. `BLITZ_DRAIN`,
+`BLITZ_RUNTIME` and `BLITZ_TRACE` steer shutdown, runtime flavour and logging; `BLITZ_DRAIN=naive` drops images
+that were fetched but not yet ingested when the paint loop exits (the measured 0/8 against 8/8 table is in
+[GATES.md](GATES.md), and `tools/drain_probe.py` reproduces it). `--help` names `BLITZ_BAND_MIB` twice, beside
+the banded modes.
 
 No `--json`, no manifest ([#28](https://github.com/leshchenko1979/html-render/issues/28)). Two surfaces are machine-readable, and they sit on different streams: `TIMING` (parse, layout, paint, total, scale, mode, plus `content_h=`/`canvas_h=` when a document was cut) on stderr, and one line per frame on stdout under `--clip` — under `--per-element` that line ends `(per-element)`. Stdout stays empty otherwise, and the output path is never echoed:
 
@@ -221,9 +225,10 @@ The divergence is not spread: one table accounts for **7 rows** (#9), one
 - **A killed render leaves a truncated PNG at the output path**: no temp file, no rename
   ([#26](https://github.com/leshchenko1979/html-render/issues/26)). At exit `4` the PNG is complete and valid, so
   an "is it an image?" check passes — decode and compare, and delete on a non-zero exit. Under `--clip` the sweep
-  that clears a previous run's frames runs before painting, so a failed clip run — exit `3` with all-boxless
-  matches, exit `4` with a dead asset — can leave you neither the new frames nor the last good ones: the same
-  verify-by-decoding rule is the only defence. No SBOM is generated and no dependency
+  that clears a previous run's frames runs before painting, so a run that then paints nothing — exit `3` with
+  all-boxless matches, exit `5` with one canvas over the limit — leaves the directory empty: neither this run's
+  frames nor the last good ones. Exit `4` does write this run's frames, but the sweep has already deleted the
+  previous run's, so the same verify-by-decoding rule is the only defence. No SBOM is generated and no dependency
   advisory scan runs in CI ([#25](https://github.com/leshchenko1979/html-render/issues/25)).
 
 ## Where the detail lives

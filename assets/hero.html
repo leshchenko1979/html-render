@@ -79,6 +79,7 @@ h1 span{color:var(--blue)}
 }
 .metric{margin-top:22px}
 .ml{font-size:19px; font-weight:700; color:var(--navy); margin-bottom:11px}
+.ml .note{font-size:14px; font-weight:400; color:var(--gray); letter-spacing:.02em}
 
 .bline{display:flex; align-items:center; gap:12px; margin-top:9px}
 .bn{font-size:16px; color:var(--gray); width:152px; flex:none}
@@ -133,7 +134,7 @@ h1 span{color:var(--blue)}
 
       <h1>HTML + CSS → PNG,<br><span>with no browser</span></h1>
 
-      <p class="sub">A <b>25 MB</b> Rust binary replaces a <b>500 MB</b> Chromium:
+      <p class="sub">A <b>25.0 MiB</b> Rust binary replaces a <b>406.9 MiB</b> Chromium:
       Blitz's Stylo + Taffy + Vello, one process, no JavaScript engine compiled in.</p>
 
       <div class="caps">
@@ -186,16 +187,16 @@ h1 span{color:var(--blue)}
         </div>
 
         <div class="metric">
-          <div class="ml">Install size · what you ship</div>
+          <div class="ml">Install size · what you ship <span class="note">downloaded, not rendered</span></div>
           <div class="bline">
             <span class="bn">Chromium 157</span>
             <span class="bt"><i style="width:100%"></i></span>
-            <span class="bv">~500 MB</span>
+            <span class="bv">406.9 MiB</span>
           </div>
           <div class="bline">
             <span class="bn">html-render</span>
-            <span class="bt"><i class="win" style="width:5%"></i></span>
-            <span class="bv win">25 MB</span>
+            <span class="bt"><i class="win" style="width:6.1%"></i></span>
+            <span class="bv win">25.0 MiB</span>
           </div>
         </div>
 
