@@ -418,6 +418,157 @@ def main():
             claim("GATES", gates, num(fid["ink_ref_pct"]),
                   "receipt fidelity, Chromium ink coverage")
 
+            # --- deck identity, corpus, the band, and the worst case -------
+            # p2 (round 2) demonstrated that all of this was ungated: mutating
+            # the digest to `deadbeef`, the deck to "Six slides at 1280x5400",
+            # the corpus to "45 of 60" and the worst case to 9999.9 each left
+            # the gate reading 100 claims PASS. The prose in that section
+            # claimed "Nothing below is typed by hand" while a quarter of its
+            # figures had no reader at all. Each figure below is derivable from
+            # a committed file, so each is now claimed.
+            # Prose spells small counts out ("Eight slides", "three renders"),
+            # so the word form has to be derivable too: the NUMBER still comes
+            # from the file, only its spelling is a table.
+            spell = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
+                     6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten",
+                     11: "eleven", 12: "twelve"}
+            deck = receipt["deck"]
+            claim("README", readme, deck["html_md5"],
+                  "digest of the deck the receipt measured")
+            # Lowercased on both sides: this count opens a sentence, so its
+            # initial is capitalised by grammar rather than by the number.
+            claim("README", readme.lower(), "%s slides" % spell[deck["slides"]],
+                  "deck slide count")
+            claim("README", readme, "%d\u00d7%d" % tuple(deck["css_px"]),
+                  "deck canvas in CSS px")
+            claim("README", readme, "scale %d" % deck["scale"],
+                  "deck device scale")
+            claim("README", readme, "%s renders per engine" % spell[chrome["repeats"]],
+                  "repeats per engine")
+
+            # The corpus is a separate artifact from the receipt: geometry over
+            # the fixtures, not memory over the deck. Agreement is DERIVED —
+            # total rows minus the ones that diverge — so a refresh that adds a
+            # fixture cannot leave the two halves disagreeing.
+            with open(os.path.join(ROOT, "tools", "parity_baseline.json"),
+                      encoding="utf-8") as fh:
+                parity = _json.load(fh)
+            n_rows = parity["text_free_rows"]
+            n_diverge = len(parity["divergent"])
+            # Three categories, not two: the rows that agree, the rows that
+            # diverge, and the rows that assert an absence. Subtracting only
+            # the divergent ones left 43 where the truth is 42.
+            n_agree = n_rows - n_diverge - len(parity["absence"])
+            claim("README", readme, "%d fixtures" % parity["fixtures"],
+                  "corpus fixture count")
+            claim("README", readme, "%d of its %d text-free rows" % (n_agree, n_rows),
+                  "corpus agreement, derived from the baseline")
+            claim("README", readme, "%d diverge" % n_diverge,
+                  "divergent row count")
+            claim("README", readme, "%d asserts" % len(parity["absence"]),
+                  "absence-asserting row count")
+            # Every divergent row must belong to a named fixture family, or the
+            # per-fixture counts in GATES.md have no population to describe.
+            n_family = sum(1 for k in parity["divergent"]
+                           if k.startswith(("table-collapse", "br-run-blocks")))
+            if n_family != n_diverge:
+                fails.append("%d of %d divergent rows name no fixture family"
+                             % (n_diverge - n_family, n_diverge))
+
+            # The band is a range over six RECORDED runs, so it is read from
+            # the history table itself, not from this receipt: parse the rows,
+            # take min and max, and require the prose to quote what it finds.
+            # This is what stops the band from being a remembered number.
+            hist = re.findall(
+                r"^\| (\d{11}) \| `([0-9a-f]{8})` \| ([\d.]+) MiB \| ([\d.]+) MiB"
+                r" \| ([\d.]+) s \| ([\d.]+) s \|$", gates, re.M)
+            if len(hist) != 6:
+                fails.append("expected six recorded runs in the history table, "
+                             "found %d" % len(hist))
+            else:
+                eng_band = [float(r[3]) for r in hist]
+                chr_band = [float(r[2]) for r in hist]
+                lo, hi = min(eng_band), max(eng_band)
+                claim("README", readme, "%.1f MiB to %.1f MiB" % (lo, hi),
+                      "pageplate band across every recorded run")
+                claim("README", readme, "%.1f %% spread" % (100.0 * (hi - lo) / lo),
+                      "band spread across every recorded run")
+                claim("README", readme,
+                      "%.0f MiB to %.0f MiB" % (min(chr_band), max(chr_band)),
+                      "Chromium band across every recorded run")
+
+            # The widest single samples are THIS receipt's, not the band's: a
+            # max carried over from an earlier run would describe a document
+            # the reader cannot reproduce, which is how `2474.1` outlived the
+            # deck it was measured on.
+            claim("README", readme, num(doc.get("peak_tree_mib_max")),
+                  "widest --full sample in this receipt")
+            claim("README", readme, num(chrome.get("peak_tree_mib_max")),
+                  "widest Chromium sample in this receipt")
+
+            # The worst case is not in the receipt (the receipt measures the
+            # deck, which is eight ordinary slides). It lives in the memory
+            # baseline, and it is the number a reader planning capacity needs.
+            with open(os.path.join(ROOT, "tools", "memory_baseline.json"),
+                      encoding="utf-8") as fh:
+                mem_baseline = _json.load(fh)["peak_mib"]
+            worst = mem_baseline["clip_oversized_frame"]
+            claim("README", readme, num(worst), "worst measured peak")
+            claim("README", readme, "%d\u00d7" % round(worst / doc["peak_tree_mib"]),
+                  "worst case as a multiple of the headline")
+            # One 128 MP frame decoded to RGBA is width*height*4 bytes. Printed
+            # in MiB because that is the unit the prose uses, and derived so a
+            # change of limit moves the sentence.
+            claim("README", readme, "%d MiB" % round(128e6 * 4 / 2 ** 20),
+                  "RGBA cost of one 128 MP decode")
+
+            # The wall band's detection threshold is a property of WALL_TOL,
+            # not a remembered pair of multipliers: the ratio moves by 1/k - 1
+            # when the renderer slows by k, so the boundary sits at
+            # 1/(1-TOL) and the prose quotes the nearest 0.05 either side.
+            sys.path.insert(0, os.path.join(ROOT, "tools"))
+            from bench_drift import WALL_TOL
+            k_edge = 1.0 / (1.0 - WALL_TOL)
+            k_caught = math.ceil(k_edge * 20) / 20
+            k_missed = math.floor(k_edge * 20) / 20
+            if not 1.0 / k_caught - 1.0 < -WALL_TOL:
+                fails.append("%.2fx does not trip a %.0f%% band" % (k_caught, 100 * WALL_TOL))
+            if not 1.0 / k_missed - 1.0 > -WALL_TOL:
+                fails.append("%.2fx does not stay inside a %.0f%% band"
+                             % (k_missed, 100 * WALL_TOL))
+            claim("README", readme, "%.2f\u00d7" % k_caught,
+                  "renderer slowdown that trips the wall band")
+            claim("README", readme, "%.2f\u00d7" % k_missed,
+                  "renderer slowdown that stays inside the wall band")
+
+            # The two Chromium wall times are quoted as EVIDENCE of run-to-run
+            # noise, so they are a hand-picked pair rather than a statistic.
+            # Both must still be rows of the table above: if a refresh moves the
+            # column, the sentence's example has to move with it.
+            pair = re.search(r"Chromium read ([\d.]+) s on one run and ([\d.]+) s on the next",
+                             " ".join(readme.split()))
+            walls = set("%.3f" % float(r[4]) for r in hist)
+            if not pair:
+                fails.append("README no longer quotes the wall-time pair")
+            elif not {pair.group(1), pair.group(2)} <= walls:
+                fails.append("README quotes Chromium walls %s and %s, which are not "
+                             "rows of the history table"
+                             % (pair.group(1), pair.group(2)))
+
+            # The wall band is quoted as a percentage, and the 128 MP decode cap
+            # as the number of megapixels. Both live in source, so both are read
+            # from it rather than repeated here.
+            claim("README", readme, "%d %%" % round(100 * WALL_TOL),
+                  "wall-ratio band, from WALL_TOL")
+            with open(os.path.join(ROOT, "src", "main.rs"), encoding="utf-8") as fh:
+                main_rs = fh.read()
+            mp = re.search(r"const MAX_IMAGE_MP_DEFAULT: u64 = (\d+);", main_rs)
+            if not mp:
+                fails.append("MAX_IMAGE_MP_DEFAULT is no longer a literal const")
+            else:
+                claim("README", readme, "%s MP decode" % mp.group(1),
+                      "decode cap, from the constant")
+
             # The asset HTMLs bake the same two ratios by hand, as a tile and
             # as a bar width. Same rule: derive from the receipt — but print the
             # FLOOR, not the ratio. The tile is the one surface with no room to

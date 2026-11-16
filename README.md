@@ -134,8 +134,9 @@ Eight slides at 1280×5760 CSS px, scale 2, three renders per engine; peak RSS s
 (43744837000, 43746767310, 43752965645, 43754284965, 43762042304, 43886554380) kept pageplate's `--full` peak inside
 37.6 MiB to 37.9 MiB, a 0.8 % spread, while Chromium ranged over 2336 MiB to 2453 MiB. Four of the six
 measured the previous deck (same canvas, different document — [GATES.md](GATES.md#cost) has the table); the
-published figure is the per-run median of sampled peaks, and the widest single samples reached 38.1 and
-2474.1 MiB.
+published figure is the per-run median of sampled peaks, and the widest single samples in this receipt reached
+38.1 and 2427.8 MiB. Earlier runs peaked higher on their own decks; those maxima belong to the table beside
+the run that produced them, not to this page.
 
 **The headline is one deck, one render.** Peak memory follows canvas area, not page length, and there is no
 daemon and no queue: N parallel renders multiply the peak by N. One 128 MP decode costs about 488 MiB of RGBA,
