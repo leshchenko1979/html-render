@@ -36,7 +36,14 @@ version scheme; no renderer change, so the pixels this release paints are the on
 - `--help` and `--version` print the name from `CARGO_PKG_NAME`, so the crate name
   and the printed name cannot drift apart.
 - The advertised images state the new name and `v0.4.0`, re-rendered from their
-  source HTML with the binary the receipt names (`sha256 de69ad53…`).
+  source HTML with the `v0.3.0-beta.10` binary (`sha256 de69ad53…`), which paints
+  the same pixels as this release.
+- **`bench/results.json` re-measured on the renamed deck** (CI run `43886554380`).
+  The deck's `html_md5` moved to `0593ca9f…` because the generator stamps the
+  product name into the document it builds, so the previous receipt described a
+  document that no longer exists; the drift gate refused to compare the two, which
+  is what it is for. Chromium's tree peak on the new deck is 2380.2 MiB and
+  pageplate's `--full` is 37.8 MiB, so the ratios moved to 62.97× / 31.57× / 50.11×.
 
 ## v0.3.0-beta.10 — 2026-11-15
 

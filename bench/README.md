@@ -8,11 +8,11 @@ edited by hand: every figure the README advertises is read from it by
 
 | | |
 |---|---|
-| Workflow run | [43762042304](https://github.com/leshchenko1979/pageplate/actions/runs/43762042304) (`parity`, `4b22e6a`) |
+| Workflow run | [43886554380](https://github.com/leshchenko1979/pageplate/actions/runs/43886554380) (`parity`, `e73a0b6`) |
 | Artefact | `bench-results`, step *Benchmark against Chromium* |
-| Measured | 2026-11-15T21:10:29Z |
+| Measured | 2026-11-16T14:33:39Z |
 | Host | `runnervmy75tu`, Ubuntu 24.04, glibc 2.35, 4 vCPU, 15,989 MiB |
-| Probe | `html-render 0.3.0-beta.10`, `sha256 de69ad53…` |
+| Probe | `pageplate 0.4.0`, `sha256 3edc885f…` |
 | Browser | Google Chrome 157.0.8103.78 |
 
 The run id, commit, *Measured* instant, host and probe version above are

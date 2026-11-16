@@ -104,42 +104,42 @@ git clone https://github.com/leshchenko1979/pageplate && cd pageplate
 python3 tools/bench.py --bin <path-to-render> --chrome <path-to-chrome> --out /tmp/mine.json
 ```
 
-A `deck.html` digest of `b77aac2de5931588dfa01eb5af418bc5` means the same document as the receipt. Any other
+A `deck.html` digest of `0593ca9f047b4110432898a9cba23263` means the same document as the receipt. Any other
 digest means the generator moved, and the rows below describe a different document.
 
 Eight slides at 1280×5760 CSS px, scale 2, three renders per engine; peak RSS sums every process the engine spawned:
 
 | measurement | Chromium | pageplate | ratio |
 |---|---|---|---|
-| peak RSS, `--full` | 2350.8 MiB | 37.6 MiB | **62.52×** |
-| peak RSS, `--clip` | 2350.8 MiB | 75.5 MiB | **31.14×** |
-| peak RSS, `--per-element` | 2350.8 MiB | 47.4 MiB | **49.59×** |
+| peak RSS, `--full` | 2380.2 MiB | 37.8 MiB | **62.97×** |
+| peak RSS, `--clip` | 2380.2 MiB | 75.4 MiB | **31.57×** |
+| peak RSS, `--per-element` | 2380.2 MiB | 47.5 MiB | **50.11×** |
 
-**Memory carries the claim.** At least 31× less in the least favourable mode, and 49× in the advertised one —
-`--per-element`, the figure the hero quotes. The band repeats: five runs of the probe on one runner image
-(43744837000, 43746767310, 43752965645, 43754284965, 43762042304) kept pageplate's `--full` peak inside
-37.6 MiB to 37.9 MiB, a 0.8 % spread, while Chromium ranged over 2336 MiB to 2453 MiB. Four of the five
+**Memory carries the claim.** At least 31× less in the least favourable mode, and 50× in the advertised one —
+`--per-element`, the figure the hero quotes. The band repeats: six runs of the probe on one runner image
+(43744837000, 43746767310, 43752965645, 43754284965, 43762042304, 43886554380) kept pageplate's `--full` peak inside
+37.6 MiB to 37.9 MiB, a 0.8 % spread, while Chromium ranged over 2336 MiB to 2453 MiB. Four of the six
 measured the previous deck (same canvas, different document — [GATES.md](GATES.md#cost) has the table); the
-published figure is the per-run median of sampled peaks, and the widest single samples reached 38.0 and
+published figure is the per-run median of sampled peaks, and the widest single samples reached 38.1 and
 2474.1 MiB.
 
 **The headline is one deck, one render.** Peak memory follows canvas area, not page length, and there is no
 daemon and no queue: N parallel renders multiply the peak by N. One 128 MP decode costs about 488 MiB of RGBA,
 and the worst case in `tools/memory_baseline.json` is `clip_oversized_frame` at **809.5 MiB**, 21× the
-37.6 MiB headline. Budget a container from that.
+37.8 MiB headline. Budget a container from that.
 
 **Wall clock is measured, gated, and not advertised.** The receipt carries it for both engines, and the drift
 check gates the wall *ratio* at a deliberately coarse 45 %: a 1.85× slowdown of this renderer trips it, a 1.80×
 one does not. Absolute seconds stay ungated, because on one host, one deck and one binary Chromium read
-1.604 s on one run and 3.120 s on the next. A ratio that mostly reports the other program's load is not a
+3.186 s on one run and 3.774 s on the next. A ratio that mostly reports the other program's load is not a
 property of this one.
 
 Method, host and the run itself: [GATES.md](GATES.md#cost).
 
 ## Fidelity against Chromium
 
-At the same viewport and scale, pixel for pixel against Chromium, the probe's deck differs on **4.7083 % of
-pixels by more than 16 levels** across 29,491,200 pixels. The mean channel difference is 8.2889; ink coverage
+At the same viewport and scale, pixel for pixel against Chromium, the probe's deck differs on **4.7102 % of
+pixels by more than 16 levels** across 29,491,200 pixels. The mean channel difference is 8.291; ink coverage
 is 17.073 % (Blitz) against 16.6941 % (Chromium). This is the entire deck at full resolution rather than a
 sample, and `tools/bench_compare.py` recomputes it from the two PNG sets.
 

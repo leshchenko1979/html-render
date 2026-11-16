@@ -9,7 +9,7 @@
       11520
     ],
     "generator": "tools/bench_deck.py",
-    "html_md5": "b77aac2de5931588dfa01eb5af418bc5",
+    "html_md5": "0593ca9f047b4110432898a9cba23263",
     "plates_md5": {
       "plate-a.png": "5dea3bb009d5e51fee1ce649575fd5b9",
       "plate-b.png": "d809f7dbfe5031937dc82dbdef9af9a9",
@@ -22,52 +22,52 @@
   },
   "determinism": {
     "distinct_md5": 1,
-    "md5": "5af754b35b730f2b6335ca193b9e3aa6",
+    "md5": "305512e59ef50ff7e50429f74ffd972e",
     "renders": 3,
     "shape": "--full"
   },
   "engines": {
     "chromium": {
       "command": "/usr/bin/google-chrome --headless --incognito --disable-gpu --no-sandbox --hide-scrollbars --force-device-scale-factor=2 --window-size=1280,5760 --screenshot=chromium.png file:///home/runner/work/html-render/html-render/bench/deck/deck.html",
-      "peak_tree_mib": 2350.8,
-      "peak_tree_mib_max": 2474.1,
+      "peak_tree_mib": 2380.2,
+      "peak_tree_mib_max": 2427.8,
       "png": "bench/deck/chromium.png",
-      "png_md5": "c25e97bb85d66ea61b34d6c7f766694f",
+      "png_md5": "85e7913b5cfb34bc0ddc913b1edfb4c8",
       "png_md5_all": [
-        "c25e97bb85d66ea61b34d6c7f766694f",
-        "c25e97bb85d66ea61b34d6c7f766694f",
-        "c25e97bb85d66ea61b34d6c7f766694f"
+        "85e7913b5cfb34bc0ddc913b1edfb4c8",
+        "85e7913b5cfb34bc0ddc913b1edfb4c8",
+        "85e7913b5cfb34bc0ddc913b1edfb4c8"
       ],
       "png_md5_distinct": 1,
       "repeats": 3,
       "status": "measured",
       "version": "Google Chrome 157.0.8103.78",
-      "wall_median_s": 1.604,
+      "wall_median_s": 2.575,
       "wall_s": [
-        1.536,
-        1.613,
-        1.604
+        2.575,
+        2.563,
+        2.806
       ]
     },
-    "html-render": {
-      "command": "/home/runner/work/html-render/html-render/target/release/render deck.html blitz.png 1280 5760 2 --full",
-      "peak_tree_mib": 37.6,
-      "peak_tree_mib_max": 38.0,
+    "pageplate": {
+      "command": "/home/runner/work/html-render/html-render/target/release/pageplate deck.html blitz.png 1280 5760 2 --full",
+      "peak_tree_mib": 37.8,
+      "peak_tree_mib_max": 38.1,
       "png": "bench/deck/blitz.png",
-      "png_md5": "5af754b35b730f2b6335ca193b9e3aa6",
+      "png_md5": "305512e59ef50ff7e50429f74ffd972e",
       "png_md5_all": [
-        "5af754b35b730f2b6335ca193b9e3aa6",
-        "5af754b35b730f2b6335ca193b9e3aa6",
-        "5af754b35b730f2b6335ca193b9e3aa6"
+        "305512e59ef50ff7e50429f74ffd972e",
+        "305512e59ef50ff7e50429f74ffd972e",
+        "305512e59ef50ff7e50429f74ffd972e"
       ],
       "png_md5_distinct": 1,
       "repeats": 3,
       "status": "measured",
-      "wall_median_s": 1.011,
+      "wall_median_s": 1.404,
       "wall_s": [
-        1.011,
-        1.03,
-        1.011
+        1.402,
+        1.404,
+        1.405
       ]
     }
   },
@@ -76,12 +76,12 @@
     "height": 11520,
     "ink_engine_pct": 17.073,
     "ink_ref_pct": 16.6941,
-    "mean_diff": 8.2889,
-    "over16_pct": 4.7083,
+    "mean_diff": 8.291,
+    "over16_pct": 4.7102,
     "pixels": 29491200,
     "width": 2560
   },
-  "generated_at": "2026-11-15T21:10:29Z",
+  "generated_at": "2026-11-16T14:33:39Z",
   "host": {
     "cpu_count": 4,
     "glibc": "ldd (Ubuntu GLIBC 2.35-0ubuntu3.15) 2.35",
@@ -91,16 +91,16 @@
     "python": "3.10.12"
   },
   "probe": {
-    "path": "/home/runner/work/html-render/html-render/target/release/render",
-    "sha256": "de69ad53a09c9088dae15179e5def2b15eae36fb169015dfcae3eb8541c25405",
-    "version": "html-render 0.3.0-beta.10"
+    "path": "/home/runner/work/html-render/html-render/target/release/pageplate",
+    "sha256": "3edc885f26ed5080cde44d6ee72091228c94db3651df7c3a8edc90f3c2093c9c",
+    "version": "pageplate 0.4.0"
   },
   "run": {
     "attempt": "1",
-    "id": "43762042304",
+    "id": "43886554380",
     "ref": "refs/heads/main",
     "repository": "leshchenko1979/html-render",
-    "sha": "4b22e6a135e1af06a5383396c626eac809d717c1"
+    "sha": "e73a0b6f7cecbe6808518d8619b19193a5be5b29"
   },
   "schema": 1,
   "shapes": {
@@ -108,15 +108,15 @@
       "chromium": {
         "derived_from": "engines.chromium",
         "note": "one tall screenshot, cut into slides; no extra render",
-        "peak_tree_mib": 2350.8,
+        "peak_tree_mib": 2380.2,
         "pngs": 8,
         "status": "measured",
-        "wall_median_s": 1.604
+        "wall_median_s": 2.575
       },
-      "html-render-clip": {
-        "command": "/home/runner/work/html-render/html-render/target/release/render --clip deck.html slides 1280 5760 2 .slide --document",
-        "peak_tree_mib": 75.5,
-        "peak_tree_mib_max": 75.6,
+      "pageplate-clip": {
+        "command": "/home/runner/work/html-render/html-render/target/release/pageplate --clip deck.html slides 1280 5760 2 .slide --document",
+        "peak_tree_mib": 75.4,
+        "peak_tree_mib_max": 75.5,
         "png_px": [
           2560,
           1440
@@ -124,17 +124,17 @@
         "pngs": 8,
         "repeats": 3,
         "status": "measured",
-        "wall_median_s": 1.039,
+        "wall_median_s": 1.433,
         "wall_s": [
-          1.04,
-          1.039,
-          1.031
+          1.432,
+          1.433,
+          1.433
         ]
       },
-      "html-render-per-element": {
-        "command": "/home/runner/work/html-render/html-render/target/release/render --clip deck.html slides-pe 1280 5760 2 .slide --document --per-element",
-        "peak_tree_mib": 47.4,
-        "peak_tree_mib_max": 47.4,
+      "pageplate-per-element": {
+        "command": "/home/runner/work/html-render/html-render/target/release/pageplate --clip deck.html slides-pe 1280 5760 2 .slide --document --per-element",
+        "peak_tree_mib": 47.5,
+        "peak_tree_mib_max": 47.7,
         "png_px": [
           2560,
           1440
@@ -142,11 +142,11 @@
         "pngs": 8,
         "repeats": 3,
         "status": "measured",
-        "wall_median_s": 1.011,
+        "wall_median_s": 1.402,
         "wall_s": [
-          1.005,
-          1.011,
-          1.013
+          1.422,
+          1.402,
+          1.402
         ]
       }
     }

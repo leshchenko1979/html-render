@@ -203,11 +203,11 @@ def main():
         receipt = None
 
     if receipt is not None:
-        doc = receipt["engines"]["html-render"]
+        doc = receipt["engines"]["pageplate"]
         chrome = receipt["engines"]["chromium"]
         shapes = receipt["shapes"]["slides"]
-        clip = shapes["html-render-clip"]
-        per_el = shapes["html-render-per-element"]
+        clip = shapes["pageplate-clip"]
+        per_el = shapes["pageplate-per-element"]
 
         # The provenance table in `bench/README.md` is a set of claims about
         # this receipt, and it was hand-typed: it named run 43744837000 measured
@@ -496,10 +496,10 @@ def main():
             fails.append("receipt expected_px %r != css_px * scale %r"
                          % (deck["expected_px"], want_px))
         checked += 1
-        if deck["slides"] != receipt["shapes"]["slides"]["html-render-clip"]["pngs"]:
+        if deck["slides"] != receipt["shapes"]["slides"]["pageplate-clip"]["pngs"]:
             fails.append("receipt deck has %d slides but the --clip run wrote %d PNGs"
                          % (deck["slides"],
-                            receipt["shapes"]["slides"]["html-render-clip"]["pngs"]))
+                            receipt["shapes"]["slides"]["pageplate-clip"]["pngs"]))
 
     # --- a derived record must actually be derived --------------------------
     # shapes.slides.chromium says derived_from engines.chromium: the browser

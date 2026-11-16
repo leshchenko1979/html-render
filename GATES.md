@@ -23,7 +23,7 @@ python3 tools/bench.py --bin <render> --chrome <chrome> --out /tmp/mine.json
 ```
 
 Compare `/tmp/mine.json` to `bench/results.json`; if `deck.html_md5` matches
-`b77aac2de5931588dfa01eb5af418bc5`, both describe the same document. CI makes
+`0593ca9f047b4110432898a9cba23263`, both describe the same document. CI makes
 that comparison on every push: `tools/bench_drift.py` fails the build when a
 figure moves past 45 % (wall ratio), 20 % (memory) or 15 % (fidelity) of the committed
 receipt, so the published numbers cannot quietly come to describe a different
@@ -69,7 +69,7 @@ produces for the same element.
 |---|---|
 | result | **PASS** |
 | slides | 12/12 at 2560×1440 |
-| whole deck | 4.7083 % of pixels off by >16, over 29,491,200 pixels |
+| whole deck | 4.7102 % of pixels off by >16, over 29,491,200 pixels |
 
 Two structural checks, because a gate that passes on a wrong mechanism is worse
 than no gate:
@@ -120,22 +120,22 @@ engine's tree**, which is what a container limit counts:
 
 | engine | peak tree RSS | wall |
 |---|---|---|
-| Chromium, one tall screenshot cut into eight slides | 2350.8 MiB | 1.604 s |
-| `--full` | **37.6 MiB** | 1.011 s |
-| `--clip` (banded, one PNG per frame) | 75.5 MiB | 1.039 s |
-| `--clip --per-element` | 47.4 MiB | 1.011 s |
+| Chromium, one tall screenshot cut into eight slides | 2380.2 MiB | 2.575 s |
+| `--full` | **37.8 MiB** | 1.404 s |
+| `--clip` (banded, one PNG per frame) | 75.4 MiB | 1.433 s |
+| `--clip --per-element` | 47.5 MiB | 1.402 s |
 
 **The advertised claim is memory: at least 31× less than Chromium**, taking the
-least favourable of the three modes (49× in the advertised `--per-element`
+least favourable of the three modes (50× in the advertised `--per-element`
 mode). Memory is the one quantity here that is steady enough to carry a claim —
-pageplate's `--full` peak held between 37.6 MiB and 37.9 MiB across five runs
+pageplate's `--full` peak held between 37.6 MiB and 37.9 MiB across six runs
 of the probe on one runner image, while Chromium's moved 21.7 % and its wall
 clock 18.5 %.
 
 Wall clock is measured and printed, but the drift check gates the wall
 **ratio**, not the seconds — and it gates it coarsely. Absolute seconds cannot be
-gated at all: the same host, deck and binary read Chromium at 1.604 s on one run
-and 3.120 s on the next, because a multi-process browser on a busy runner is a
+gated at all: the same host, deck and binary read Chromium at 3.186 s on one run
+and 3.774 s on the next, because a multi-process browser on a busy runner is a
 measurement of the runner. The ratio survives that better but not perfectly, and
 it is load-dependent in one direction: six runs on one runner image span 1.42× to
 1.85×. So the band is 45 %, which catches a 1.85× slowdown of our renderer and
@@ -144,12 +144,13 @@ Speed is not advertised anywhere; the ratio exists only so that a regression has
 somewhere to fail.
 
 A record, not a gate — same runner image throughout. The first four rows
-measured the previous deck (`deck.html` md5 `5c71602d…`), the last one the deck
-that ships today (`b77aac2d…`); both are 2560×11520, but they are different
-documents and the drift check refuses to compare them. The fifth row is the
-receipt's own run, and it concluded `failure` — the deck refusal first among
-its reasons, then four wall rows past the 45 % band. The drift gate doing its job,
-not the figures failing. That the memory ratio
+measured the previous deck (`deck.html` md5 `5c71602d…`), the fifth the deck that
+shipped under the former name (`b77aac2d…`), and the sixth the deck after the
+rename touched its title (`0593ca9f…`); all three are 2560×11520, but they are
+different documents and the drift check refuses to compare them. Rows five and
+six are the receipt's own runs, and both concluded `failure` — the deck refusal
+first among their reasons, then four wall rows past the 45 % band. The drift gate
+doing its job, not the figures failing. That the memory ratio
 barely moved across the deck change is the useful part: it is a property of the
 architecture, not of the page.
 
@@ -160,6 +161,7 @@ architecture, not of the page.
 | 43752965645 | `5c71602d` | 2389.6 MiB | 37.8 MiB | 3.250 s | 2.292 s |
 | 43754284965 | `5c71602d` | 2431.3 MiB | 37.7 MiB | 3.101 s | 2.042 s |
 | 43762042304 | `b77aac2d` | 2350.8 MiB | 37.6 MiB | 1.604 s | 1.011 s |
+| 43886554380 | `0593ca9f` | 2380.2 MiB | 37.8 MiB | 2.575 s | 1.404 s |
 
 Two things this section does not claim.
 
@@ -492,8 +494,8 @@ Whole-deck, every pixel, no sampling:
 | probe deck, scale 2, 2560×11520 | |
 |---|---|
 | pixels compared | **29,491,200** |
-| pixels off by >16 | **4.7083 %** |
-| mean channel difference | 8.2889 |
+| pixels off by >16 | **4.7102 %** |
+| mean channel difference | 8.291 |
 | ink coverage | 17.073 % engine vs 16.6941 % Chromium |
 
 The residual is antialiasing, not layout: wrap points match, boxes sit at
