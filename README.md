@@ -113,8 +113,9 @@ no allowlist, so an untrusted document reaches the network
 
 ## Performance
 
-Every figure below is derived from `bench/results.json` by `tools/check_claims.py`; `tools/bench.py` wrote that
-receipt on a GitHub runner and the repo commits it unedited. The deck comes from a seed, so one command reproduces it
+Figures below are gated by `tools/check_claims.py` against `bench/results.json`; `tools/bench.py` wrote that receipt
+on a GitHub runner and the repo commits it unedited. The six-run spread is the exception, since one receipt carries one
+run: it comes from the run-history table in GATES.md. The deck comes from a seed, so one command reproduces it
 anywhere:
 
 ```bash
@@ -174,6 +175,7 @@ CSS is not Chromium's: an unknown property is dropped, not rejected, so a reader
 
 Defects and gaps are tracked as issues rather than restated here:
 **[open limitations](https://github.com/leshchenko1979/pageplate/issues?q=is%3Aissue+is%3Aopen+label%3Alimitation)**.
+That list is authoritative and current; this page describes what the tool does, not what is wrong with it.
 
 ## Where the detail lives
 
