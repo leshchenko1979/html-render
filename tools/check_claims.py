@@ -619,7 +619,8 @@ def main():
     # grew two docs (the probe's, and the research note) that nothing pointed
     # at. Both directions are checked: the target exists, and the README says
     # where it is.
-    for target in ("bench/README.md", "docs/why-html-first.md"):
+    for target in ("bench/README.md", "docs/why-html-first.md",
+                   "docs/USAGE.md"):
         checked += 1
         if not os.path.exists(os.path.join(ROOT, target)):
             fails.append("README.md links %s, which does not exist" % target)

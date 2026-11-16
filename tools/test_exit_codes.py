@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pins the exit-code contract documented in README §Exit codes.
+"""Pins the exit-code contract documented in docs/USAGE.md §Exit codes.
 
 A CLI that exits `0` on a typo is worse than one that crashes: `--documnet`
 rendered a fragment of a full document and wrote a plausible PNG of the wrong
@@ -21,6 +21,7 @@ hand-written measurement: it stays put when a leg is added or deleted.
 
 import argparse
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -165,6 +166,43 @@ def main():
         if not out.startswith("html-render "):
             fails.append("--help does not start with the program name and version")
             print("FAIL --help does not start with the program name and version")
+
+        # 0 — every flag the parser accepts is documented, and the doc invents
+        # none. AGENTS.md used to forbid a flags table anywhere but `--help`,
+        # on the grounds that a third copy drifts unguarded; that is exactly
+        # what happened to `--scroll`, which the parser accepts, `--help` omits
+        # and no document named. The table in docs/USAGE.md is now the copy
+        # with a leg behind it.
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "src", "main.rs"), encoding="utf-8") as fh:
+            source = fh.read()
+        block = re.search(r"if !matches!\(\s*a\.as_str\(\),(.*?)\)\s*\{",
+                          source, re.S)
+        if not block:
+            fails.append("cannot find the accepted-flag list in src/main.rs")
+            print("FAIL flags: accepted-flag list not found")
+        else:
+            parser_flags = set(re.findall(r'"(--[a-z-]+)"', block.group(1)))
+            with open(os.path.join(root, "docs", "USAGE.md"), encoding="utf-8") as fh:
+                usage = fh.read()
+            section = usage.split("## Flags", 1)[-1].split("## Environment", 1)[0]
+            doc_flags = set(re.findall(r"(--[a-z][a-z-]+)", section))
+            help_flags = set(re.findall(r"--[a-z][a-z-]+", out))
+            for name, missing in (("parser", parser_flags - doc_flags),
+                                  ("--help", help_flags - doc_flags),
+                                  ("USAGE.md", doc_flags - parser_flags
+                                   - {"--help", "--version"})):
+                for flag in sorted(missing):
+                    fails.append("%s names %s, which docs/USAGE.md does not "
+                                 "document in its Flags table" % (name, flag)
+                                 if name != "USAGE.md" else
+                                 "docs/USAGE.md documents %s, which the parser "
+                                 "does not accept" % flag)
+                    print("FAIL flags: %s vs docs/USAGE.md: %s" % (name, flag))
+            if not (parser_flags - doc_flags or help_flags - doc_flags
+                    or doc_flags - parser_flags - {"--help", "--version"}):
+                print("ok   flags: %d accepted, %d documented, none hidden"
+                      % (len(parser_flags), len(doc_flags)))
 
         # 0 — a missing output directory is created, in BOTH modes. Clip mode
         # always did; the single-image path panicked 101 instead, so the same

@@ -182,11 +182,12 @@ File a defect with the measurement that exposes it, not with an adjective.
 
 | Path | Holds |
 |---|---|
-| `README.md` | the first five minutes: what it is, install, usage, limits, where the detail lives — one screen per section. Budget 220 lines, hard ceiling 235 (a 2026-11-16 rewrite cut it from 282); the budget is a subtraction exercise, not a target to fill |
+| `README.md` | the first five minutes: what it is, install, usage, performance, fidelity, scope, where the detail lives — one screen per section. **It carries no defect list**: defects are issues under the `limitation` label (owner directive 2026-11-16). Budget 220 lines, hard ceiling 235 (a 2026-11-16 rewrite cut it from 282); the budget is a subtraction exercise, not a target to fill |
+| `docs/USAGE.md` | the reference: every flag, all six environment variables, the exit-code contract, both machine-readable streams, and the behaviour a caller must plan for. The flags table here is pinned against the parser by `tools/test_exit_codes.py` |
 | `GATES.md` | the measurements — determinism, scale, clip, corpus, fidelity, CSS audit, published artefacts |
 | `CONTRIBUTING.md` | build requirements, the five workflows, the rules that bite |
 | `SECURITY.md` | threat model, measured egress proof, reporting |
-| `src/main.rs` | the renderer; `help_text()` is the single source of truth for flags |
+| `src/main.rs` | the renderer; `help_text()` prints the flags, `docs/USAGE.md` is the documented reference, and `tools/test_exit_codes.py` pins the two together |
 | `tools/` | the gates and the instruments that measure them |
 | `fixtures/` | 36 documents that paint probes in exact colours so geometry can be read from a PNG |
 
@@ -194,9 +195,19 @@ File a defect with the measurement that exposes it, not with an adjective.
 
 - **Semantic line breaks** — one clause per line, never reflowed. Diffs stay
   reviewable that way.
-- **Do not add a flags table** to any document. `--help` is tested against the
-  parser by `tools/test_exit_codes.py`; a third copy would be unguarded.
-- **Never soften a negative statement.** The named layout defects, the five
-  silent-failure modes and "verify the PNG, not the exit code" are the product.
+- **One flags table, and it is guarded.** `docs/USAGE.md` is the only document
+  that lists flags, environment variables and exit codes; `tools/test_exit_codes.py`
+  asserts that every flag the parser accepts is documented there, that the table
+  invents none, and that `--help` names nothing it omits. Do not add a second
+  copy elsewhere — an unguarded third copy is how `--scroll` stayed invisible.
+- **Defects live in issues, not in prose.** A limitation the README used to
+  enumerate is filed under the `limitation` label and linked from a single
+  pointer, so the page describes what the tool does and the tracker says what is
+  wrong with it. File first, then remove the sentence — never the reverse, or a
+  known limitation becomes a hidden one.
+- **Never soften a negative statement.** A limitation moves to an issue with its
+  measurement attached, never out of the record: the layout divergences, the
+  silent-failure modes and "verify the PNG, not the exit code" are the product,
+  wherever they are written down.
 - **Never invent a number.** A figure that was not produced by a command in the
   same turn does not go in a file.
