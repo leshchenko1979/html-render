@@ -82,7 +82,7 @@ forms.
 |---|---|
 | `0` | a PNG was written, or `--help` / `--version` was printed |
 | `2` | bad arguments: unknown flag, too few arguments, `--clip` not first, `--per-element` outside `--clip`, `--full` with `--clip`, `--document` with `--fragment` |
-| `3` | the selector matched nothing. The second half of this clause — "or every match had no layout box" — is **not implemented**: a selector whose matches have no layout box returns `0` with a 1×1 PNG ([#38](https://github.com/leshchenko1979/pageplate/issues/38)) |
+| `3` | the selector matched nothing, or every match had no layout box (`br`, `wbr`, an empty inline `span`). A match with a **zero-size** box is a different case: `script`, `style`, `template` and `display:none` return `0` with a 1×1 PNG ([#38](https://github.com/leshchenko1979/pageplate/issues/38)) |
 | `4` | output written but known to be incomplete: a sub-resource failed to fetch (`404`, DNS, connection refused), was refused as too large, a fetch hit `BLITZ_DEADLINE_SECS`, or a frame past 65,408 px was cut |
 | `5` | one canvas would exceed the renderer limit (65,408 wide, 65,532 tall) and nothing was written; with banding on, that means one band or one element is too large, banding was disabled with `BLITZ_BAND_MIB=0`, or a `position:fixed` element forces one canvas past the limit |
 | `101` | panic: unparsable number, invalid selector, unreadable input, unwritable output path |
@@ -98,7 +98,7 @@ A killed process returns none of them: the shell reports `128+signal` (`137` on 
 | code | output path after the run |
 |---|---|
 | `2` | untouched — arguments are validated before anything is opened |
-| `3` | with `--clip`: the previous run's frames are **already swept**, so the directory can be empty; with a single image, untouched |
+| `3` | with `--clip`: a selector that matched nothing leaves the previous frames **untouched**; the all-matches-boxless path **sweeps them first**, so the directory is empty |
 | `4` | a complete PNG (or the `--clip` set), plus a named reason on stderr |
 | `5` | with `--clip`: **empty** — the sweep runs before the paint, so a refusal leaves nothing |
 | `101` | possibly a **truncated PNG at the final path**: the file is opened before the panic, so a good file can be replaced by a stub |

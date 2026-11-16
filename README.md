@@ -82,10 +82,13 @@ host's `libssl.so.3`, so your distro patches it, which makes the tarball the bet
 ## Usage
 
 ```bash
-pageplate page.html out.png 1280 720 2                            # one PNG
-pageplate --clip deck.html slides/ 1280 720 2 'section.slide'    # one PNG per match
-pageplate --clip deck.html slides/ 1280 720 2 'section.slide' --per-element   # element-sized canvases
+pageplate page.html out.png 1280 720 2                            # your document → one PNG
+pageplate --clip assets/demo-deck.html slides/ 1280 720 2 'section.slide'    # one PNG per match
+pageplate --clip assets/demo-deck.html slides/ 1280 720 2 'section.slide' --per-element   # element-sized canvases
 ```
+
+`page.html` is your own file; the two `--clip` recipes use the four-slide deck this repo ships, so they run from a
+fresh clone.
 
 The viewport is given in CSS pixels and `scale` multiplies the output; a single-image run may leave it out. A
 `1280 640 2` run writes 2560×1280, the shape of `assets/og.png` — but the canvas is the viewport, so a document taller
@@ -97,8 +100,10 @@ runs aimed at the same one interleave their frames and both exit `0`
 ([#37](https://github.com/leshchenko1979/pageplate/issues/37)).
 
 **Full reference: [docs/USAGE.md](docs/USAGE.md)** — every flag, all six environment variables, the exit-code
-contract, the three modes and their memory shapes, and the two machine-readable streams. During a render the only
-output is `TIMING …` on stderr and, under `--clip`, one `clip_NN css x= y= w= h=` line per frame on stdout.
+contract, the three modes and their memory shapes, and the two machine-readable streams. On stderr: `TIMING …`
+every run, plus a `warning: …` when the document was cut, a font was substituted, a sub-resource failed, stale
+frames were swept, or a matched element was skipped — and `error: exiting N` when the run fails. On stdout, one
+`clip_NN css x= y= w= h=  physical WxH at x,y` line per `--clip` frame.
 
 Sub-resources are fetched at render time with no allowlist, so an untrusted document reaches the network;
 [SECURITY.md](SECURITY.md#what-rendering-does-to-the-machine) covers what that means for the host.
