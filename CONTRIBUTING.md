@@ -7,10 +7,11 @@ regression, or a prose number that turns out to be wrong.
 ## Building
 
 The build is a GitHub Actions job, because the host this was written on forbids
-local Rust compilation. Five workflows:
+local Rust compilation. Six workflows:
 
 | Workflow | Trigger | Output |
 |---|---|---|
+| `claims.yml` | push touching `README.md`, `GATES.md`, `docs/`, `AGENTS.md`, `CONTRIBUTING.md`, `bench/`, `Cargo.toml`, `assets/`, `tools/check_claims.py`, `release.yml` or the workflow itself; or manual | runs the claim guard's own selftest, then recomputes every derived figure in `README.md`, `GATES.md` and the release template from `bench/results.json`. No Rust build: `--bin` is optional and only the asset re-render uses it, so this covers 122 of 124 claims in 0.3 s |
 | `parity.yml` | push touching `src/`, `Cargo.*`, `assets/`, `fixtures/`, `tools/`, `.github/workflows/**` or `.github/dependabot.yml`; or manual | builds, runs the clip, exit-code, redirect, full-page, document-root, CSS-audit, corpus-gate and undefined-name tests, runs the exit-code contract against the **published tarball**, **measures the corpus and fails on a new divergence**, uploads results |
 | `drain-probe.yml` | manual dispatch only | builds, measures the image drain loop under each `BLITZ_DRAIN` mode, uploads the report |
 | `release.yml` | push a `v*` tag, or manual | builds, packages, publishes, **then verifies the published asset** |
