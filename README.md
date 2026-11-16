@@ -122,8 +122,9 @@ Sub-resources are fetched at render time with no allowlist, so an untrusted docu
 
 ## Performance
 
-Nothing below is typed by hand: `bench/results.json` is a receipt that `tools/bench.py` wrote on a GitHub
-runner, and the repo commits it unedited. The deck comes from a seed, so one command reproduces this document anywhere:
+Every figure below is checked against `bench/results.json` by `tools/check_claims.py`, which derives each
+value from the receipt rather than trusting this page: `bench/results.json` is a receipt that `tools/bench.py`
+wrote on a GitHub runner, and the repo commits it unedited. The deck comes from a seed, so one command reproduces this document anywhere:
 
 ```bash
 git clone https://github.com/leshchenko1979/pageplate && cd pageplate
