@@ -119,7 +119,7 @@ def timed(cmd):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--blitz", default=os.path.join(ROOT, "target", "release", "render"))
+    ap.add_argument("--blitz", default=os.path.join(ROOT, "target", "release", "pageplate"))
     ap.add_argument("--chrome", default=None)
     ap.add_argument("--bench-repeats", type=int, default=5)
     ap.add_argument(

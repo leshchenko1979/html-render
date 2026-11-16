@@ -88,7 +88,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--html", required=True)
     ap.add_argument("--chrome", default=None)
-    ap.add_argument("--blitz", default=os.path.join(ROOT, "target", "release", "render"))
+    ap.add_argument("--blitz", default=os.path.join(ROOT, "target", "release", "pageplate"))
     ap.add_argument("--repeats", type=int, default=3)
     args = ap.parse_args()
 
