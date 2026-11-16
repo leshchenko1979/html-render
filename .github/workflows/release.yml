@@ -62,6 +62,24 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq pkg-config libfontconfig1-dev libfreetype6-dev
 
+      - name: Assert the tag matches Cargo.toml
+        # V1, measured: `v0.3.0-beta.4-r1` shipped a binary reporting `0.1.0`
+        # because the version came from the tag and nothing compared it to the
+        # manifest. Cargo.toml is the single source of truth; the tag is derived.
+        # Placed before the build so a mismatch costs seconds, not eight minutes.
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME:-${{ inputs.tag }}}"
+          [ -n "$TAG" ] || { echo "::error::no tag"; exit 1; }
+          MANIFEST=$(python3 -c 'import tomllib;print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"])')
+          echo "tag: $TAG   manifest: $MANIFEST"
+          if [ "v$MANIFEST" != "$TAG" ]; then
+            echo "::error::tag $TAG does not match Cargo.toml version $MANIFEST"
+            exit 1
+          fi
+          echo "ok: tag and manifest agree"
+
       - name: Build the Blitz renderer
         shell: bash
         run: |
@@ -86,6 +104,21 @@ jobs:
             exit 1
           fi
           echo "ok: runs on glibc >= 2.35"
+
+      - name: Assert the built binary reports the tag
+        # V1 one layer down: the manifest can be right while the built artefact is
+        # stale (a cached target/, a wrong [[bin]]). Read the binary, not the source.
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME:-${{ inputs.tag }}}"
+          REPORTED=$(./target/release/render --version | head -1 | awk '{print $NF}')
+          echo "tag: $TAG   binary reports: $REPORTED"
+          if [ "$REPORTED" != "${TAG#v}" ]; then
+            echo "::error::binary reports $REPORTED but the tag is $TAG"
+            exit 1
+          fi
+          echo "ok: binary matches the tag"
 
       - name: Package
         id: pkg
