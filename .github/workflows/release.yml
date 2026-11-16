@@ -72,7 +72,15 @@ jobs:
           set -euo pipefail
           TAG="${GITHUB_REF_NAME:-${{ inputs.tag }}}"
           [ -n "$TAG" ] || { echo "::error::no tag"; exit 1; }
-          MANIFEST=$(python3 -c 'import tomllib;print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"])')
+          # No Python: ubuntu-22.04 ships 3.10, which has no tomllib. awk reads the
+          # [package] section only, so a dependency's `version` can never be picked up.
+          MANIFEST=$(awk '
+            /^\[/ { in_pkg = ($0 == "[package]"); next }
+            in_pkg && /^[[:space:]]*version[[:space:]]*=/ {
+              sub(/^[^"]*"/, ""); sub(/".*$/, ""); print; exit
+            }
+          ' Cargo.toml)
+          [ -n "$MANIFEST" ] || { echo "::error::could not read [package].version from Cargo.toml"; exit 1; }
           echo "tag: $TAG   manifest: $MANIFEST"
           if [ "v$MANIFEST" != "$TAG" ]; then
             echo "::error::tag $TAG does not match Cargo.toml version $MANIFEST"
