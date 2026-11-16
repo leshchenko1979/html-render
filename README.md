@@ -18,11 +18,9 @@ html-render assets/hero.html hero.png 1600 900 2 --document  # the PNG above; ne
 
 ## Why it exists
 
-Getting a page into an image inside CI usually means shipping a browser: several hundred megabytes
-of image, a JavaScript engine the job never calls, a cold start ahead of the first pixel, and a
-runtime to install before any of it.
+Getting a page into an image usually means using a browser: a memory footprint of 2GB+, a cold start ahead of the first pixel, and a runtime to install before any of it.
 
-This one reads a file and writes a PNG. On an 8-slide deck its peak is **at least 31× less memory**
+Our CLI tool reads a file and writes a PNG. On an 8-slide deck its peak is **at least 31× less memory**
 than headless Chromium ([the measurements](#performance)), and deck and probe both ship in this
 repo, so `python3 tools/bench.py` re-derives every row.
 
