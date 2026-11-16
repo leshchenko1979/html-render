@@ -44,26 +44,38 @@ OIDC identity, with GitHub as issuer. The checksum catches a damaged download; t
 names the repository, commit and workflow behind the build. Both need the `gh` CLI.
 
 ```bash
-gh attestation verify "$N.tar.gz" --repo leshchenko1979/pageplate
-gh attestation verify checksums.txt --repo leshchenko1979/pageplate
+N=pageplate_0.4.0_linux_amd64
+gh attestation verify "$N.tar.gz" --repo leshchenko1979/pageplate \
+    --signer-workflow leshchenko1979/pageplate/.github/workflows/release.yml \
+    --source-ref refs/tags/v0.4.0
+gh attestation verify checksums.txt --repo leshchenko1979/pageplate \
+    --signer-workflow leshchenko1979/pageplate/.github/workflows/release.yml \
+    --source-ref refs/tags/v0.4.0
 ```
+
+`--repo` alone accepts an attestation from *any* workflow in the repository; the two extra flags are what make the
+check test the claim above it, and the release job runs the same pair on the downloaded files.
 
 The release job attests both assets, publishes them, then downloads the published files back and runs these same two
 commands on them; a release whose downloaded asset does not verify turns the job red. That check runs after publication,
 so a red run there means a live release needs re-cutting, not that nothing was published.
 
-The binary names six libraries directly — `libc`, `libssl`, `libcrypto`, `libfontconfig`, `libm`, `libgcc_s` — and
-pulls freetype, expat, libpng, bzip2, brotli and zlib through fontconfig. The closure varies by distro: `ldd` lists 12
-of them on bookworm and 13 on jammy, so treat the list as a starting point rather than a fixed count. A slim Debian or
-Ubuntu host needs one extra package line:
-`apt-get install -y libssl3 libfontconfig1 libfreetype6 libpng16-16 libbz2-1.0 libbrotli1 ca-certificates fonts-dejavu-core`
+The binary names seven objects directly — the loader plus `libc`, `libssl`, `libcrypto`, `libfontconfig`, `libm`,
+`libgcc_s` — and pulls freetype, expat, libpng, brotli and zlib through fontconfig. The closure varies by distro: 12
+objects on bookworm and 13 on jammy, and the difference is `libuuid.so.1`, which jammy's fontconfig links and
+bookworm's does not. Treat the list as a starting point rather than a fixed count. A slim Debian or Ubuntu host needs
+one extra package line:
+`apt-get install -y libssl3 libfontconfig1 libfreetype6 libpng16-16 libbrotli1 ca-certificates fonts-dejavu-core`
 
-A host with no font package still renders, with a substituted face, and names the family it could not find on stderr.
+A host with no font package still renders, with a substituted face — but it cannot tell you which family it wanted,
+because nothing was visible to compare against: the warning says substitution cannot be detected on that host. When
+*some* fonts are visible and the requested one is not, it names each missing family.
 
 The image carries those libraries and a font, but no network policy: a document's sub-resources are fetched at render time, so the container does not isolate egress ([#29](https://github.com/leshchenko1979/pageplate/issues/29)).
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges \
+    --memory 1g \
     -v "$PWD:/work" ghcr.io/leshchenko1979/pageplate:v0.4.0 \
     /work/card.html /work/card.png 1280 720 2
 ```

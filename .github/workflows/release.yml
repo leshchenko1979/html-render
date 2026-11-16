@@ -275,5 +275,9 @@ jobs:
           # by checking the Sigstore bundle against GitHub's OIDC issuer. It
           # runs on the DOWNLOADED file, so a release published without an
           # attestation fails here rather than shipping silently.
-          gh attestation verify "${NAME}.tar.gz" --repo "$GITHUB_REPOSITORY"
-          gh attestation verify checksums.txt --repo "$GITHUB_REPOSITORY"
+          gh attestation verify "${NAME}.tar.gz" --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+            --source-ref "refs/tags/${GITHUB_REF_NAME}"
+          gh attestation verify checksums.txt --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+            --source-ref "refs/tags/${GITHUB_REF_NAME}"

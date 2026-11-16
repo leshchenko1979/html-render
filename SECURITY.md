@@ -29,8 +29,10 @@ the largest attack surface a headless browser has.
    One failure mode here is silent and worth knowing before you trust an exit
    code: a `200` whose body is not an image paints an empty box and exits `0`,
    because the decode failure happens inside Blitz, after the bytes were
-   accepted. A `404`, a refused redirect and a missed deadline are loud — exit
-   `4`, with the resource named on stderr. Decoded size is capped at 128 MP by
+   accepted. A `404` and a refused redirect are loud — exit `4`, with the
+   resource named on stderr. A missed deadline also exits `4`, but names no
+   resource: it says only that asset fetching stopped, so an output that is
+   missing images cannot be traced to a URL from the log alone. Decoded size is capped at 128 MP by
    `BLITZ_MAX_IMAGE_MP`, so one image cannot expand past roughly 488 MiB of
    RGBA; the whole render can, and `tools/memory_baseline.json` pins the
    measured worst case at 809.5 MiB. Verify the artefact, not the status code.
