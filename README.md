@@ -49,7 +49,9 @@ gh attestation verify "$N.tar.gz" --repo leshchenko1979/html-render
 gh attestation verify checksums.txt --repo leshchenko1979/html-render
 ```
 
-The release job applies both to the file it downloaded, so a release missing one fails before publication.
+The release job attests both assets, publishes them, then downloads the published files back and runs these same two
+commands on them; a release whose downloaded asset does not verify turns the job red. That check runs after publication,
+so a red run there means a live release needs re-cutting, not that nothing was published.
 
 The binary names six libraries directly — `libc`, `libssl`, `libcrypto`, `libfontconfig`, `libm`, `libgcc_s` — and
 pulls freetype, expat, libpng, bzip2, brotli and zlib through fontconfig, so `ldd` lists 12 of them on bookworm and 13
@@ -69,6 +71,11 @@ exist, `v0.3.0-beta.10` and `latest`. A moving tag lets two builds of one commit
 version, or the digest when the image itself must be frozen. The tarball's attestation does not extend to the image,
 so verify that one by digest ([#31](https://github.com/leshchenko1979/html-render/issues/31)).
 Building from source: [CONTRIBUTING.md](CONTRIBUTING.md#building).
+
+The image is built on a tag push, a `workflow_dispatch`, or a commit touching `src/`, `Cargo.toml`, `Cargo.lock`,
+`Dockerfile` or `assets/`. There is no schedule, and Dependabot watches the action pins and the crates, not
+`debian:bookworm-slim`, so its `libssl3` is as old as the last build. The tarball is the other way round: it links
+your host's `libssl.so.3`, so your distro patches it. For TLS patch latency the tarball is the better artifact.
 
 ## Usage
 
