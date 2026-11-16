@@ -146,6 +146,29 @@ git -c user.name="Alexey Leshchenko" \
   every gate green, because the guard compared each PNG to its HTML and read no
   figure inside the HTML.
 
+## Surfaces outside the tree
+
+The prose guard reads files. Anything a reader sees that is **not** a file in the
+tree is unguarded, and it goes stale silently:
+
+| Surface | Read it with | Set it with |
+|---|---|---|
+| GitHub repo description | `gh repo view leshchenko1979/html-render --json description` | `gh repo edit leshchenko1979/html-render --description "…"` |
+| Repo topics | `gh repo view … --json repositoryTopics` | `gh repo edit --add-topic …` |
+| Release notes | the release body | the `release.yml` template |
+
+**After any change to the README's one-liner, its headline figure, or what the
+tool claims, re-read the description and update it in the same turn.** Read the
+pre-state first: it is a live surface, not a default to overwrite. Quote the old
+description in the commit or the report so the change is auditable.
+
+Measured 2026-11-16: the description read *"2.34x faster and 3.12x lighter than
+Chromium on the plain --clip recipe"* while the page had retired speed as a claim
+and the receipt reads **31.14×** on `--clip`. A retired claim and a figure off by
+an order of magnitude, on the most-read surface of the project, with every gate
+green. Same failure class as the version kickers that read `v0.3.0-beta.6` for
+four releases: the guard checks what it can read, and it cannot read GitHub.
+
 ## Issues
 
 This repository's own tracker is `leshchenko1979/html-render`.
@@ -156,7 +179,7 @@ File a defect with the measurement that exposes it, not with an adjective.
 
 | Path | Holds |
 |---|---|
-| `README.md` | the first five minutes: what it is, install, usage, limits, where the detail lives — one screen per section, under 200 lines |
+| `README.md` | the first five minutes: what it is, install, usage, limits, where the detail lives — one screen per section. Budget 220 lines, hard ceiling 235 (a 2026-11-16 rewrite cut it from 282); the budget is a subtraction exercise, not a target to fill |
 | `GATES.md` | the measurements — determinism, scale, clip, corpus, fidelity, CSS audit, published artefacts |
 | `CONTRIBUTING.md` | build requirements, the five workflows, the rules that bite |
 | `SECURITY.md` | threat model, measured egress proof, reporting |
