@@ -42,7 +42,7 @@ are now read against the constants they are derived from.
   second copy of a fact that nothing compared. The kicker was written correctly in
   `814ac50` (Cargo.toml read `0.3.0-beta.6` then) and never moved again while
   `beta.7`, `beta.8`, `beta.9` and this cut passed every gate. The guard now reads
-  all thirteen figures out of both HTMLs, and `AGENTS.md` § Releases requires a
+  all thirteen figures out of both HTMLs, and `skills/html-render/SKILL.md` § Releases requires a
   release to move the README, both assets and the regenerated PNGs in one commit.
   Falsified before trusting it: a hero ratio of `2.48` and a bar width of `40.1 %`
   each fail by name, and the real drift failed the same way before the kickers were

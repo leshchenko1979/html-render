@@ -67,4 +67,4 @@ Each of these exists because the thing it prevents already happened once.
   each published artefact actually did.
 - `SECURITY.md` — the threat model, the measured egress proof, and how to report.
 - `CHANGELOG.md` — what changed between releases.
-- `AGENTS.md` — the same rules for a coding agent, in the form it reads.
+- `skills/html-render/SKILL.md` — the same rules for a coding agent, in the form it reads.
