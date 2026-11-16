@@ -53,9 +53,12 @@ commands on them; a release whose downloaded asset does not verify turns the job
 so a red run there means a live release needs re-cutting, not that nothing was published.
 
 The binary names six libraries directly — `libc`, `libssl`, `libcrypto`, `libfontconfig`, `libm`, `libgcc_s` — and
-pulls freetype, expat, libpng, bzip2, brotli and zlib through fontconfig, so `ldd` lists 12 of them on bookworm and 13
-on jammy. A slim Debian or Ubuntu host needs one extra package line:
-`apt-get install -y libssl3 libfontconfig1 libfreetype6 libpng16-16 libbz2-1.0 libbrotli1 ca-certificates`
+pulls freetype, expat, libpng, bzip2, brotli and zlib through fontconfig. The closure varies by distro: `ldd` lists 12
+of them on bookworm and 13 on jammy, so treat the list as a starting point rather than a fixed count. A slim Debian or
+Ubuntu host needs one extra package line:
+`apt-get install -y libssl3 libfontconfig1 libfreetype6 libpng16-16 libbz2-1.0 libbrotli1 ca-certificates fonts-dejavu-core`
+
+A host with no font package still renders, with a substituted face, and names the family it could not find on stderr.
 
 The image carries those libraries and a font, but no network policy: a document's sub-resources are fetched at render time, so the container does not isolate egress ([#29](https://github.com/leshchenko1979/pageplate/issues/29)).
 
@@ -72,7 +75,7 @@ so verify that one by digest ([#31](https://github.com/leshchenko1979/pageplate/
 Building from source: [CONTRIBUTING.md](CONTRIBUTING.md#building).
 
 The image is built on a tag push, a `workflow_dispatch`, or a commit touching `src/`, `Cargo.toml`, `Cargo.lock`,
-`Dockerfile` or `assets/`; it has no scheduled rebuild, so pin the digest when base-image patches matter
+`Dockerfile`, `assets/` or `container.yml` itself; it has no scheduled rebuild, so pin the digest when base-image patches matter
 ([#31](https://github.com/leshchenko1979/pageplate/issues/31)). The tarball is the other way round: it links your
 host's `libssl.so.3`, so your distro patches it, which makes the tarball the better artifact for TLS patch latency.
 
@@ -85,11 +88,17 @@ pageplate --clip deck.html slides/ 1280 720 2 'section.slide' --per-element   # 
 ```
 
 The viewport is given in CSS pixels and `scale` multiplies the output; a single-image run may leave it out. A
-`1280 640 2` run writes 2560×1280, the shape of `assets/og.png`. `--clip` writes `slides/clip_01.png`,
-`clip_02.png` and so on, numbered from `01` in document order.
+`1280 640 2` run writes 2560×1280, the shape of `assets/og.png` — but the canvas is the viewport, so a document taller
+than it is cut at exit `0`. Add `--full` when the height is unknown: a 640-CSS-px viewport on a 770-px card loses the
+bottom 130 px and still reports success. `--clip` writes `slides/clip_01.png`, `clip_02.png` and so on, numbered from
+`01` in document order with `%02d` — past 99 frames the names need a numeric sort, not `ls` order
+([#40](https://github.com/leshchenko1979/pageplate/issues/40)) — and an output directory is single-writer: two `--clip`
+runs aimed at the same one interleave their frames and both exit `0`
+([#37](https://github.com/leshchenko1979/pageplate/issues/37)).
 
 **Full reference: [docs/USAGE.md](docs/USAGE.md)** — every flag, all six environment variables, the exit-code
-contract, the three modes and their memory shapes, and the two machine-readable streams.
+contract, the three modes and their memory shapes, and the two machine-readable streams. During a render the only
+output is `TIMING …` on stderr and, under `--clip`, one `clip_NN css x= y= w= h=` line per frame on stdout.
 
 Sub-resources are fetched at render time with no allowlist, so an untrusted document reaches the network;
 [SECURITY.md](SECURITY.md#what-rendering-does-to-the-machine) covers what that means for the host.
