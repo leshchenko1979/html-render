@@ -129,8 +129,11 @@ jobs:
           NAME="pageplate_${VERSION#v}_linux_amd64"
           mkdir -p dist
           cp target/release/pageplate dist/pageplate
+          # Apache-2.0 4(a): a redistribution must carry the licence. The tarball
+          # shipped the binary alone for eight releases (#32).
+          cp LICENSE dist/LICENSE
           chmod 755 dist/pageplate
-          tar -C dist -czf "dist/${NAME}.tar.gz" pageplate
+          tar -C dist -czf "dist/${NAME}.tar.gz" pageplate LICENSE
           # The tarball is what gets downloaded, so the checksum is of the tarball.
           ( cd dist && sha256sum "${NAME}.tar.gz" > checksums.txt )
           cat dist/checksums.txt
@@ -163,14 +166,17 @@ jobs:
           NOTES=$(cat <<EOF
           Blitz-based renderer CLI, built from \`${{ github.sha }}\`.
 
-          Dynamically linked, not static: the table below lists every shared
-          library it needs, and \`ldd\` on the asset prints the same list.
+          Dynamically linked, not static: it names six libraries directly
+          (\`libc\`, \`libssl\`, \`libcrypto\`, \`libfontconfig\`, \`libm\`,
+          \`libgcc_s\`) and pulls freetype, expat, libpng, bzip2, brotli and
+          zlib through fontconfig, so \`ldd\` lists 12 of them on bookworm and
+          13 on jammy.
 
           | | |
           |---|---|
           | Asset | \`${NAME}.tar.gz\` |
           | Binary | \`pageplate\`, ${SIZE}, single file |
-          | Runtime deps | 13 system libraries: glibc, libssl/libcrypto, freetype, fontconfig, expat, png, zlib, bz2, brotli |
+          | Runtime deps | six direct, six more via fontconfig; \`ldd\` lists 12 on bookworm, 13 on jammy |
           | glibc floor | 2.35 (asserted at build time) |
           | Built on | ubuntu-22.04 |
           | Blitz pin | see \`Cargo.toml\` at this tag |
@@ -200,7 +206,7 @@ jobs:
           antialiasing; how much is layout is not quantified). On one host, same
           font stack, renderer version and band budget, three renders of the same input are byte-identical.
           Reproduce it:
-          \`python3 tools/bench.py --bin <render> --chrome <chrome>\`.
+          \`python3 tools/bench.py --bin <pageplate> --chrome <chrome>\`.
           EOF
           )
           # Idempotent on purpose: a re-dispatch on a published tag must REPLACE

@@ -199,8 +199,10 @@ jobs:
             -p '*.tar.gz' -p checksums.txt -D .
           sha256sum -c checksums.txt
           tar xzf ./*.tar.gz
-          # The shipped binary is named by the release, not by this tree.
-          bin=$(tar tzf ./*.tar.gz | head -1)
+          # The shipped binary is named by the release, not by this tree, and it
+          # is not necessarily the first entry: the tarball also carries LICENSE
+          # (#32), so resolve by content, never by position.
+          bin=$(tar tzf ./*.tar.gz | grep -v -x -e 'LICENSE' -e 'checksums.txt' | head -1)
           bin=$(basename "$bin")
           echo "published tarball carries ./$bin"
 
