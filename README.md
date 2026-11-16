@@ -7,10 +7,17 @@ Rust, one process, one binary.
 
 ![A 3200×1800 rendering of a slide headed "HTML + CSS → PNG, with no browser", with bar charts of wall time and peak memory against Chromium](assets/hero.png)
 
-One command produced the PNG above:
+One command produced the PNG above, from the `assets/hero.html` in this repo:
 
 ```bash
 html-render assets/hero.html hero.png 1600 900 2 --document
+```
+
+From an empty directory, make an input first — the command takes a path, not a URL,
+and a missing one is a panic (`101`), not a usage error:
+
+```bash
+printf '<h1>hello</h1>' > t.html && html-render t.html t.png 1280 720 2
 ```
 
 [![parity](https://github.com/leshchenko1979/html-render/actions/workflows/parity.yml/badge.svg)](https://github.com/leshchenko1979/html-render/actions/workflows/parity.yml)
@@ -62,8 +69,8 @@ That needs the `gh` CLI, and it is the check worth running if the tarball goes
 into a build pipeline. The release job runs both itself against the **downloaded**
 file, so a release published without one fails its own verification.
 
-That is a ~25 MB binary, dynamically linked against 13 shared libraries — glibc,
-OpenSSL 3, fontconfig, freetype, expat, libpng, bzip2, brotli, zlib. On a slim
+That is a ~25 MB binary, dynamically linked against 14 shared libraries — glibc, the C++
+runtime, OpenSSL 3, fontconfig, freetype, expat, libpng, bzip2, brotli, zlib. On a slim
 Debian or Ubuntu image the rest is one command:
 
 ```bash
@@ -74,12 +81,15 @@ The container image carries the libraries and a font:
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges \
-    -v "$PWD:/work" ghcr.io/leshchenko1979/html-render:latest \
+    -v "$PWD:/work" ghcr.io/leshchenko1979/html-render:v0.3.0-beta.10 \
     /work/card.html /work/card.png 1280 720 2
 ```
 
 `--user` is required, not decorative: the image runs as uid 10001 and exits `101` without it.
-Tags are `latest` and `v0.3.0-beta.10`; pin a digest for reproducibility.
+Tags are `v0.3.0-beta.10` and `latest`; a moving tag in a pipeline is how two builds of one
+commit disagree, so pin the version, or the digest if you need the image itself frozen.
+The release tarball carries signed provenance attestations (`gh attestation verify <tarball>`);
+the container image does not — verify it by digest.
 Building from source: [CONTRIBUTING.md](CONTRIBUTING.md#building).
 
 ## Usage
@@ -89,18 +99,21 @@ Both modes take the viewport in CSS pixels; the scale factor multiplies output r
 ```bash
 html-render page.html out.png 1280 720 2                            # one PNG
 html-render --clip deck.html slides/ 1280 720 2 'section.slide'    # one per match
-html-render --clip deck.html slides/ 1280 720 2 'section.slide' --per-element  # lowest memory
-# → slides/clip_00.png, clip_01.png, … in document order
+html-render --clip deck.html slides/ 1280 720 2 'section.slide' --per-element  # element-sized canvases
+# → slides/clip_01.png, clip_02.png, … in document order
 ```
 
 `--clip` cuts every match out of the document, painted in row bands, so peak memory is one
 band rather than the whole page;
-`--per-element` paints an element-sized canvas per match instead and holds even less.
+`--per-element` paints an element-sized canvas per match instead and holds less than `--clip`
+(47.4 MiB against 75.5), though `--full` holds least of the three (37.6) by banding a single image.
 `--full` lets a single image run to the document's height rather than the viewport,
 painted in row bands and streamed to the encoder, so a tall page is not a memory limit
 and has no height ceiling (a `position:fixed` element forces one canvas instead, and says so).
 Whether the input is a document or a fragment is auto-detected from the first tag and can be overridden; passing both overrides at once is an error.
-Output is deterministic — same input, same bytes — so a changed pixel in CI means a changed document.
+Output is deterministic on one host — same input, same binary, same bytes — so a changed pixel in CI
+means a changed document, a changed font stack, or a changed host. The receipt's own deck digest is
+not portable across hosts for that reason.
 A 1280×640 card at scale 2, the shape of `assets/og.png` at 2560×1280, is the same call with different numbers.
 
 Exit codes are a contract, tested in CI against a real binary:
@@ -110,7 +123,7 @@ Exit codes are a contract, tested in CI against a real binary:
 | `0` | PNG written, or `--help` / `--version` printed |
 | `2` | bad arguments: unknown flag, `--clip` not first, `--per-element` outside `--clip`, `--full` with `--clip`, `--document` with `--fragment` |
 | `3` | the selector matched nothing |
-| `4` | output written but known to be incomplete: a sub-resource failed to fetch (`404`, DNS, connection refused) or was refused as too large, a fetch hit `BLITZ_DEADLINE_SECS`, or a frame was cut to the canvas width |
+| `4` | output written but known to be incomplete: a sub-resource failed to fetch (`404`, DNS, connection refused) or was refused as too large, or a fetch hit `BLITZ_DEADLINE_SECS` |
 | `5` | a single canvas would exceed the renderer limit (65408 wide, 65532 tall): nothing written. `--clip` and `--full` band the page, so this now means one *band* or one element is too large, or banding was disabled with `BLITZ_BAND_MIB=0` |
 | `101` | panic: unparsable number, invalid selector, unreadable input |
 
@@ -118,7 +131,20 @@ Exit codes are a contract, tested in CI against a real binary:
 Six optional environment variables exist for diagnostics —
 `BLITZ_BAND_MIB` (`4`), `BLITZ_DEADLINE_SECS` (`120`), `BLITZ_DRAIN` (`quiet`),
 `BLITZ_MAX_IMAGE_MP` (`128`), `BLITZ_RUNTIME` (current-thread), `BLITZ_TRACE` (unset) —
-and stay out of that text because it is tested against the argument parser.
+and stay out of that text because it is tested against the argument parser, with one exception:
+`--help` names `BLITZ_BAND_MIB` where it explains why banding is refused.
+
+There is no `--json` and no manifest. Two machine-readable surfaces exist, on two
+different streams: the `TIMING` line (parse/layout/paint/total, scale, mode, and
+`content_h=`/`canvas_h=` when a document was cut) goes to **stderr**, and in `--clip`
+mode one line per frame goes to **stdout**:
+
+```
+clip_01 css x=0.00 y=21.44 w=400.00 h=38.00  physical 400x38 at 0,21
+```
+
+So `--clip ... > frames.txt` gives you the geometry and leaves warnings on the
+terminal. Frames are numbered from `01`, not `00`.
 
 ## Performance
 
@@ -172,7 +198,8 @@ Host, method and the run behind these figures: [GATES.md](GATES.md#cost).
 Diffed pixel for pixel against Chromium at the same viewport and scale, the
 probe's deck comes out **4.7083 % of pixels differing by more than 16 levels**
 over all 29,491,200 pixels — antialiasing and glyph rasterisation, not layout:
-mean channel difference 7.115, and both engines ink 19.1–19.4 % of the canvas.
+mean channel difference 8.2889, and the engines ink 17.073 % (Blitz) against 16.6941 % (Chromium)
+of the canvas.
 That is the whole deck at full resolution, not a sample, and
 `tools/bench_compare.py` will recompute it from the two PNG sets you just made.
 
@@ -192,12 +219,18 @@ The divergence is concentrated, not spread: **7 rows are one table** (#9) and
 - **No JavaScript.** A page that needs script renders as the static HTML it shipped with.
 - **No PDF, no print layout.** PNG only: no `@page`, no page boxes, no page counters.
 - **Blitz's CSS, not Chromium's.** An unsupported property is ignored, not rejected, so a gap shows up as a declaration that did nothing.
-- **Dynamically linked.** 13 shared libraries, so the host needs them or you use the container.
+- **Dynamically linked.** 14 shared libraries on the release build, so the host needs them or you
+  use the container; `ldd` the binary to list them, because the count moves with how your
+  distribution packages the C++ runtime and brotli.
 - **Beta.** No API promise: flags and output names may move between minor versions.
 - **Untrusted input is not sandboxed.** Sub-resources are fetched at render time with no allowlist
   and `file://` is readable ([SECURITY.md](SECURITY.md#what-rendering-does-to-the-machine)).
-- **Peak memory is per process.** Counted across the whole process tree the advantage narrows to 5.7–6.1×.
-- **Three known defects produce wrong output with exit 0**, measured on `0.3.0-beta.8`:
+- **Peak memory scales with the canvas, not the page.** Every figure above counts the whole process
+  tree, but it is measured on that deck. One 128 MP image decodes to roughly 512 MiB of RGBA, and the
+  `clip_oversized_frame` shape in `tools/memory_baseline.json` peaks at **809.5 MiB** — 21× the
+  37.6 MiB headline. Size a container from that, not from the table.
+- **Three known defects produce wrong output with exit 0**, reproduced on `0.3.0-beta.10` (five
+  were tracked; #16 and #17 no longer reproduce as filed):
   table layout
   off by up to 18px (#9), `<br>` runs shifting content 16px per break (#15), and a `200`
   whose body is not an image — that one fails to decode inside Blitz, after the bytes

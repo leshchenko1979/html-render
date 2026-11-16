@@ -26,12 +26,14 @@ the largest attack surface a headless browser has.
    (`Mozilla/5.0 … Firefox/81.0`), so a UA-based rule will not tell a render
    apart from a person.
 
-   Three failure modes here are silent by design and worth knowing before you
-   trust an exit code: an HTTP redirect fetches both hops and paints **nothing**;
-   a `404` or a non-image body paints nothing; and there is no cap on decoded
-   pixel count, so a small image can expand to hundreds of megabytes of RSS. All
-   four cases (those three plus a missed deadline) write a PNG and exit `0`.
-   Verify the artefact, not the status code.
+   One failure mode here is silent and worth knowing before you trust an exit
+   code: a `200` whose body is not an image paints an empty box and exits `0`,
+   because the decode failure happens inside Blitz, after the bytes were
+   accepted. A `404`, a refused redirect and a missed deadline are loud — exit
+   `4`, with the resource named on stderr. Decoded size is capped at 128 MP by
+   `BLITZ_MAX_IMAGE_MP`, so one image cannot expand past roughly 512 MiB of
+   RGBA; the whole render can, and `tools/memory_baseline.json` pins the
+   measured worst case at 809.5 MiB. Verify the artefact, not the status code.
 2. **`file://` is readable.** The document's base URL is `file://` of its own
    path, so relative resources resolve on disk, and an absolute `file://` URL in
    the markup is fetched the same way. A document can pull local files into the

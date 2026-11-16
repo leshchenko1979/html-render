@@ -490,8 +490,8 @@ Whole-deck, every pixel, no sampling:
 |---|---|
 | pixels compared | **29,491,200** |
 | pixels off by >16 | **4.7083 %** |
-| mean channel difference | 7.115 |
-| ink coverage | 19.4399 % engine vs 19.1282 % Chromium |
+| mean channel difference | 8.2889 |
+| ink coverage | 17.073 % engine vs 16.6941 % Chromium |
 
 The residual is antialiasing, not layout: wrap points match, boxes sit at
 Chromium's coordinates, and images are sampled at zero offset. Vello's
@@ -582,7 +582,8 @@ a hand-written summary:
 
 | Published asset | Contract | Because |
 |---|---|---|
-| `v0.3.0-beta.6` | **all 21 legs hold** | cut from the commit the README documents |
+| `v0.3.0-beta.10` | **all 26 legs hold** | the version this page documents |
+| `v0.3.0-beta.6` | all 21 legs hold | cut from the commit the README then documented; the contract has grown five legs since |
 | `v0.3.0-beta.5` | 8 failed assertions | `--help` only at `argv[1]`; `-V` panics (`rc=101`); no code `4`; `--scroll` silently ignored; stale frames kept; `--full` unknown |
 | `v0.3.0-beta.4-r2` | 22 failed assertions | all of the above plus `--help` exits `2`, `--version` exits `2`, and a single image into a missing directory panics |
 
