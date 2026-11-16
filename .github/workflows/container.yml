@@ -1,11 +1,11 @@
 name: container
 
 # Builds the image and proves it can render, on the same tag push that publishes
-# the tarball. Two artifacts, one source: a user who pulls `ghcr.io/...:v0.3.0`
+# the tarball. Two artifacts, one source: a user who pulls `ghcr.io/...:v0.4.0`
 # gets the same commit the release asset was built from.
 #
 # The smoke test is the point. An image that builds is not an image that renders:
-# a missing font or one of the 13 libraries produces a container that starts and
+# a missing font or a missing shared library produces a container that starts and
 # then either fails at load time or silently substitutes a typeface.
 on:
   push:
