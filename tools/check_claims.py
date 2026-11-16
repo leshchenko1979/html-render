@@ -368,6 +368,16 @@ def main():
             claim_prose("README", readme,
                         "**at least %d\u00d7 less memory**" % worst_floor,
                         "floor, restated in the README intro")
+            # "2GB+" three lines above it is the SAME paragraph's other
+            # figure, and it had no claim anywhere: the intro could have said
+            # "8GB+" or "512MB+" and the gate would still have read green.
+            # It is a FLOOR ("2GB+"), so it is Chromium's peak rounded DOWN --
+            # derive the string rather than restating it. Under 2048 MiB the
+            # expectation becomes "1GB+" and the prose fails; past 3 GiB it
+            # becomes "3GB+" and the prose fails too. Both directions bite.
+            chrome_gb = int(chrome["peak_tree_mib"] // 1024)
+            claim("README", readme, "%dGB+" % chrome_gb,
+                  "Chromium peak, rounded down from the receipt")
             claim_prose("GATES", gates,
                         "at least %d\u00d7 \u2014 which held to" % worst_floor,
                         "floor, restated in the withdrawn-claims section")
