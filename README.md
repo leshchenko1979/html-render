@@ -1,7 +1,7 @@
 # pageplate
 
 Turns HTML and CSS into a PNG without a browser in the loop.
-`0.4.0`, one maintainer, one Rust binary.
+`0.5.0`, one maintainer, one Rust binary.
 Linux x86_64, glibc ≥ 2.35.
 
 ![The 3200×1800 hero render: a slide titled "HTML + CSS → PNG, with no browser", beside bar charts of peak memory and install size against Chromium](assets/hero.png)
@@ -26,8 +26,8 @@ Decks, social cards, report one-pagers and CI visual diffs are the shapes it fit
 ## Install
 
 ```bash
-V=v0.4.0
-N=pageplate_0.4.0_linux_amd64
+V=v0.5.0
+N=pageplate_0.5.0_linux_amd64
 BASE="https://github.com/leshchenko1979/pageplate/releases/download/$V"
 curl -fsSL -O "$BASE/$N.tar.gz" -O "$BASE/checksums.txt"
 sha256sum -c checksums.txt && tar xzf "$N.tar.gz"

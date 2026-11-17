@@ -4,10 +4,11 @@ Newest first. Every entry names its commit range, so it can be re-derived with
 `git log --oneline <prev>..<tag>` rather than trusted. Pre-1.0: flags and output
 names may change between minor versions, and this file is where that shows up.
 
-## Unreleased
+## v0.5.0 — unreleased
 
-Branch `fix/open-issues`. The commit range is filled in when this becomes a
-release, so nothing here is a published number yet.
+Branch `fix/open-issues`; the commit range is filled in when this is cut. The
+version moved because the CLI contract did: frame names and three exit codes
+change, which is breaking under this file's own pre-1.0 rule.
 
 ### Fixed — behaviour that exited `0` while doing the wrong thing
 

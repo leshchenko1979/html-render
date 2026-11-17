@@ -16,8 +16,8 @@ apt-get install -y libssl3 libfontconfig1 libfreetype6 libpng16-16 libbrotli1 ca
 Download the tarball and the checksum file, verify the checksum, extract, then install:
 
 ```bash
-V=v0.4.0
-N=pageplate_0.4.0_linux_amd64
+V=v0.5.0
+N=pageplate_0.5.0_linux_amd64
 BASE="https://github.com/leshchenko1979/pageplate/releases/download/$V"
 curl -fsSL -O "$BASE/$N.tar.gz" -O "$BASE/checksums.txt"
 sha256sum -c checksums.txt && tar xzf "$N.tar.gz"
@@ -33,13 +33,13 @@ is checkable without a key. The checksum catches a damaged download; the attesta
 and workflow behind the build. Both checks need the `gh` CLI.
 
 ```bash
-N=pageplate_0.4.0_linux_amd64
+N=pageplate_0.5.0_linux_amd64
 gh attestation verify "$N.tar.gz" --repo leshchenko1979/pageplate \
     --signer-workflow leshchenko1979/pageplate/.github/workflows/release.yml \
-    --source-ref refs/tags/v0.4.0
+    --source-ref refs/tags/v0.5.0
 gh attestation verify checksums.txt --repo leshchenko1979/pageplate \
     --signer-workflow leshchenko1979/pageplate/.github/workflows/release.yml \
-    --source-ref refs/tags/v0.4.0
+    --source-ref refs/tags/v0.5.0
 ```
 
 `--repo` alone accepts an attestation from *any* workflow in the repository; the two extra flags pin the check to
@@ -57,14 +57,14 @@ be involved:
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges \
     --memory 1g \
-    -v "$PWD:/work" ghcr.io/leshchenko1979/pageplate:v0.4.0 \
+    -v "$PWD:/work" ghcr.io/leshchenko1979/pageplate:v0.5.0 \
     /work/card.html /work/card.png 1280 720 2
 ```
 
 The image's uid is 10001, so omitting `--user` leaves it unable to write your mounted directory, and it panics
 (`101`).
 
-Two tags exist, `v0.4.0` and `latest`. A moving tag lets two builds of one commit disagree, so pin the version, or
+Two tags exist, `v0.5.0` and `latest`. A moving tag lets two builds of one commit disagree, so pin the version, or
 the digest when the image must be frozen.
 
 The tarball's attestation does not extend to the image, so verify that one by digest
