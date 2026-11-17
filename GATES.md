@@ -468,12 +468,12 @@ selects standards. Nothing in the CSS changes — the same markup lays out
 differently because the mode changes rules the spec says are historical.
 
 The rules that differ are a short list and all of them are IE5-era behaviours
-that were kept because too many pages depended on them. The one that bit us: a
-table cell's declared `height` resolves against the **content box**, so padding
-lands on top of it. In standards mode the same declaration resolves against the
-**border box**, so padding is inside it. A cell declaring `height:16px` with
-`padding:6px` is 28 px tall in quirks mode and 16 px in standards mode, from
-identical CSS. Percentage heights on tables, `font-size` inheritance into
+that were kept because too many pages depended on them. The one that bit us: in
+quirks mode a table cell's declared `height` resolves against the **border
+box**, so padding sits inside it. In standards mode it resolves against the
+**content box**, so padding is added on top of it. A cell declaring
+`height:16px` with `padding:6px` is 16 px tall in quirks mode and 28 px in
+standards mode, from identical CSS. Percentage heights on tables, `font-size` inheritance into
 tables, and some line-height defaults differ for the same reason.
 
 pageplate does not implement quirks mode, and the engine it builds on discards

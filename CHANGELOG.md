@@ -22,8 +22,8 @@ With the doctype added, the text-free corpus went **42 → 46 exact**:
   entirely** — a `<br>` strut is `line-height` in standards mode and 4 px in
   quirks mode;
 - the table gap fell from **18 px to 2-4 px**, and a cell's declared `height`
-  now agrees to the pixel, because both engines resolve it against the border
-  box rather than the content box;
+  now agrees to the pixel, because both engines resolve it against the content
+  box in standards mode rather than the border box quirks mode uses;
 - what remains is collapsed-border edge accounting, which is a real difference
   and stays pinned.
 
