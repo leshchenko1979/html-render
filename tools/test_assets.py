@@ -17,14 +17,18 @@ Legs:
   a-control    200 PNG              -> paints, exit 0   (the pipeline works)
   b-404        missing              -> blank, exit 4, names the url and the status
   c-huge       PNG header 30000x30000 -> refused, exit 4, names the dimensions
-  d-cap-off    the same, cap off    -> NOT refused: the refusal in c is the cap
+  d-cap-off    the same, cap off    -> cap silent, body still not decodable: exit 4
   e-cap-low    real 1200x1200, cap 1 MP -> refused at 1.44 MP
+  d2-cap-off-decodes  e's image, cap off -> paints, exit 0 (the cap WAS the refusal)
   f-large-ok   real 9000x9000, default cap -> paints, exit 0 (no false refusal)
   g-formats    header-only PNG/JPEG/GIF/WebP at 4000x4000, cap 1 MP
                                     -> each one names 4000x4000
 
 Leg `c` is deliberately a header-only file: the cap refuses it before any
-decoder runs, which is the property under test. Leg `g` relies on the same
+decoder runs, which is the property under test. That is also why `d` cannot be
+its mirror image: with the cap off the body still has no pixels, so `d` asserts
+the cap message is ABSENT while the decode failure is named, and `d2` supplies
+the positive half on a body that really decodes. Leg `g` relies on the same
 thing to gate the four header parsers without needing an encoder for each
 format -- a parser that reads the wrong field states the wrong dimensions and
 fails.
@@ -228,10 +232,23 @@ def main():
         want_stderr=("/missing.png", "404"))
     leg("c-huge", f"{url}/huge.png", False, want_rc=4,
         want_stderr=("30000x30000", "128 MP"))
-    leg("d-cap-off", f"{url}/huge.png", False, want_rc=0,
-        no_stderr=("sub-resource failed",), env={"BLITZ_MAX_IMAGE_MP": "0"})
+    # `d` is the same header-only body as `c` with the cap off, so the property
+    # is "the cap was the refusal, not something else" -- the cap message must be
+    # gone. The body still cannot decode (it is a header and no pixels), and #27
+    # made that loud: exit 4 naming the resource, where this used to be a blank
+    # box at exit 0. Asserting `want_rc=0` here would pin the silent failure back
+    # in place, so the leg asserts the two things that are true at once.
+    leg("d-cap-off", f"{url}/huge.png", False, want_rc=4,
+        want_stderr=("not a decodable image",),
+        no_stderr=("128 MP",), env={"BLITZ_MAX_IMAGE_MP": "0"})
     leg("e-cap-low", f"{url}/medium.png", False, want_rc=4,
         want_stderr=("1200x1200", "1.4 MP"), env={"BLITZ_MAX_IMAGE_MP": "1"})
+    # The positive half of the same property, which `d` cannot show because its
+    # body never decodes: this is `e`'s exact image and the exact cap that
+    # refused it, with the cap off. Painted, exit 0 -- so the refusal in `e` is
+    # the cap and nothing else.
+    leg("d2-cap-off-decodes", f"{url}/medium.png", True, want_rc=0,
+        env={"BLITZ_MAX_IMAGE_MP": "0"})
     leg("f-large-ok", f"{url}/big.png", True)
     for name in HEADER_ONLY:
         leg(f"g-{name}", f"{url}/fmt.{name}", False, want_rc=4,
