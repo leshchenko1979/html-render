@@ -4,6 +4,54 @@ Newest first. Every entry names its commit range, so it can be re-derived with
 `git log --oneline <prev>..<tag>` rather than trusted. Pre-1.0: flags and output
 names may change between minor versions, and this file is where that shows up.
 
+## Unreleased
+
+Branch `fix/open-issues`. The commit range is filled in when this becomes a
+release, so nothing here is a published number yet.
+
+### Fixed — behaviour that exited `0` while doing the wrong thing
+
+- **`pageplate t.html t.html` no longer destroys `t.html`.** The document is read
+  into memory before the write, so the render SUCCEEDED: exit `0`, a plausible
+  PNG, and the source gone. It now exits `2` and names the collision. Both sides
+  are resolved through the filesystem, so `./t.html`, a `..` segment and a
+  symlink to the input are refused too ([#36]).
+- **A selector whose every match has a zero-area box exits `3`, not `0`.**
+  `script`, `style`, `template` and `display:none` report a `0x0` rect rather
+  than no rect, and a `1x1` clamp turned that into a 68-byte PNG at exit `0`.
+  Skipped matches are counted on stderr, so a short dump is distinguishable from
+  a complete one; a selector mixing paintless and real matches still dumps the
+  real ones ([#38]).
+- **A single-dash flag is refused.** `-q` in a trailing position was collected
+  as a surplus positional and dropped without a word, and `-x` in the html slot
+  panicked on a file named `-x`. Both now exit `2` naming the flag; `-h` and
+  `-V` keep working ([#39]).
+- **A surplus positional is refused** instead of silently ignored ([#39]).
+
+### Changed
+
+- **Clip frames are named `clip_001.png`, not `clip_01.png`.** Two digits put
+  `clip_100` between `clip_10` and `clip_11` in a lexical sort, so a caller that
+  globs and sorts a dump interleaved the hundredth frame into the teens. Three
+  digits keep lexical order equal to numeric order for any dump the renderer can
+  produce. A reader that matches `clip_*` is unaffected; one that hardcodes
+  `clip_01` must be updated ([#40]).
+
+### Fixed — documentation
+
+- `--help` exit `4` said "a frame was cut to the canvas width", which names the
+  symptom and not the cause. The canvas is `widest.min(65,408)`, so the only
+  width a frame is cut to is the **65,408 px** renderer limit.
+- `docs/USAGE.md` documented the zero-size case accurately as "returns `0` with a
+  1×1 PNG" — that was the defect, written down rather than fixed. The row now
+  describes what the code does (exit `3`), and the "output path after the run"
+  table says what the zero-area path leaves behind ([#38]).
+
+[#36]: https://github.com/leshchenko1979/pageplate/issues/36
+[#38]: https://github.com/leshchenko1979/pageplate/issues/38
+[#39]: https://github.com/leshchenko1979/pageplate/issues/39
+[#40]: https://github.com/leshchenko1979/pageplate/issues/40
+
 ## v0.4.0 — 2026-11-16
 
 Raw list: `git log --oneline v0.3.0-beta.10..v0.4.0` (35 commits). A rename and a

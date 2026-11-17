@@ -236,6 +236,76 @@ def main():
         check("3 all matches boxless", ["--clip", doc, os.path.join(tmp, "bl"), "120", "60", "1", "br, wbr"], 3,
               want_err="no layout box")
 
+        # 3 — matched, but every match has a ZERO-AREA box. This is the leg
+        # that was missing: a box that exists but paints nothing (`script`,
+        # `style`, `template`, `display:none`) reported 0x0, the `.max(1)`
+        # clamped it to a 1x1 canvas, and the run exited 0 having written a
+        # 68-byte PNG. Same "nothing to write" as no match, so the same code —
+        # the defect was the success code, not the classification (#38).
+        void = os.path.join(tmp, "void.html")
+        with open(void, "w") as fh:
+            fh.write("<!doctype html><html><head><style>p{color:red}</style></head>"
+                     "<body style=\"margin:0\"><script>var x=1</script>"
+                     '<div style="display:none;width:40px;height:20px"></div>'
+                     "<p>visible</p></body></html>\n")
+        check("3 all matches zero-area", ["--clip", void, os.path.join(tmp, "za"), "120", "60", "1", "script"], 3,
+              want_err="non-zero area")
+        check("3 display:none zero-area",
+              ["--clip", void, os.path.join(tmp, "za2"), "120", "60", "1", "div"], 3,
+              want_err="non-zero area")
+        # A selector mixing a paintless match with a real one must still dump the
+        # real one: the skip is per-element, and turning one 0x0 match into a
+        # fatal error would destroy the other 300 boxes a `*` selector finds.
+        check("0 zero-area skipped, visible kept",
+              ["--clip", void, os.path.join(tmp, "za3"), "120", "60", "1", "script, p"], 0,
+              want_err="zero-area box")
+
+        # 2 — a single-dash argument. `-q` in a trailing position used to be
+        # collected as a surplus positional and dropped without a word, so a
+        # typo'd short flag read as "it ran fine"; `-x` in the html slot panicked
+        # on a file literally named `-x` instead of naming the flag. `-h` and
+        # `-V` are handled before this point and exit 0, so they are not caught
+        # by it — proven by the two `0 -h` / `0 -V` legs above (#39).
+        check("2 short flag leading", ["-x", os.path.join(tmp, "sf.png"), "120", "60"], 2,
+              want_err="short flags other than -h and -V")
+        check("2 short flag trailing", [doc, os.path.join(tmp, "sf2.png"), "120", "60", "1", "-q"], 2,
+              want_err="short flags other than -h and -V")
+
+        # 2 — a surplus positional. `pageplate in.html out.png 1280 720 2 7`
+        # rendered at exit 0 and dropped the `7`, which a caller cannot tell
+        # from a value that was honoured (#39).
+        check("2 surplus positional", [doc, os.path.join(tmp, "sp.png"), "120", "60", "1", "7"], 2,
+              want_err="unexpected extra argument")
+
+        # 2 — the output path IS the input path. The document is read into
+        # memory before the write, so `pageplate t.html t.html` used to SUCCEED:
+        # exit 0, a plausible PNG, and the source gone (#36). Both sides are
+        # resolved rather than compared lexically, so `./t.html`, a symlink and
+        # a `..` segment all have to be refused too — and the input has to still
+        # be there afterwards, which is the assertion that matters: the exit code
+        # is the fix, the surviving file is the point.
+        guard = os.path.join(tmp, "guard.html")
+        with open(guard, "w") as fh:
+            fh.write(DOC)
+        before = open(guard, "rb").read()
+        check("2 out==in", [guard, guard, "120", "60"], 2, want_err="over the input")
+        check("2 out==in relative", [guard, os.path.join(tmp, ".", "guard.html"), "120", "60"], 2,
+              want_err="over the input")
+        dotdot = os.path.join(tmp, "sub", "..", "guard.html")
+        os.makedirs(os.path.join(tmp, "sub"), exist_ok=True)
+        check("2 out==in dotdot", [guard, dotdot, "120", "60"], 2, want_err="over the input")
+        link = os.path.join(tmp, "guard_link.png")
+        os.symlink(guard, link)
+        check("2 out==in symlink", [guard, link, "120", "60"], 2, want_err="over the input")
+        if open(guard, "rb").read() != before:
+            fails.append("out==in: the input was modified despite the refusal")
+            print("FAIL out==in: the input was modified despite the refusal")
+
+        # 0 — a NEIGHBOUR of the input is not the input. The refusal above must
+        # not become "refuses anything in the same directory", so this leg pins
+        # the boundary the other three cannot see.
+        check("0 out beside input", [guard, os.path.join(tmp, "beside.png"), "120", "60"], 0)
+
         # 2 — `--per-element` is a clip-mode reading and nothing else reads it.
         # It used to be accepted in single-image mode and silently ignored, so
         # the flag looked honoured while the output was the plain full-document
@@ -296,7 +366,7 @@ def main():
         stale_dir = os.path.join(tmp, "stale")
         os.makedirs(stale_dir)
         for i in range(1, 6):
-            with open(os.path.join(stale_dir, "clip_%02d.png" % i), "wb") as fh:
+            with open(os.path.join(stale_dir, "clip_%03d.png" % i), "wb") as fh:
                 fh.write(b"old")
         keep = os.path.join(stale_dir, "notes.txt")
         with open(keep, "w") as fh:
@@ -309,13 +379,38 @@ def main():
               want_err="stale clip frame")
         frames = sorted(n for n in os.listdir(stale_dir)
                         if n.startswith("clip_") and n.endswith(".png") and n[5:-4].isdigit())
-        if frames != ["clip_01.png"]:
-            fails.append("stale sweep left %r, want ['clip_01.png']" % (frames,))
+        if frames != ["clip_001.png"]:
+            fails.append("stale sweep left %r, want ['clip_001.png']" % (frames,))
             print("FAIL stale sweep left %r" % (frames,))
         for survivor in (keep, lookalike):
             if not os.path.isfile(survivor):
                 fails.append("stale sweep deleted %s, which is not a numbered frame" % survivor)
                 print("FAIL stale sweep deleted %s" % os.path.basename(survivor))
+
+        # 0 — frame numbering past 99. `clip_%02d` gave `clip_01` … `clip_99`
+        # then `clip_100`, which sorts BETWEEN `clip_10` and `clip_11`: a caller
+        # that globs the dump and sorts by name interleaves the hundredth frame
+        # into the teens. Three digits keep lexical order equal to numeric order
+        # for any dump the renderer can produce (#40).
+        many = os.path.join(tmp, "many.html")
+        with open(many, "w") as fh:
+            fh.write('<!doctype html><html><body style="margin:0">')
+            for i in range(105):
+                fh.write('<div style="width:8px;height:4px;background:#0a0"></div>')
+            fh.write("</body></html>\n")
+        many_dir = os.path.join(tmp, "many")
+        check("0 105 frames numbered", ["--clip", many, many_dir, "120", "60", "1", "div"], 0)
+        names = sorted(n for n in os.listdir(many_dir) if n.endswith(".png"))
+        if len(names) != 105:
+            fails.append("105 frames: wrote %d, want 105" % len(names))
+            print("FAIL 105 frames: wrote %d, want 105" % len(names))
+        if names[:2] != ["clip_001.png", "clip_002.png"] or names[-1:] != ["clip_105.png"]:
+            fails.append("105 frames: names run %r … %r, want clip_001.png … clip_105.png"
+                         % (names[:2], names[-1:]))
+            print("FAIL 105 frames: %r … %r" % (names[:2], names[-1:]))
+        if names != sorted(names, key=lambda n: int(n[5:-4])):
+            fails.append("105 frames: lexical sort does not match numeric sort")
+            print("FAIL 105 frames: lexical sort does not match numeric sort")
 
         # 4 — an asset that never arrives. The drain loop gives up at the
         # deadline and still paints, which used to exit 0 with a plausible PNG

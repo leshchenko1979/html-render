@@ -95,8 +95,8 @@ def main():
         rc, out, err = run(args.bin, doc, d1, 1)
         check("a rc is 0", rc == 0, "rc=%d stderr=%r" % (rc, err))
 
-        f1 = os.path.join(d1, "clip_01.png")
-        f2 = os.path.join(d1, "clip_02.png")
+        f1 = os.path.join(d1, "clip_001.png")
+        f2 = os.path.join(d1, "clip_002.png")
         check("a both frames written", os.path.exists(f1) and os.path.exists(f2), os.listdir(d1) if os.path.isdir(d1) else "no dir")
         if os.path.exists(f1):
             w, h, ch, px = png(f1)
@@ -113,7 +113,7 @@ def main():
         d2 = os.path.join(tmp, "s2")
         rc2, _o2, _e2 = run(args.bin, doc, d2, 2)
         check("e scale 2 rc is 0", rc2 == 0, "rc=%d" % rc2)
-        f3 = os.path.join(d2, "clip_01.png")
+        f3 = os.path.join(d2, "clip_001.png")
         if os.path.exists(f3):
             w3, h3, ch3, px3 = png(f3)
             check("e scale 2 doubles the frame", (w3, h3) == (ELEM_W * 2, ELEM_H * 2), "%dx%d" % (w3, h3))
@@ -123,7 +123,7 @@ def main():
         d3 = os.path.join(tmp, "pe")
         rc3, _o3, _e3 = run(args.bin, doc, d3, 1, ("--per-element",))
         check("f per-element rc is 0", rc3 == 0, "rc=%d" % rc3)
-        f4 = os.path.join(d3, "clip_01.png")
+        f4 = os.path.join(d3, "clip_001.png")
         if os.path.exists(f4):
             w4, h4, _c4, _p4 = png(f4)
             check("f strategies agree on width", (w4, h4) == (ELEM_W, ELEM_H), "%dx%d" % (w4, h4))

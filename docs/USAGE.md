@@ -30,7 +30,7 @@ pageplate --clip <html> <outdir> <width> <height> <scale> <selector> [--document
 |---|---|---|
 | default | one PNG of the viewport | one canvas of the viewport |
 | `--full` | one PNG as tall as the whole document, painted in row bands and streamed into the encoder, so page height has no ceiling | one band |
-| `--clip` | one PNG per selector match, `clip_01.png`, `clip_02.png`, … An output directory is **single-writer**: two runs aimed at the same one interleave their frames and both exit `0` ([#37](https://github.com/leshchenko1979/pageplate/issues/37)) | one band, as wide as the widest match |
+| `--clip` | one PNG per selector match, `clip_001.png`, `clip_002.png`, … An output directory is **single-writer**: two runs aimed at the same one interleave their frames and both exit `0` ([#37](https://github.com/leshchenko1979/pageplate/issues/37)) | one band, as wide as the widest match |
 | `--clip --per-element` | one PNG per match, each on its own element-sized canvas with the viewport scrolled to it | one element-sized canvas; flat in page height |
 
 A document holding a `position:fixed` element is painted as **one canvas** under `--full`, because a banded
@@ -81,8 +81,8 @@ forms.
 | code | meaning |
 |---|---|
 | `0` | a PNG was written, or `--help` / `--version` was printed |
-| `2` | bad arguments: unknown flag, too few arguments, `--clip` not first, `--per-element` outside `--clip`, `--full` with `--clip`, `--document` with `--fragment` |
-| `3` | the selector matched nothing, or every match had no layout box (`br`, `wbr`, an empty inline `span`). A match with a **zero-size** box is a different case: `script`, `style`, `template` and `display:none` return `0` with a 1×1 PNG ([#38](https://github.com/leshchenko1979/pageplate/issues/38)) |
+| `2` | bad arguments: unknown flag (including any single-dash flag other than `-h`/`-V`), too few or too many positionals, `--clip` not first, `--per-element` outside `--clip`, `--full` with `--clip`, `--document` with `--fragment`, or an output path that resolves to the input file |
+| `3` | the selector matched nothing, or every match had no layout box (`br`, `wbr`) or a zero-area box (`script`, `style`, `template`, `display:none`). Matches that are skipped are counted on stderr, so a short dump is distinguishable from a complete one |
 | `4` | output written but known to be incomplete: a sub-resource failed to fetch (`404`, DNS, connection refused), was refused as too large, a fetch hit `BLITZ_DEADLINE_SECS`, or a frame past 65,408 px was cut |
 | `5` | one canvas would exceed the renderer limit (65,408 wide, 65,532 tall) and nothing was written; with banding on, that means one band or one element is too large, banding was disabled with `BLITZ_BAND_MIB=0`, or a `position:fixed` element forces one canvas past the limit |
 | `101` | panic: unparsable number, invalid selector, unreadable input, unwritable output path |
@@ -98,7 +98,7 @@ A killed process returns none of them: the shell reports `128+signal` (`137` on 
 | code | output path after the run |
 |---|---|
 | `2` | untouched — arguments are validated before anything is opened |
-| `3` | with `--clip`: a selector that matched nothing leaves the previous frames **untouched**; the all-matches-boxless path **sweeps them first**, so the directory is empty |
+| `3` | with `--clip`: a selector that matched nothing leaves the previous frames **untouched**; when matches exist but none is paintable (no layout box, or a zero-area box) the sweep runs **first**, so the directory is empty |
 | `4` | a complete PNG (or the `--clip` set), plus a named reason on stderr |
 | `5` | with `--clip`: **empty** — the sweep runs before the paint, so a refusal leaves nothing |
 | `101` | possibly a **truncated PNG at the final path**: the file is opened before the panic, so a good file can be replaced by a stub |
@@ -124,7 +124,7 @@ so a log reader sees the truncation without parsing the warning text.
 Under `--clip`, one line per frame goes to **stdout**, under `--per-element` ending in `(per-element)`:
 
 ```
-clip_01 css x=0.00 y=21.44 w=400.00 h=38.00  physical 400x38 at 0,21
+clip_001 css x=0.00 y=21.44 w=400.00 h=38.00  physical 400x38 at 0,21
 ```
 
 `css` coordinates are document coordinates at scroll 0, so they are the same whether the run was banded or

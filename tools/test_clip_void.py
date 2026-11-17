@@ -91,9 +91,9 @@ def main():
                 fails.append("%s: %d clip line(s), want %d (%d matched - %d skipped)"
                              % (tag, len(boxes), want, matched, skipped))
             # Numbering must be contiguous over the EMITTED boxes: a caller that
-            # reads clip_01..clip_NN must not find a hole where a <br> was.
+            # reads clip_001..clip_NNN must not find a hole where a <br> was.
             names = sorted(f for f in os.listdir(outdir) if f.startswith("clip_"))
-            expect = ["clip_%02d.png" % (i + 1) for i in range(want)]
+            expect = ["clip_%03d.png" % (i + 1) for i in range(want)]
             if names != expect:
                 fails.append("%s: files %r, want %r" % (tag, names, expect))
             for n in names:

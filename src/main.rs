@@ -26,7 +26,7 @@
 use std::env;
 use std::fs::File;
 use std::io::Write as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -86,7 +86,7 @@ fn help_text() -> String {
          \x20               default 4). A document holding a position:fixed element\n\
          \x20               is painted as ONE canvas instead, because a banded paint\n\
          \x20               would repeat that element down the image.\n\
-         \x20 --clip        one PNG per selector match, written as clip_NN.png, by\n\
+         \x20 --clip        one PNG per selector match, written as clip_NNN.png, by\n\
          \x20               one of two strategies:\n\
          \x20                 (no flag)      paint the document in row bands, then cut\n\
          \x20                                each frame out of the band that holds it.\n\
@@ -117,10 +117,11 @@ fn help_text() -> String {
          \x20 0    the PNG, or the clip directory, was written\n\
          \x20 2    wrong argument count, an unknown flag, --clip not first, --per-element\n\
          \x20      outside --clip, or --full with --clip\n\
-         \x20 3    the selector matched nothing, or every match had no layout box\n\
+         \x20 3    the selector matched nothing, or every match had no layout box or\n\
+         \x20      zero area (script, style, display:none)\n\
          \x20 4    the output was written but is known to be incomplete: a sub-resource\n\
          \x20      failed to fetch or was refused as too large, an asset fetch hit the\n\
-         \x20      deadline, or a frame was cut to the canvas width\n\
+         \x20      deadline, or a frame past 65408 px wide was cut to that limit\n\
          \x20 5    the canvas would exceed the renderer limit (65408 wide, 65532 tall);\n\
          \x20      nothing was written\n\
          \x20 101  a panic: an unparsable number, an invalid selector, an unreadable input\n",
@@ -475,7 +476,7 @@ fn font_face_families(document: &HtmlDocument) -> Vec<String> {
     families
 }
 
-/// Remove `clip_NN.png` files left in `dir` by an earlier, longer run.
+/// Remove `clip_NNN.png` files left in `dir` by an earlier, longer run.
 ///
 /// Clip numbering restarts at 1 every run, so a re-render that matches FEWER
 /// elements used to leave the tail of the previous dump behind: the caller saw
@@ -505,6 +506,34 @@ fn remove_stale_clip_frames(dir: &Path) -> usize {
         }
     }
     removed
+}
+
+/// True when `out` resolves to the same file as `input`.
+///
+/// `pageplate in.html in.html` used to overwrite its own source and exit 0: the
+/// document was read into memory first, so the render succeeded and the input
+/// was gone (#36). A lexical compare is not enough — `./t.html` and `t.html`, a
+/// symlink, and a `..` segment all name one file — so both sides are resolved.
+///
+/// The output usually does not exist yet, which `canonicalize` refuses; its
+/// parent is resolved instead and the file name re-attached, so a symlinked
+/// directory is still followed.
+fn same_file(input: &Path, out: &Path) -> bool {
+    fn resolve(p: &Path) -> Option<PathBuf> {
+        if let Ok(c) = p.canonicalize() {
+            return Some(c);
+        }
+        let name = p.file_name()?;
+        let parent = match p.parent() {
+            Some(d) if !d.as_os_str().is_empty() => d,
+            _ => Path::new("."),
+        };
+        Some(parent.canonicalize().ok()?.join(name))
+    }
+    match (resolve(input), resolve(out)) {
+        (Some(a), Some(b)) => a == b,
+        _ => false,
+    }
 }
 
 async fn real_main() {
@@ -564,6 +593,16 @@ async fn real_main() {
     // the wrong thing with nothing on stderr. `--clip` additionally shifts the
     // positionals by one, so it is only a mode when it leads.
     for (i, a) in args.iter().enumerate().skip(1) {
+        // A single-dash argument is an error. `-q` in a trailing position used
+        // to be collected as a surplus positional and silently dropped, so a
+        // typo'd short flag read as "it ran fine"; `-x` in the html slot panicked
+        // on a file named `-x` instead of naming the flag (#39). `-h` and `-V`
+        // never reach here — they are handled above and exit 0.
+        if a.starts_with('-') && !a.starts_with("--") {
+            eprintln!("unknown flag {a:?}: short flags other than -h and -V are not supported");
+            eprintln!("{usage}");
+            std::process::exit(2);
+        }
         if !a.starts_with("--") {
             continue;
         }
@@ -599,6 +638,24 @@ async fn real_main() {
             eprintln!("{usage}");
             std::process::exit(2);
         }
+    }
+
+    // Surplus positionals are an error, not padding. `pageplate in.html out.png
+    // 1280 720 2 7` rendered at exit 0 and dropped the `7`, and a caller cannot
+    // tell that from a value that was honoured (#39). The count is exact in both
+    // modes: clip takes six (html, outdir, width, height, scale, selector),
+    // single-image four or five (scale optional). This runs AFTER the flag loop
+    // on purpose, so a stray `-q` is reported as an unknown flag rather than
+    // counted as one extra positional — both are exit 2, one names the cause.
+    let max_pos = if clip { 6 } else { 5 };
+    if pos.len() > max_pos {
+        eprintln!(
+            "{} unexpected extra argument(s): {:?}",
+            pos.len() - max_pos,
+            &pos[max_pos..]
+        );
+        eprintln!("{usage}");
+        std::process::exit(2);
     }
 
     // Both flags name a reading; together they name none. Silently preferring
@@ -638,6 +695,15 @@ async fn real_main() {
             None,
         )
     };
+
+    // Refuse to write the render over its own source (#36). The document is read
+    // into memory below, so the render would SUCCEED and destroy the input:
+    // exit 0, a plausible PNG, and the source gone. Clip mode writes into a
+    // directory, so only single-image mode can collide.
+    if selector.is_none() && same_file(Path::new(html_path), Path::new(out_path)) {
+        eprintln!("refusing to write the output over the input: {html_path:?}");
+        std::process::exit(2);
+    }
 
     let started = Instant::now();
     let source = std::fs::read_to_string(html_path).expect("read html");
@@ -880,14 +946,24 @@ async fn real_main() {
             // `<style>`, …) have no geometry, and `*` matches them in any real
             // document. They are SKIPPED, not fatal: a clip dump is a diagnostic,
             // so one unlayoutable element must not destroy the other 300 boxes.
-            // The skip is reported rather than silent, and `clip_NN` numbering
+            // The skip is reported rather than silent, and `clip_NNN` numbering
             // stays contiguous over the emitted boxes, so a caller can tell a
             // short dump from a complete one.
             let mut skipped = 0usize;
+            // A box that EXISTS but has no area is the same outcome as no box:
+            // nothing to paint. `display:none`, `<script>`, `<style>` and
+            // `<template>` all report a 0x0 rect rather than none, and the
+            // `.max(1)` below then produced a 68-byte 1x1 PNG at exit 0 — a
+            // success code for a render that painted nothing (#38).
+            let mut zero_area = 0usize;
             let rects: Vec<_> = ids
                 .iter()
                 .filter_map(|id| match document.get_client_bounding_rect(*id) {
-                    Some(rect) => Some(rect),
+                    Some(rect) if rect.width > 0.0 && rect.height > 0.0 => Some(rect),
+                    Some(_) => {
+                        zero_area += 1;
+                        None
+                    }
                     None => {
                         skipped += 1;
                         None
@@ -900,8 +976,16 @@ async fn real_main() {
                     ids.len()
                 );
             }
+            if zero_area > 0 {
+                eprintln!(
+                    "skipped {zero_area} of {} matched element(s): zero-area box",
+                    ids.len()
+                );
+            }
             if rects.is_empty() {
-                eprintln!("no matched element for selector {sel:?} has a layout box");
+                eprintln!(
+                    "no matched element for selector {sel:?} has a layout box with a non-zero area"
+                );
                 std::process::exit(3);
             }
 
@@ -924,7 +1008,7 @@ async fn real_main() {
                     document.set_viewport_scroll(Point { x: rect.x, y: rect.y });
                     let buffer = paint_region(&mut document, 0, 0, w, h, scale);
                     println!(
-                        "clip_{:02} css x={:.2} y={:.2} w={:.2} h={:.2}  physical {}x{} (per-element)",
+                        "clip_{:03} css x={:.2} y={:.2} w={:.2} h={:.2}  physical {}x{} (per-element)",
                         i + 1,
                         rect.x,
                         rect.y,
@@ -933,7 +1017,7 @@ async fn real_main() {
                         w,
                         h
                     );
-                    let path = Path::new(out_path).join(format!("clip_{:02}.png", i + 1));
+                    let path = Path::new(out_path).join(format!("clip_{:03}.png", i + 1));
                     write_png(File::create(&path).expect("create png"), &buffer, w, h);
                 }
                 document.set_viewport_scroll(Point::ZERO);
@@ -1059,7 +1143,7 @@ async fn real_main() {
                     if x.saturating_add(want_w) > canvas_w {
                         clipped_frames += 1;
                         eprintln!(
-                            "warning: clip_{:02} is {want_w} px wide but the canvas is {canvas_w} px; the frame is cut (--per-element keeps the full width)",
+                            "warning: clip_{:03} is {want_w} px wide but the canvas is {canvas_w} px; the frame is cut (--per-element keeps the full width)",
                             i + 1
                         );
                     }
@@ -1068,7 +1152,7 @@ async fn real_main() {
                     // `top + y` is the ABSOLUTE document row, so a reader sees the
                     // same coordinates whether the run was banded or not.
                     println!(
-                        "clip_{:02} css x={:.2} y={:.2} w={:.2} h={:.2}  physical {}x{} at {},{}",
+                        "clip_{:03} css x={:.2} y={:.2} w={:.2} h={:.2}  physical {}x{} at {},{}",
                         i + 1,
                         rect.x,
                         rect.y,
@@ -1080,7 +1164,7 @@ async fn real_main() {
                         top + y
                     );
                     crop_into(&mut out, &canvas, canvas_w, x, y, w, h);
-                    let path = Path::new(out_path).join(format!("clip_{:02}.png", i + 1));
+                    let path = Path::new(out_path).join(format!("clip_{:03}.png", i + 1));
                     write_png(File::create(&path).expect("create png"), &out, w, h);
                 }
                 document.set_viewport_scroll(Point::ZERO);
