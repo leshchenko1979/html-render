@@ -24,10 +24,20 @@ on:
       - "assets/**"
       - ".github/workflows/container.yml"
   workflow_dispatch:
+  schedule:
+    # Weekly rebuild, so a base-image CVE is picked up without a code change
+    # (#31). It republishes `latest`, the documented moving tag, and a fresh
+    # digest; a version tag is never rewritten by this.
+    - cron: "0 5 * * 1"
 
 permissions:
   contents: read
   packages: write # push to ghcr.io
+  # Keyless signing: the workflow's own OIDC identity is the signer, so there is
+  # no key to leak, rotate or lose, and the provenance record lands publicly
+  # beside the digest (#31).
+  id-token: write
+  attestations: write
 
 concurrency:
   group: container-${{ github.ref }}
@@ -166,6 +176,7 @@ jobs:
           PY
 
       - name: Push
+        id: push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
@@ -173,3 +184,32 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
+
+      - name: Record the published digest
+        # A tag is a moving pointer; the digest is the identity. Without it a run
+        # cannot say WHICH image it produced, and `latest` moves on every push to
+        # main (#31). The summary is the durable record — an artifact would
+        # expire and nobody downloads one to find a digest.
+        run: |
+          set -euo pipefail
+          digest="${{ steps.push.outputs.digest }}"
+          test -n "$digest" || { echo "::error::the push returned no digest"; exit 1; }
+          {
+            echo "### Published image"
+            echo ""
+            echo '```'
+            echo "tags:   ${{ steps.meta.outputs.tags }}"
+            echo "digest: ${digest}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "digest=${digest}"
+
+      - name: Attest the image
+        # Same keyless chain as the tarball in release.yml. The container package
+        # carried no attestation at all before this (#31), so a puller could not
+        # tell a digest built here from one pushed by hand.
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
