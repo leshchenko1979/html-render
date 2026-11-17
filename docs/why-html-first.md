@@ -62,6 +62,10 @@ code from a plot — and is useful for the same reason: it treats the code as th
 thing worth evaluating, not the pixels
 ([aclanthology.org/2025.findings-naacl.164.pdf](https://aclanthology.org/2025.findings-naacl.164.pdf)).
 
+**Which text format** is a separate question, and it also has an answer:
+[`html-vs-svg.md`](html-vs-svg.md) records the benchmark where HTML beats SVG by
+44.81 points at the median across 12 models, with none preferring SVG.
+
 **The practical consequence.** If an agent writes a figure, the only useful
 output is text. Rendering it to PNG is a presentation step that should be
 cheap, deterministic, and available offline. Spawning a browser per figure

@@ -800,7 +800,7 @@ def main():
     # at. Both directions are checked: the target exists, and the README says
     # where it is.
     for target in ("bench/README.md", "docs/why-html-first.md",
-                   "docs/USAGE.md", "docs/INSTALL.md"):
+                   "docs/html-vs-svg.md", "docs/USAGE.md", "docs/INSTALL.md"):
         checked += 1
         if not os.path.exists(os.path.join(ROOT, target)):
             fails.append("README.md links %s, which does not exist" % target)

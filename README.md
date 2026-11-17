@@ -95,6 +95,7 @@ and that list is authoritative and current.
 | [CHANGELOG.md](CHANGELOG.md) | what moved between releases |
 | [bench/README.md](bench/README.md) | the probe: what it measures, how to re-run it, what the bands mean |
 | [docs/why-html-first.md](docs/why-html-first.md) | what HTML-and-CSS-first rendering is good for, with sources |
+| [docs/html-vs-svg.md](docs/html-vs-svg.md) | why a generated card is HTML rather than SVG, with the benchmark |
 
 ## Contributing
 
