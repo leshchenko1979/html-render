@@ -59,7 +59,7 @@ Each of these exists because the thing it prevents already happened once.
   names is accepted. Do not add a flags table to any document.
 
 - **Do not reflow the README.** One clause per line. That is what makes the diff
-  reviewable and the 500-line file navigable.
+  reviewable and the page navigable.
 
 ## Where the detail lives
 
