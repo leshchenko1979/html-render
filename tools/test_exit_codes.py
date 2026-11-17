@@ -20,6 +20,7 @@ hand-written measurement: it stays put when a leg is added or deleted.
 """
 
 import argparse
+import json
 import os
 import re
 import socket
@@ -663,6 +664,168 @@ def main():
                      "</body></html>\n" % port)
         check("0 image 200 still exits 0",
               [good, os.path.join(tmp, "good.png"), "120", "60", "1"], 0)
+
+        # ---- #28: --json. The schema is a contract, so the legs below compare
+        # the keys the binary emits against the keys docs/USAGE.md lists, in both
+        # directions: a field that vanishes from the code, or one the doc invents,
+        # fails here. Everything else asserts a FACT, because a schema that parses
+        # and carries the wrong number is the defect class this file exists for.
+        def json_objects(argv, env=None):
+            rc, out, err = run(binary, argv, env=env)
+            objs = []
+            for line in out.splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    objs.append(json.loads(line))
+                except ValueError:
+                    fails.append("--json wrote a non-JSON line on stdout: %r" % line[:120])
+                    print("FAIL --json non-JSON stdout line %r" % line[:80])
+            return rc, objs, err
+
+        one_json = os.path.join(tmp, "one_json.png")
+        rc, objs, err = json_objects(["--json", doc, one_json, "120", "60"])
+        if rc != 0:
+            fails.append("--json rc=%d want 0" % rc)
+            print("FAIL --json rc=%d" % rc)
+        if len(objs) != 1:
+            fails.append("--json wrote %d object(s), want 1" % len(objs))
+            print("FAIL --json wrote %d objects, want 1" % len(objs))
+        else:
+            obj = objs[0]
+            want_keys = {
+                "out", "width", "height", "content_h", "canvas_h", "rows_lost",
+                "mode", "parse_mode", "scale", "substituted_families",
+                "failed_resources", "timings_ms", "exit",
+            }
+            if set(obj) != want_keys:
+                fails.append("--json keys differ: missing %r extra %r"
+                             % (sorted(want_keys - set(obj)), sorted(set(obj) - want_keys)))
+                print("FAIL --json keys: missing %r extra %r"
+                      % (sorted(want_keys - set(obj)), sorted(set(obj) - want_keys)))
+            # The DOC is the contract: every field named in its schema table must
+            # be one the binary emits, and vice versa.
+            with open(os.path.join(root, "docs", "USAGE.md"), encoding="utf-8") as fh:
+                usage_doc = fh.read()
+            schema = usage_doc.split("### `--json`", 1)[-1]
+            schema = schema.split("**The schema is stable**", 1)[0]
+            # The first CELL, not the first backticked token: `width` and
+            # `height` share a row, and a regex anchored at the line start would
+            # silently drop the second name of every pair.
+            doc_keys = set()
+            for row in schema.splitlines():
+                if row.startswith("|"):
+                    doc_keys |= set(re.findall(r"`([a-z_]+)`", row.split("|")[1]))
+            if doc_keys != want_keys:
+                fails.append("docs/USAGE.md schema and the emitted keys differ: "
+                             "doc-only %r code-only %r"
+                             % (sorted(doc_keys - want_keys), sorted(want_keys - doc_keys)))
+                print("FAIL --json schema drift: doc-only %r code-only %r"
+                      % (sorted(doc_keys - want_keys), sorted(want_keys - doc_keys)))
+            if obj.get("width") != 120 or obj.get("height") != 60:
+                fails.append("--json geometry %rx%r, want 120x60"
+                             % (obj.get("width"), obj.get("height")))
+                print("FAIL --json geometry %r" % ((obj.get("width"), obj.get("height")),))
+            if obj.get("out") != one_json:
+                fails.append("--json out=%r, want %r" % (obj.get("out"), one_json))
+                print("FAIL --json out=%r" % (obj.get("out"),))
+            if obj.get("exit") != 0 or obj.get("mode") != "single":
+                fails.append("--json exit/mode %r/%r, want 0/single"
+                             % (obj.get("exit"), obj.get("mode")))
+                print("FAIL --json exit/mode %r %r" % (obj.get("exit"), obj.get("mode")))
+            timings = obj.get("timings_ms") or {}
+            if set(timings) != {"parse", "layout", "paint", "total"}:
+                fails.append("--json timings_ms keys %r" % sorted(timings))
+                print("FAIL --json timings_ms keys %r" % sorted(timings))
+            if not (isinstance(obj.get("substituted_families"), list)
+                    or obj.get("substituted_families") is None):
+                fails.append("--json substituted_families is neither a list nor null")
+                print("FAIL --json substituted_families type")
+            if not err.strip():
+                fails.append("--json suppressed stderr entirely; diagnostics belong there")
+                print("FAIL --json wrote nothing to stderr")
+            else:
+                print("ok   --json single object")
+
+        # A CUT document: the object must carry the same fact the TIMING line and
+        # the warning carry, or the field is decoration.
+        cut_json = os.path.join(tmp, "cut_json.png")
+        rc, objs, _ = json_objects(["--json", tall, cut_json, "120", "60"])
+        if len(objs) != 1:
+            fails.append("--json cut: %d object(s), want 1" % len(objs))
+            print("FAIL --json cut: %d objects" % len(objs))
+        else:
+            obj = objs[0]
+            ch, cv, lost = obj.get("content_h"), obj.get("canvas_h"), obj.get("rows_lost")
+            if not (isinstance(ch, int) and isinstance(cv, int) and isinstance(lost, int)):
+                fails.append("--json cut: content_h/canvas_h/rows_lost not integers: %r"
+                             % ((ch, cv, lost),))
+                print("FAIL --json cut field types")
+            elif ch <= cv:
+                fails.append("--json cut: content_h=%r not above canvas_h=%r" % (ch, cv))
+                print("FAIL --json cut: %r <= %r" % (ch, cv))
+            elif lost != ch - cv:
+                fails.append("--json cut: rows_lost=%r, want content_h-canvas_h=%d"
+                             % (lost, ch - cv))
+                print("FAIL --json cut: rows_lost=%r want %d" % (lost, ch - cv))
+            else:
+                print("ok   --json cut document names the rows lost")
+
+        # --clip: one object per frame, and stdout carries NOTHING but objects,
+        # which is the property that makes the stream parseable at all.
+        clips = os.path.join(tmp, "clips_json")
+        rc, objs, err = json_objects(["--json", "--clip", doc, clips, "120", "60", "1", "div"])
+        if rc != 0 or len(objs) != 1:
+            fails.append("--json --clip rc=%d objects=%d, want 0/1" % (rc, len(objs)))
+            print("FAIL --json --clip rc=%d objects=%d" % (rc, len(objs)))
+        else:
+            obj = objs[0]
+            if obj.get("mode") != "clip":
+                fails.append("--json --clip mode=%r, want clip" % obj.get("mode"))
+                print("FAIL --json --clip mode=%r" % obj.get("mode"))
+            if not str(obj.get("out", "")).endswith("clip_001.png"):
+                fails.append("--json --clip out=%r, want .../clip_001.png" % obj.get("out"))
+                print("FAIL --json --clip out=%r" % obj.get("out"))
+            # The human frame line must have moved to stderr, not disappeared.
+            if "clip_001 css" not in err:
+                fails.append("--json --clip dropped the geometry line instead of moving it")
+                print("FAIL --json --clip geometry line missing from stderr")
+            else:
+                print("ok   --json --clip frame line moved to stderr")
+
+        # exit 4 with the resource named, in the object rather than only on stderr.
+        rc, objs, _ = json_objects(["--json", bad, os.path.join(tmp, "bad_json.png"),
+                                    "120", "60", "1"])
+        if rc != 4:
+            fails.append("--json non-image rc=%d want 4" % rc)
+            print("FAIL --json non-image rc=%d" % rc)
+        elif len(objs) != 1:
+            fails.append("--json non-image wrote %d object(s), want 1" % len(objs))
+            print("FAIL --json non-image objects=%d" % len(objs))
+        else:
+            obj = objs[0]
+            fr = obj.get("failed_resources") or []
+            if obj.get("exit") != 4:
+                fails.append("--json non-image exit=%r, want 4" % obj.get("exit"))
+                print("FAIL --json non-image exit=%r" % obj.get("exit"))
+            elif not fr or not fr[0].get("url") or not fr[0].get("reason"):
+                fails.append("--json non-image failed_resources=%r, want url+reason" % (fr,))
+                print("FAIL --json non-image failed_resources=%r" % (fr,))
+            elif "not a decodable image" not in fr[0]["reason"]:
+                fails.append("--json non-image reason=%r" % fr[0]["reason"])
+                print("FAIL --json non-image reason=%r" % fr[0]["reason"])
+            else:
+                print("ok   --json carries exit 4 and the failed resource")
+
+        # A run that writes no PNG emits no object: there is no artefact to
+        # describe, and inventing one would make `out` a lie.
+        rc, objs, _ = json_objects(["--json", empty, os.path.join(tmp, "none.png"),
+                                    "120", "60", "--clip", "div"])
+        if rc != 3 or objs:
+            fails.append("--json no-match rc=%d objects=%d, want 3/0" % (rc, len(objs)))
+            print("FAIL --json no-match rc=%d objects=%d" % (rc, len(objs)))
+        else:
+            print("ok   --json emits nothing when no PNG is written")
 
         srv.shutdown()
 

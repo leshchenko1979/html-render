@@ -52,6 +52,7 @@ nothing written.
 | `--scroll` | accepted alias for `--per-element`, kept so older invocations keep working; `--help` does not list it |
 | `--no-network` | refuse every sub-resource that is not `file://` or `data:`; each refusal is named on stderr and the run exits `4` |
 | `--allow-host=<glob>` | fetch a sub-resource only when its host matches; repeatable, `*` is any run of characters. `file://` and `data:` always pass. A bare `--allow-host` or an empty value exits `2` |
+| `--json` | write one JSON object per PNG to stdout; every human diagnostic stays on stderr. Schema below |
 | `-h`, `--help` | print the flag list, exit `0` |
 | `-V`, `--version` | print the version, exit `0` |
 
@@ -133,8 +134,38 @@ clip_001 css x=0.00 y=21.44 w=400.00 h=38.00  physical 400x38 at 0,21
 not. Stdout stays empty in every other mode, and the output path is never echoed. The order of these lines relative to
 each other is not part of the contract: match them by prefix, never by position.
 
-There is no `--json` and no manifest
-([#28](https://github.com/leshchenko1979/pageplate/issues/28)).
+### `--json`: one object per PNG, on stdout
+
+`--json` writes one JSON object per PNG **actually written**, and nothing else, to stdout. Every human line —
+the `TIMING` line, the warnings, the per-frame geometry above — stays on stderr, so `--json` composes with a
+redirect that also wants the diagnostics, and a reader of stdout never has to skip a line it cannot parse.
+
+```json
+{"out":"slides/clip_001.png","width":400,"height":38,"content_h":5760,"canvas_h":720,"rows_lost":0,
+ "mode":"clip","parse_mode":"document","scale":2,"substituted_families":["Arial"],
+ "failed_resources":[{"url":"http://127.0.0.1:8080/t.txt","reason":"delivered but the body is not a decodable image"}],
+ "timings_ms":{"parse":18,"layout":599,"paint":72,"total":689},"exit":0}
+```
+
+| field | meaning |
+|---|---|
+| `out` | the PNG this object describes |
+| `width`, `height` | that PNG's pixel size |
+| `content_h` | the document's own height, in physical pixels, the same for every frame of the run |
+| `canvas_h` | the canvas height the run was given, before any document cut |
+| `rows_lost` | `content_h - canvas_h` when the canvas cut the document, else `0`. Clip frames are cropped on purpose, so it stays `0` there |
+| `mode` | `single`, `clip` or `per-element` |
+| `parse_mode` | `document` or `fragment`: how the input was parsed |
+| `scale` | the device scale factor |
+| `substituted_families` | font families the renderer replaced, or `null` when no fonts were visible at all — `[]` means none were substituted, `null` means the host cannot tell |
+| `failed_resources` | `[{url, reason}]` for every sub-resource that will not be in the picture |
+| `timings_ms` | `parse`, `layout`, `paint`, `total` |
+| `exit` | the code the process exits with, on every object of the run |
+
+**The schema is stable**: a field will not be renamed or removed without a major version, and a leg in
+`tools/test_exit_codes.py` fails if the keys above and the keys the binary emits stop matching in either
+direction. New fields may be added. A run that writes no PNG emits no object — a `2`, `3` or `5` is the
+process exit code alone, since there is no artefact to describe.
 
 ## Determinism
 

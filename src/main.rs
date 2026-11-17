@@ -115,6 +115,8 @@ fn help_text() -> String {
          \x20 --allow-host=<glob>  fetch a sub-resource only when its host matches;\n\
          \x20               repeatable, `*` matches any run of characters. file://\n\
          \x20               and data: are always allowed\n\
+         \x20 --json        write one JSON object per PNG to stdout, with the\n\
+         \x20               human diagnostics left on stderr\n\
          \x20 -h, --help    print this text and exit 0\n\
          \x20 -V, --version print the version and exit 0\n\
          \n\
@@ -161,10 +163,29 @@ fn help_text() -> String {
 /// `fetch_with_callback` does not clone it, so forwarding that count would
 /// report an empty queue while fetches were still running. The drain loop reads
 /// this counter, so the counter has to be ours.
+/// One sub-resource that will not be in the picture, kept as its two facts
+/// rather than one formatted line: stderr wants `url: reason`, and the JSON
+/// report (#28) wants them as separate fields. Splitting the string back apart
+/// on `": "` would break on a URL that contains it.
+#[derive(Clone, Debug)]
+struct Failure {
+    url: String,
+    reason: String,
+}
+
+impl Failure {
+    fn new(url: impl Into<String>, reason: impl Into<String>) -> Self {
+        Self {
+            url: url.into(),
+            reason: reason.into(),
+        }
+    }
+}
+
 struct RequestedUrlProvider {
     inner: Arc<Provider>,
     inflight: Arc<AtomicUsize>,
-    failed: Arc<Mutex<Vec<String>>>,
+    failed: Arc<Mutex<Vec<Failure>>>,
     /// Every URL this run was ASKED for, absolute, in request order. A node
     /// with no image data is only evidence of a decode failure if its URL is
     /// here — an image that was never requested (`display:none`, a template)
@@ -201,7 +222,7 @@ impl RequestedUrlProvider {
 
     /// One line per sub-resource that failed or was refused, in completion
     /// order. Read after painting, where a non-empty list decides exit code 4.
-    fn failures(&self) -> Vec<String> {
+    fn failures(&self) -> Vec<Failure> {
         self.failed.lock().map(|v| v.clone()).unwrap_or_default()
     }
 
@@ -249,7 +270,7 @@ impl NetProvider for RequestedUrlProvider {
         // 4 naming the URL it would not fetch (#29).
         if let Some(reason) = self.refusal(&requested) {
             if let Ok(mut v) = self.failed.lock() {
-                v.push(format!("{requested}: {reason}"));
+                v.push(Failure::new(&requested, reason));
             }
             return;
         }
@@ -272,11 +293,14 @@ impl NetProvider for RequestedUrlProvider {
                                 && u64::from(w) * u64::from(h) > max_image_px =>
                         {
                             if let Ok(mut v) = failed.lock() {
-                                v.push(format!(
-                                    "{requested}: {w}x{h} image is {:.1} MP, above the {} MP cap \
-                                     (BLITZ_MAX_IMAGE_MP=0 disables it)",
-                                    (u64::from(w) * u64::from(h)) as f64 / 1_000_000.0,
-                                    max_image_px / 1_000_000,
+                                v.push(Failure::new(
+                                    &requested,
+                                    format!(
+                                        "{w}x{h} image is {:.1} MP, above the {} MP cap \
+                                         (BLITZ_MAX_IMAGE_MP=0 disables it)",
+                                        (u64::from(w) * u64::from(h)) as f64 / 1_000_000.0,
+                                        max_image_px / 1_000_000,
+                                    ),
                                 ));
                             }
                         }
@@ -284,7 +308,7 @@ impl NetProvider for RequestedUrlProvider {
                     },
                     Err(e) => {
                         if let Ok(mut v) = failed.lock() {
-                            v.push(format!("{requested}: {e}"));
+                            v.push(Failure::new(&requested, e.to_string()));
                         }
                     }
                 }
@@ -349,6 +373,99 @@ fn glob_match(pattern: &str, subject: &str) -> bool {
         pi += 1;
     }
     pi == p.len()
+}
+
+/// One PNG this run wrote, as the JSON report states it (#28).
+struct FrameReport {
+    out: String,
+    width: u32,
+    height: u32,
+    content_h: u32,
+    canvas_h: u32,
+    rows_lost: u32,
+}
+
+/// A JSON string literal, escaped by hand: the crate has no serde, and pulling
+/// one in to print a dozen fields would be a dependency for a comma.
+fn json_string(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// One JSON object per PNG written, on stdout, then nothing else (#28).
+///
+/// The schema is documented in `docs/USAGE.md` and a test leg asserts the keys
+/// below are exactly the ones it lists, so a field cannot vanish silently.
+///
+/// `substituted_families` is `null` when the host has no fonts visible at all:
+/// the check cannot distinguish "nothing was substituted" from "substitution
+/// cannot be detected here", and a `[]` would claim the first.
+fn emit_json_report(
+    frames: &[FrameReport],
+    mode: &str,
+    parse_mode: &str,
+    scale: f64,
+    timings: (u128, u128, u128, u128),
+    substituted: Option<&[String]>,
+    failed: &[Failure],
+    exit: i32,
+) {
+    let substituted = match substituted {
+        Some(fams) => format!(
+            "[{}]",
+            fams.iter()
+                .map(|f| json_string(f))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+        None => "null".to_string(),
+    };
+    let failed = format!(
+        "[{}]",
+        failed
+            .iter()
+            .map(|f| format!(
+                "{{\"url\":{},\"reason\":{}}}",
+                json_string(&f.url),
+                json_string(&f.reason)
+            ))
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    for frame in frames {
+        println!(
+            "{{\"out\":{},\"width\":{},\"height\":{},\"content_h\":{},\"canvas_h\":{},\"rows_lost\":{},\"mode\":{},\"parse_mode\":{},\"scale\":{},\"substituted_families\":{},\"failed_resources\":{},\"timings_ms\":{{\"parse\":{},\"layout\":{},\"paint\":{},\"total\":{}}},\"exit\":{}}}",
+            json_string(&frame.out),
+            frame.width,
+            frame.height,
+            frame.content_h,
+            frame.canvas_h,
+            frame.rows_lost,
+            json_string(mode),
+            json_string(parse_mode),
+            scale,
+            substituted,
+            failed,
+            timings.0,
+            timings.1,
+            timings.2,
+            timings.3,
+            exit
+        );
+    }
 }
 
 /// Decoded-pixel cap for one sub-resource image, in pixels. Read from
@@ -726,6 +843,10 @@ async fn real_main() {
     // refused; `--allow-host=<glob>` narrows that to a set of hosts. Both are
     // opt-in, so no existing invocation changes behaviour.
     let no_network = args.iter().any(|a| a == "--no-network");
+    // #28: a pipeline needs to know what happened without regexing English. One
+    // object per PNG on stdout; every human line stays on stderr, so `--json`
+    // composes with a redirect that also collects `--clip`'s frame lines.
+    let json = args.iter().any(|a| a == "--json");
     let allow_hosts: Vec<String> = args
         .iter()
         .filter_map(|a| a.strip_prefix("--allow-host="))
@@ -776,6 +897,7 @@ async fn real_main() {
                 | "--full"
                 | "--no-network"
                 | "--allow-host"
+                | "--json"
         ) {
             eprintln!("unknown flag {a:?}");
             eprintln!("{usage}");
@@ -1049,6 +1171,17 @@ async fn real_main() {
     // page, and `--full` is the documented escape. The cut used to be silent, so
     // this records the document's own height to report it after the fact.
     let mut cut_content_h: Option<u32> = None;
+    // The document's own height, measured once. The JSON report states it on
+    // every frame, and in clip mode each frame scrolls the viewport, so reading
+    // it later would report whatever the last frame left behind.
+    let doc_content_h =
+        ((document.root_element().scroll_height() * scale).round() as u32).max(phys_h);
+    // Rows the canvas cut off the document. Clip frames are cropped on purpose,
+    // so this stays 0 there and only the single-image path sets it.
+    let mut rows_lost = 0u32;
+    // One entry per PNG written, printed at the end: the exit code is only known
+    // once every failure has been collected (#28).
+    let mut frames: Vec<FrameReport> = Vec::new();
     match selector {
         None => {
             // Clip mode creates its output directory (`create_dir_all` below),
@@ -1069,16 +1202,24 @@ async fn real_main() {
             // and named in a warning. The exit code stays 0: whether a knowingly
             // partial render should be fatal is caller policy (#10), the same
             // question #17 asks about a cut width.
-            let content_h =
-                ((document.root_element().scroll_height() * scale).round() as u32).max(phys_h);
+            let content_h = doc_content_h;
             if !full_page && content_h > phys_h {
                 cut_content_h = Some(content_h);
+                rows_lost = content_h - phys_h;
             }
             let out_phys_h = if full_page { content_h } else { phys_h };
             if full_page {
                 // Banded + streamed: the canvas is never materialised whole, so
                 // the document height stops being a memory limit or a ceiling.
                 write_full_banded(&mut document, out_path, phys_w, out_phys_h, scale, trace);
+                frames.push(FrameReport {
+                    out: Path::new(out_path).display().to_string(),
+                    width: phys_w,
+                    height: out_phys_h,
+                    content_h: doc_content_h,
+                    canvas_h: phys_h,
+                    rows_lost,
+                });
             } else {
                 refuse_oversized_canvas(
                     phys_w,
@@ -1094,6 +1235,14 @@ async fn real_main() {
                     out_phys_h,
                 );
                 finish_atomic(&tmp, Path::new(out_path));
+                frames.push(FrameReport {
+                    out: Path::new(out_path).display().to_string(),
+                    width: phys_w,
+                    height: out_phys_h,
+                    content_h: doc_content_h,
+                    canvas_h: phys_h,
+                    rows_lost,
+                });
             }
         }
         Some(sel) => {
@@ -1180,7 +1329,10 @@ async fn real_main() {
                     );
                     document.set_viewport_scroll(Point { x: rect.x, y: rect.y });
                     let buffer = paint_region(&mut document, 0, 0, w, h, scale);
-                    println!(
+                    // `--json` owns stdout: the same facts are in the object,
+                    // and a human line between two objects would break every
+                    // reader of the stream.
+                    let line = format!(
                         "clip_{:03} css x={:.2} y={:.2} w={:.2} h={:.2}  physical {}x{} (per-element)",
                         i + 1,
                         rect.x,
@@ -1190,10 +1342,23 @@ async fn real_main() {
                         w,
                         h
                     );
+                    if json {
+                        eprintln!("{line}");
+                    } else {
+                        println!("{line}");
+                    }
                     let path = Path::new(out_path).join(format!("clip_{:03}.png", i + 1));
                     let tmp = temp_output_path(&path);
                     write_png(File::create(&tmp).expect("create png"), &buffer, w, h);
                     finish_atomic(&tmp, &path);
+                    frames.push(FrameReport {
+                        out: path.display().to_string(),
+                        width: w,
+                        height: h,
+                        content_h: doc_content_h,
+                        canvas_h: phys_h,
+                        rows_lost,
+                    });
                 }
                 document.set_viewport_scroll(Point::ZERO);
             } else {
@@ -1326,7 +1491,7 @@ async fn real_main() {
                     let h = (((rect.height * s).round() as u32).max(1)).min(band_h.saturating_sub(y));
                     // `top + y` is the ABSOLUTE document row, so a reader sees the
                     // same coordinates whether the run was banded or not.
-                    println!(
+                    let line = format!(
                         "clip_{:03} css x={:.2} y={:.2} w={:.2} h={:.2}  physical {}x{} at {},{}",
                         i + 1,
                         rect.x,
@@ -1338,11 +1503,24 @@ async fn real_main() {
                         x,
                         top + y
                     );
+                    if json {
+                        eprintln!("{line}");
+                    } else {
+                        println!("{line}");
+                    }
                     crop_into(&mut out, &canvas, canvas_w, x, y, w, h);
                     let path = Path::new(out_path).join(format!("clip_{:03}.png", i + 1));
                     let tmp = temp_output_path(&path);
                     write_png(File::create(&tmp).expect("create png"), &out, w, h);
                     finish_atomic(&tmp, &path);
+                    frames.push(FrameReport {
+                        out: path.display().to_string(),
+                        width: w,
+                        height: h,
+                        content_h: doc_content_h,
+                        canvas_h: phys_h,
+                        rows_lost,
+                    });
                 }
                 document.set_viewport_scroll(Point::ZERO);
             }
@@ -1437,42 +1615,82 @@ async fn real_main() {
                 // per resource, not two for the same picture.
                 if failed_assets
                     .iter()
-                    .any(|line| line.starts_with(&format!("{abs}:")))
+                    .any(|f| f.url == abs)
                 {
                     continue;
                 }
-                failed_assets.push(format!(
-                    "{abs}: delivered but the body is not a decodable image"
+                failed_assets.push(Failure::new(
+                    &abs,
+                    "delivered but the body is not a decodable image",
                 ));
             }
         }
     }
 
+    // The code is decided here rather than by an early `exit`, so the JSON
+    // report can carry it: a caller reading stdout must see `exit: 4` on the
+    // same object that names the PNG it should not trust (#28). The three
+    // branches stay exclusive, exactly as three early exits were.
+    let mut exit_code = 0i32;
     if !failed_assets.is_empty() {
-        for line in &failed_assets {
-            eprintln!("warning: sub-resource failed: {line}");
+        for f in &failed_assets {
+            eprintln!("warning: sub-resource failed: {}: {}", f.url, f.reason);
         }
         eprintln!(
             "error: exiting 4: {} sub-resource(s) missing or refused (see the warnings above)",
             failed_assets.len()
         );
-        std::process::exit(4);
-    }
-
-    // Reported after the diagnostics, so a caller still gets the timing that
-    // says how far the run got before giving up.
-    if clipped_frames > 0 {
+        exit_code = 4;
+    } else if clipped_frames > 0 {
+        // Reported after the diagnostics, so a caller still gets the timing that
+        // says how far the run got before giving up.
         eprintln!(
             "error: exiting 4: {clipped_frames} frame(s) cut to the canvas width (see the warning above)"
         );
-        std::process::exit(4);
+        exit_code = 4;
+    } else if asset_deadline_hit {
+        // After the diagnostics, so a caller still gets the timing that says how
+        // far the run got before the asset deadline.
+        eprintln!("error: exiting 4: assets may be missing (see the warning above)");
+        exit_code = 4;
     }
 
-    // After the diagnostics, so a caller still gets the timing that says how
-    // far the run got before the asset deadline.
-    if asset_deadline_hit {
-        eprintln!("error: exiting 4: assets may be missing (see the warning above)");
-        std::process::exit(4);
+    if json {
+        let mode = if selector.is_some() {
+            if use_per_element {
+                "per-element"
+            } else {
+                "clip"
+            }
+        } else {
+            "single"
+        };
+        // `null` rather than `[]` when no fonts were visible: the check cannot
+        // tell "nothing was substituted" from "cannot be detected here".
+        let substituted = if installed_families == 0 {
+            None
+        } else {
+            Some(missing_families.as_slice())
+        };
+        emit_json_report(
+            &frames,
+            mode,
+            if as_document { "document" } else { "fragment" },
+            scale as f64,
+            (
+                parsed.as_millis(),
+                laid_out.as_millis(),
+                painted.as_millis(),
+                started.elapsed().as_millis(),
+            ),
+            substituted,
+            &failed_assets,
+            exit_code,
+        );
+    }
+
+    if exit_code != 0 {
+        std::process::exit(exit_code);
     }
 }
 

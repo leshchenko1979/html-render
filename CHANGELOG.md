@@ -51,6 +51,21 @@ change, which is breaking under this file's own pre-1.0 rule.
   empties the directory while naming no file in its exit code. Exit `3` and `5`
   now leave the previous frames untouched ([#35]).
 
+### Added — a machine-readable result
+
+- **`--json` writes one JSON object per PNG to stdout**, with every human
+  diagnostic left on stderr, so a pipeline reads a field instead of regexing
+  English and a redirect still collects the warnings. Until now the only
+  machine-readable surfaces were the `TIMING` line on stderr and the per-frame
+  geometry on stdout, and the failure modes a caller must act on — a cut
+  document, a substituted font, a refused resource — were all exit `0` with a
+  sentence on stderr. The schema is documented in `docs/USAGE.md` and is stable;
+  a test leg compares the documented keys against the emitted ones in both
+  directions, so a field cannot disappear quietly ([#28]).
+- **`substituted_families` is `null`, not `[]`, when no fonts are visible.** The
+  check cannot distinguish "nothing was substituted" from "substitution cannot
+  be detected on this host", and an empty list would claim the first.
+
 ### Added — a caller can turn the network off
 
 - **`--no-network` refuses every sub-resource that is not `file://` or `data:`**,
@@ -92,6 +107,7 @@ change, which is breaking under this file's own pre-1.0 rule.
 
 [#26]: https://github.com/leshchenko1979/pageplate/issues/26
 [#27]: https://github.com/leshchenko1979/pageplate/issues/27
+[#28]: https://github.com/leshchenko1979/pageplate/issues/28
 [#29]: https://github.com/leshchenko1979/pageplate/issues/29
 [#35]: https://github.com/leshchenko1979/pageplate/issues/35
 [#36]: https://github.com/leshchenko1979/pageplate/issues/36
