@@ -1,0 +1,98 @@
+name: supply-chain
+
+# Two things the repo published without: a bill of materials for what is inside
+# the binary, and a scan that says whether a dependency has a known advisory
+# against it (#25). Neither needs a compiler — the audit reads Cargo.lock and the
+# SBOM catalogues the source tree — so this workflow is cheap enough to run on
+# every dependency change and weekly.
+#
+# It is NOT a release gate: a newly published advisory should redden this job and
+# start a conversation, not block a tag that was already cut. `parity.yml` and
+# `release.yml` remain the gates a release must pass.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/supply-chain.yml"
+  schedule:
+    # Weekly: a CVE published against a crate that has not changed since the last
+    # run is exactly the case a push trigger cannot see.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  advisory:
+    # NOT ubuntu-latest: the same floor discipline as every other job here.
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      # The action reports through a check run; issues: write lets it open one
+      # instead of failing when it finds something worth a human's attention.
+      checks: write
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Audit Cargo.lock against the RustSec advisory database
+        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  sbom:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Generate an SPDX SBOM for the source tree
+        # SPDX JSON, not the default: a JSON document is diffable and machine
+        # readable, and the point of an SBOM is that something else can consume
+        # it without a parser for this project.
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          format: spdx-json
+          output-file: sbom.spdx.json
+          # No release upload: the artefact is produced here and attached to a
+          # release deliberately, not as a side effect of every push.
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Assert the SBOM names the renderer's own dependencies
+        # A syft run that catalogues nothing still produces a valid, empty SBOM.
+        # Counting the packages it found is the cheapest way to tell "no
+        # dependencies" from "the tool did not run".
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+
+          doc = json.load(open("sbom.spdx.json"))
+          pkgs = doc.get("packages", [])
+          names = {p.get("name", "") for p in pkgs}
+          print(f"packages: {len(pkgs)}")
+          if len(pkgs) < 100:
+              raise SystemExit(
+                  f"::error::only {len(pkgs)} packages in the SBOM; a Rust build "
+                  "of this size resolves far more, so the catalogue is incomplete"
+              )
+          for required in ("blitz", "stylo", "tokio"):
+              hit = [n for n in names if required in n.lower()]
+              print(f"  {required}: {len(hit)} entries")
+              if not hit:
+                  raise SystemExit(f"::error::SBOM names no {required} package")
+          print("ok: SBOM carries the renderer's dependency graph")
+          PY
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: sbom-spdx
+          path: sbom.spdx.json
+          if-no-files-found: error
