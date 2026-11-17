@@ -27,6 +27,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 
 # One box, one boxless pair, one empty document. Small enough that the whole
 # pass is a few hundred milliseconds and can afford to run on every push.
@@ -411,6 +412,102 @@ def main():
         if names != sorted(names, key=lambda n: int(n[5:-4])):
             fails.append("105 frames: lexical sort does not match numeric sort")
             print("FAIL 105 frames: lexical sort does not match numeric sort")
+
+        # 0 — a completed render leaves no `.partial-` sibling (#26). The temp
+        # name is the mechanism; a run that forgot to rename would leave the
+        # whole image behind under a name no glob finds, which is a silent disk
+        # leak dressed as a success.
+        clean_dir = os.path.join(tmp, "atomic")
+        os.makedirs(clean_dir, exist_ok=True)
+        clean_out = os.path.join(clean_dir, "clean.png")
+        check("0 no partial left behind", [doc, clean_out, "120", "60"], 0)
+        leftovers = [n for n in os.listdir(clean_dir) if ".partial-" in n]
+        if leftovers:
+            fails.append("no partial left behind: %r survived a successful render" % leftovers)
+            print("FAIL no partial left behind: %r" % (leftovers,))
+
+        # 101 — a render killed mid-write must NOT leave a truncated PNG at the
+        # final path (#26). This is the leg that has to be timed rather than
+        # argued: the encoder streams, so the window is the paint plus the
+        # encode, and a fixture that finishes in 20 ms has no window at all.
+        # A 70,000-px banded page takes ~2.5 s at 1600 px wide on the runner.
+        #
+        # Against a binary that opens the FINAL path (0.4.0) this leg fails with
+        # a truncated file carrying a valid PNG signature — measured, 69,869
+        # bytes of 589,369 with no IEND. That is the point of the leg.
+        kill_dir = os.path.join(tmp, "kill")
+        os.makedirs(kill_dir, exist_ok=True)
+        kill_out = os.path.join(kill_dir, "killed.png")
+        proc = subprocess.Popen(
+            [binary, tall, kill_out, "1600", "600", "1", "--full"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(0.45)
+        proc.kill()
+        proc.wait()
+        if os.path.exists(kill_out):
+            size = os.path.getsize(kill_out)
+            with open(kill_out, "rb") as fh:
+                head = fh.read(8)
+            fails.append("killed mid-write left %d bytes at the final path "
+                         "(signature %r); a killed render must leave no output "
+                         "there" % (size, head))
+            print("FAIL killed mid-write left %d bytes at the final path" % size)
+        # The previous file must survive, not just be absent: a caller re-rendering
+        # over a good image must still have that image after a kill.
+        keep_out = os.path.join(kill_dir, "keep.png")
+        subprocess.run([binary, doc, keep_out, "120", "60"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
+        before_keep = open(keep_out, "rb").read() if os.path.exists(keep_out) else b""
+        proc = subprocess.Popen(
+            [binary, tall, keep_out, "1600", "600", "1", "--full"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(0.45)
+        proc.kill()
+        proc.wait()
+        if not os.path.exists(keep_out):
+            fails.append("killed mid-write deleted the previous file at the output path")
+            print("FAIL killed mid-write deleted the previous file")
+        elif open(keep_out, "rb").read() != before_keep:
+            fails.append("killed mid-write replaced the previous file with %d bytes"
+                         % os.path.getsize(keep_out))
+            print("FAIL killed mid-write replaced the previous file")
+
+        # 3 and 5 — a --clip run that paints NOTHING must not delete the last
+        # good dump (#35). The sweep used to run before the paint, so every
+        # refusal below had already emptied the directory while the exit code
+        # named no file.
+        for label, selector, want_rc in (("all boxless", "br, wbr", 3),
+                                         ("no match", "span.nope", 3)):
+            dump = os.path.join(tmp, "dump_" + label.replace(" ", "_"))
+            os.makedirs(dump, exist_ok=True)
+            seeded = []
+            for i in range(1, 4):
+                f = os.path.join(dump, "clip_%03d.png" % i)
+                with open(f, "wb") as fh:
+                    fh.write(b"previous run")
+                seeded.append(f)
+            check("3 %s keeps old dump" % label,
+                  ["--clip", doc, dump, "120", "60", "1", selector], want_rc)
+            missing = [f for f in seeded if not os.path.exists(f)]
+            if missing:
+                fails.append("%s: exit %d destroyed %d of %d previous frame(s)"
+                             % (label, want_rc, len(missing), len(seeded)))
+                print("FAIL %s destroyed %d previous frame(s)" % (label, len(missing)))
+
+        # 0 — and the sweep still happens when the run DOES paint: a shorter
+        # re-render must not leave the previous run's tail, which was the whole
+        # reason the sweep existed.
+        dump = os.path.join(tmp, "dump_short")
+        os.makedirs(dump, exist_ok=True)
+        for i in range(1, 6):
+            with open(os.path.join(dump, "clip_%03d.png" % i), "wb") as fh:
+                fh.write(b"previous run")
+        check("0 shorter run sweeps the tail", ["--clip", doc, dump, "120", "60", "1", "div"], 0,
+              want_err="stale clip frame")
+        left = sorted(n for n in os.listdir(dump) if n.endswith(".png"))
+        if left != ["clip_001.png", "clip_002.png"]:
+            fails.append("shorter run left %r, want clip_001.png + clip_002.png" % (left,))
+            print("FAIL shorter run left %r" % (left,))
 
         # 4 — an asset that never arrives. The drain loop gives up at the
         # deadline and still paints, which used to exit 0 with a plausible PNG

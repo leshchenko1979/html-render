@@ -31,6 +31,26 @@ change, which is breaking under this file's own pre-1.0 rule.
   `-V` keep working ([#39]).
 - **A surplus positional is refused** instead of silently ignored ([#39]).
 
+### Fixed — a killed render left a truncated PNG under the real name
+
+- **Every output is now written to a hidden `.<name>.partial-<pid>` sibling and
+  renamed into place**, after `sync_all`. The encoder used to stream straight
+  into the final path, so any interruption left a file that exists, carries a
+  PNG signature, and is not the document — measured on `0.4.0`, a `SIGKILL`
+  0.45 s into a 2.5 s render left **69,869 bytes of a 589,369-byte image** with
+  no `IEND`, 11.9 % of a real PNG, which a pipeline then diffs against a golden
+  and reports as a visual regression that never happened. A killed run now
+  leaves the previous file intact plus one `.partial-` file ([#26]).
+
+### Fixed — a `--clip` run that painted nothing deleted the last good dump
+
+- **The stale-frame sweep runs after the paint, not before it**, and removes only
+  the tail this run did not write. The sweep existed so a shorter re-render
+  leaves no stale frames, and that still holds; what changes is that a run which
+  then refuses — every match boxless, a band over the canvas limit — no longer
+  empties the directory while naming no file in its exit code. Exit `3` and `5`
+  now leave the previous frames untouched ([#35]).
+
 ### Changed
 
 - **Clip frames are named `clip_001.png`, not `clip_01.png`.** Two digits put
@@ -50,6 +70,8 @@ change, which is breaking under this file's own pre-1.0 rule.
   describes what the code does (exit `3`), and the "output path after the run"
   table says what the zero-area path leaves behind ([#38]).
 
+[#26]: https://github.com/leshchenko1979/pageplate/issues/26
+[#35]: https://github.com/leshchenko1979/pageplate/issues/35
 [#36]: https://github.com/leshchenko1979/pageplate/issues/36
 [#38]: https://github.com/leshchenko1979/pageplate/issues/38
 [#39]: https://github.com/leshchenko1979/pageplate/issues/39

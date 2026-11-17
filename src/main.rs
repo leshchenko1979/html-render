@@ -476,15 +476,23 @@ fn font_face_families(document: &HtmlDocument) -> Vec<String> {
     families
 }
 
-/// Remove `clip_NNN.png` files left in `dir` by an earlier, longer run.
+/// Remove `clip_NNN.png` frames past `keep`, left in `dir` by an earlier, longer
+/// run.
 ///
 /// Clip numbering restarts at 1 every run, so a re-render that matches FEWER
-/// elements used to leave the tail of the previous dump behind: the caller saw
-/// `clip_01..clip_03` beside stale `clip_04..clip_09` and could not tell a
+/// elements leaves the tail of the previous dump behind: the caller sees
+/// `clip_001..clip_003` beside stale `clip_004..clip_009` and cannot tell a
 /// short dump from a complete one. The pattern is exact (`clip_` + digits +
 /// `.png`), so nothing else in the directory is touched, and the count is
 /// reported rather than removed silently.
-fn remove_stale_clip_frames(dir: &Path) -> usize {
+///
+/// `keep` is why this takes an argument rather than clearing everything (#35).
+/// The sweep used to run BEFORE the paint, so a run that then refused — every
+/// match boxless, a band over the canvas limit — had already destroyed the last
+/// good dump and named no file in the exit code. It now runs after the paint and
+/// removes only the tail this run did not write, so a run that paints nothing
+/// touches nothing, and a shorter re-render still leaves no stale frames.
+fn remove_stale_clip_frames(dir: &Path, keep: usize) -> usize {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return 0;
     };
@@ -500,6 +508,12 @@ fn remove_stale_clip_frames(dir: &Path) -> usize {
         };
         if stem.is_empty() || !stem.bytes().all(|b| b.is_ascii_digit()) {
             continue;
+        }
+        // Keep what this run wrote. Parsed rather than compared as text, so
+        // `clip_7.png` from a hand-named file is judged by its number.
+        match stem.parse::<usize>() {
+            Ok(n) if n <= keep => continue,
+            _ => {}
         }
         if std::fs::remove_file(entry.path()).is_ok() {
             removed += 1;
@@ -915,12 +929,14 @@ async fn real_main() {
                     "reduce <height>, or pass --full to paint the whole document in bands",
                 );
                 let buffer = paint_region(&mut document, 0, 0, phys_w, out_phys_h, scale);
+                let tmp = temp_output_path(Path::new(out_path));
                 write_png(
-                    File::create(out_path).expect("create png"),
+                    File::create(&tmp).expect("create png"),
                     &buffer,
                     phys_w,
                     out_phys_h,
                 );
+                finish_atomic(&tmp, Path::new(out_path));
             }
         }
         Some(sel) => {
@@ -932,12 +948,12 @@ async fn real_main() {
                 std::process::exit(3);
             }
             std::fs::create_dir_all(out_path).expect("create outdir");
-            // Swept BEFORE painting: a crash mid-emit must not leave a mixed
-            // dump of this run's frames and the previous run's tail.
-            let stale = remove_stale_clip_frames(Path::new(out_path));
-            if stale > 0 {
-                eprintln!("removed {stale} stale clip frame(s) from a previous run");
-            }
+            // The stale-frame sweep deliberately does NOT run here (#35). It used
+            // to, so that a crash mid-emit could not leave a mixed dump — but the
+            // cost was that a run which then painted NOTHING (every match
+            // boxless, a band over the canvas limit) had already deleted the last
+            // good dump, and the exit code named no file. It now runs after the
+            // paint, over the tail this run did not write.
             let s = scale as f64;
 
             // Every matched element's box, in document coordinates, at scroll 0.
@@ -1018,7 +1034,9 @@ async fn real_main() {
                         h
                     );
                     let path = Path::new(out_path).join(format!("clip_{:03}.png", i + 1));
-                    write_png(File::create(&path).expect("create png"), &buffer, w, h);
+                    let tmp = temp_output_path(&path);
+                    write_png(File::create(&tmp).expect("create png"), &buffer, w, h);
+                    finish_atomic(&tmp, &path);
                 }
                 document.set_viewport_scroll(Point::ZERO);
             } else {
@@ -1165,9 +1183,20 @@ async fn real_main() {
                     );
                     crop_into(&mut out, &canvas, canvas_w, x, y, w, h);
                     let path = Path::new(out_path).join(format!("clip_{:03}.png", i + 1));
-                    write_png(File::create(&path).expect("create png"), &out, w, h);
+                    let tmp = temp_output_path(&path);
+                    write_png(File::create(&tmp).expect("create png"), &out, w, h);
+                    finish_atomic(&tmp, &path);
                 }
                 document.set_viewport_scroll(Point::ZERO);
+            }
+            // Swept AFTER the paint (#35), over the tail this run did not write.
+            // Every frame above is on disk under its final name already (each one
+            // written to a temp and renamed, #26), so nothing here can be mistaken
+            // for a frame of this run, and a run that painted nothing never
+            // reaches this line.
+            let stale = remove_stale_clip_frames(Path::new(out_path), rects.len());
+            if stale > 0 {
+                eprintln!("removed {stale} stale clip frame(s) from a previous run");
             }
         }
     }
@@ -1484,8 +1513,14 @@ fn write_full_banded(
     }
 
     let s = scale as f64;
+    // Streamed into a temp name and renamed at the end (#26). This is the
+    // LONGEST write the renderer performs, so it is the one a supervisor kill or
+    // an OOM is most likely to catch mid-stream — and the one that used to leave
+    // the largest truncated file under the real name.
+    let out = Path::new(out_path);
+    let tmp = temp_output_path(out);
     let mut encoder = png::Encoder::new(
-        File::create(out_path).expect("create png"),
+        File::create(&tmp).expect("create png"),
         phys_w,
         out_phys_h,
     );
@@ -1528,6 +1563,7 @@ fn write_full_banded(
         document.set_viewport_scroll(Point::ZERO);
     }
     sw.finish().expect("png finish");
+    finish_atomic(&tmp, out);
 }
 
 fn write_png<W: std::io::Write>(writer: W, buffer: &[u8], width: u32, height: u32) {
@@ -1537,6 +1573,37 @@ fn write_png<W: std::io::Write>(writer: W, buffer: &[u8], width: u32, height: u3
     let mut writer = encoder.write_header().expect("png header");
     writer.write_image_data(buffer).expect("png data");
     writer.finish().expect("png finish");
+}
+
+/// A sibling temp path for `out`, in the SAME directory so the rename is atomic
+/// on any POSIX filesystem, under a name no reader can mistake for the output.
+///
+/// The pid is in the name so two concurrent runs aimed at one path cannot adopt
+/// each other's partial, and the leading dot keeps it out of a `clip_*` glob.
+fn temp_output_path(out: &Path) -> PathBuf {
+    let name = out
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "out".to_string());
+    out.with_file_name(format!(".{name}.partial-{}", std::process::id()))
+}
+
+/// Move a finished temp file onto `out` (#26).
+///
+/// The renderer used to stream the encoder straight into the FINAL path, so any
+/// interruption left a truncated PNG under the real name: a file that exists,
+/// has a PNG signature, and is not the document. Measured on `0.4.0`, a `SIGKILL`
+/// 0.45 s into a 2.5 s render left **69,869 bytes of a 589,369-byte image** at
+/// the final path with no `IEND` — 11.9 % of a real PNG. A caller then diffs a
+/// partial image against a golden and reports a regression that never happened.
+///
+/// `sync_all` guards power loss and the rename guards truncation; both, because a
+/// rename of unsynced data can still land empty after a crash.
+fn finish_atomic(tmp: &Path, out: &Path) {
+    if let Ok(f) = File::open(tmp) {
+        let _ = f.sync_all();
+    }
+    std::fs::rename(tmp, out).expect("rename the finished render into place");
 }
 
 /// True when `source` declares its own document root.

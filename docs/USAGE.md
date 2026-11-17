@@ -98,11 +98,11 @@ A killed process returns none of them: the shell reports `128+signal` (`137` on 
 | code | output path after the run |
 |---|---|
 | `2` | untouched — arguments are validated before anything is opened |
-| `3` | with `--clip`: a selector that matched nothing leaves the previous frames **untouched**; when matches exist but none is paintable (no layout box, or a zero-area box) the sweep runs **first**, so the directory is empty |
+| `3` | with `--clip`: the previous frames are left **untouched**, whether nothing matched or every match was unpaintable (no layout box, or a zero-area box) — the stale-frame sweep runs only after a successful paint |
 | `4` | a complete PNG (or the `--clip` set), plus a named reason on stderr |
-| `5` | with `--clip`: **empty** — the sweep runs before the paint, so a refusal leaves nothing |
-| `101` | possibly a **truncated PNG at the final path**: the file is opened before the panic, so a good file can be replaced by a stub |
-| `128+signal` | possibly a truncated PNG, as above |
+| `5` | with `--clip`: the previous frames are left **untouched** — the canvas is refused before anything is painted or swept |
+| `101` | the final path holds either the **previous file** or a complete new one: the render is written to a hidden `.<name>.partial-<pid>` sibling and renamed into place, so a panic leaves the old file untouched and a `.partial-` file behind |
+| `128+signal` | as above. Before this, a killed render left a **truncated PNG under the real name** — measured on `0.4.0`, a `SIGKILL` 0.45 s into a 2.5 s render left 69,869 bytes of a 589,369-byte image with no `IEND` ([#26](https://github.com/leshchenko1979/pageplate/issues/26)) |
 
 A caller that publishes on any of these has published a wrong image. Write to a fresh directory per run and decode
 before publishing ([#26](https://github.com/leshchenko1979/pageplate/issues/26),
@@ -158,7 +158,9 @@ renders the same bytes.
 - **Sub-resources are fetched with no allowlist**, so an untrusted document reaches the network. There is no
   offline mode ([#29](https://github.com/leshchenko1979/pageplate/issues/29));
   [SECURITY.md](../SECURITY.md) measures what rendering does to the machine.
-- **Verify the output before using it.** On a non-zero exit, decode the PNG and compare before publishing:
-  a killed render can leave a truncated file ([#26](https://github.com/leshchenko1979/pageplate/issues/26)),
-  and a `--clip` run that fails after its sweep has already removed the previous run's frames
-  ([#35](https://github.com/leshchenko1979/pageplate/issues/35)).
+- **Verify the output before using it.** On a non-zero exit, decode the PNG and compare before publishing.
+  Each file is written to a hidden sibling and renamed, so a killed render leaves the previous file
+  intact rather than a truncated one ([#26](https://github.com/leshchenko1979/pageplate/issues/26)), and a
+  `--clip` run that paints nothing no longer removes the previous frames
+  ([#35](https://github.com/leshchenko1979/pageplate/issues/35)) — but a crash mid-dump can still leave
+  this run's frames beside an older tail, and the exit code is how you know to look.
