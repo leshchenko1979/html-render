@@ -33,7 +33,7 @@ use std::time::Instant;
 
 use anyrender::{render_to_buffer, ImageRenderer as _, PaintScene as _};
 use anyrender_vello_cpu::VelloCpuImageRenderer;
-use blitz_dom::{util::Color, Document as _, DocumentConfig, Point};
+use blitz_dom::{util::Color, Document as _, DocumentConfig, NodeData, Point};
 use blitz_html::HtmlDocument;
 use blitz_net::Provider;
 use blitz_paint::paint_scene;
@@ -110,6 +110,11 @@ fn help_text() -> String {
          FLAGS:\n\
          \x20 --document    treat the file as a full document (default: auto-detected)\n\
          \x20 --fragment    treat the file as a fragment and wrap it\n\
+         \x20 --no-network  refuse every sub-resource that is not file:// or data:;\n\
+         \x20               each refusal is named and the run exits 4\n\
+         \x20 --allow-host=<glob>  fetch a sub-resource only when its host matches;\n\
+         \x20               repeatable, `*` matches any run of characters. file://\n\
+         \x20               and data: are always allowed\n\
          \x20 -h, --help    print this text and exit 0\n\
          \x20 -V, --version print the version and exit 0\n\
          \n\
@@ -160,15 +165,27 @@ struct RequestedUrlProvider {
     inner: Arc<Provider>,
     inflight: Arc<AtomicUsize>,
     failed: Arc<Mutex<Vec<String>>>,
+    /// Every URL this run was ASKED for, absolute, in request order. A node
+    /// with no image data is only evidence of a decode failure if its URL is
+    /// here — an image that was never requested (`display:none`, a template)
+    /// would otherwise read as a broken one (#27).
+    requested: Arc<Mutex<Vec<String>>>,
+    /// `--no-network`: nothing but `file:` and `data:` may be fetched.
+    no_network: bool,
+    /// `--allow-host=<glob>` patterns, lowercased. Empty means no host filter.
+    allow_hosts: Vec<String>,
     max_image_px: u64,
 }
 
 impl RequestedUrlProvider {
-    fn new(inner: Arc<Provider>) -> Self {
+    fn new(inner: Arc<Provider>, no_network: bool, allow_hosts: Vec<String>) -> Self {
         Self {
             inner,
             inflight: Arc::new(AtomicUsize::new(0)),
             failed: Arc::new(Mutex::new(Vec::new())),
+            requested: Arc::new(Mutex::new(Vec::new())),
+            no_network,
+            allow_hosts,
             max_image_px: max_image_px(),
         }
     }
@@ -187,11 +204,55 @@ impl RequestedUrlProvider {
     fn failures(&self) -> Vec<String> {
         self.failed.lock().map(|v| v.clone()).unwrap_or_default()
     }
+
+    /// Every URL this run asked for, absolute. Used to tell "the body was not
+    /// an image" from "nothing ever asked for it".
+    fn requests(&self) -> Vec<String> {
+        self.requested.lock().map(|v| v.clone()).unwrap_or_default()
+    }
+
+    /// Why this URL may not be fetched, or `None` when it may.
+    ///
+    /// `file:` and `data:` are never network traffic, so `--no-network` leaves
+    /// them alone: a document that embeds its own images still renders.
+    fn refusal(&self, url: &str) -> Option<String> {
+        let scheme = url.split(':').next().unwrap_or("");
+        if scheme.eq_ignore_ascii_case("file") || scheme.eq_ignore_ascii_case("data") {
+            return None;
+        }
+        if self.no_network {
+            return Some("refused by --no-network".to_string());
+        }
+        if self.allow_hosts.is_empty() {
+            return None;
+        }
+        let host = host_of(url).unwrap_or("").to_ascii_lowercase();
+        if !self.allow_hosts.iter().any(|p| glob_match(p, &host)) {
+            return Some(format!(
+                "host {host:?} is not matched by any --allow-host pattern"
+            ));
+        }
+        None
+    }
 }
 
 impl NetProvider for RequestedUrlProvider {
     fn fetch(&self, _doc_id: usize, request: Request, handler: Box<dyn NetHandler>) {
         let requested = request.url.to_string();
+        // Recorded BEFORE any policy check, so "was this URL ever asked for" is
+        // answered by the document, not by the outcome of the fetch.
+        if let Ok(mut v) = self.requested.lock() {
+            v.push(requested.clone());
+        }
+        // Refused before the request is spawned: the node stays pending, paints
+        // the same blank box a 404 does, and lands in `failed` so the run exits
+        // 4 naming the URL it would not fetch (#29).
+        if let Some(reason) = self.refusal(&requested) {
+            if let Ok(mut v) = self.failed.lock() {
+                v.push(format!("{requested}: {reason}"));
+            }
+            return;
+        }
         let inflight = Arc::clone(&self.inflight);
         let failed = Arc::clone(&self.failed);
         let max_image_px = self.max_image_px;
@@ -235,6 +296,59 @@ impl NetProvider for RequestedUrlProvider {
     fn is_noop(&self) -> bool {
         self.inner.is_noop()
     }
+}
+
+/// The host part of an absolute URL: no userinfo, no port, no path.
+///
+/// Deliberately a string walk rather than a `Url` parse, so the policy in
+/// `RequestedUrlProvider::refusal` cannot disagree with the URL crate about a
+/// malformed input — an unparseable host matches no pattern, which refuses.
+fn host_of(url: &str) -> Option<&str> {
+    let rest = url.split_once("://")?.1;
+    let authority = rest.split(|c| c == '/' || c == '?' || c == '#').next()?;
+    let after_userinfo = authority
+        .rsplit_once('@')
+        .map(|(_, host)| host)
+        .unwrap_or(authority);
+    // An IPv6 literal is bracketed and full of colons, so the port split must
+    // not run inside it: `[::1]:8080` has host `[::1]`, not `[`.
+    let host = match after_userinfo.strip_prefix('[').and_then(|h| h.find(']')) {
+        Some(end) => &after_userinfo[..end + 2],
+        None => after_userinfo.split(':').next().unwrap_or(""),
+    };
+    if host.is_empty() { None } else { Some(host) }
+}
+
+/// Glob match where `*` is any run of characters and `?` is exactly one.
+///
+/// `--allow-host` matches a HOST, never a path, so there is no separator to
+/// treat specially and no need for a glob crate. Iterative with one backtrack
+/// point, so a hostile pattern cannot recurse.
+fn glob_match(pattern: &str, subject: &str) -> bool {
+    let p = pattern.as_bytes();
+    let s = subject.as_bytes();
+    let (mut pi, mut si) = (0usize, 0usize);
+    let (mut star, mut mark) = (usize::MAX, 0usize);
+    while si < s.len() {
+        if pi < p.len() && (p[pi] == b'?' || p[pi] == s[si]) {
+            pi += 1;
+            si += 1;
+        } else if pi < p.len() && p[pi] == b'*' {
+            star = pi;
+            pi += 1;
+            mark = si;
+        } else if star != usize::MAX {
+            pi = star + 1;
+            mark += 1;
+            si = mark;
+        } else {
+            return false;
+        }
+    }
+    while pi < p.len() && p[pi] == b'*' {
+        pi += 1;
+    }
+    pi == p.len()
 }
 
 /// Decoded-pixel cap for one sub-resource image, in pixels. Read from
@@ -606,6 +720,31 @@ async fn real_main() {
     // typo rendered a FRAGMENT of a full document and wrote a plausible PNG of
     // the wrong thing with nothing on stderr. `--clip` additionally shifts the
     // positionals by one, so it is only a mode when it leads.
+    // #29: a document controls outbound HTTP, and until now the only bound was
+    // the asset deadline. `--no-network` sends every sub-resource that is not
+    // `file:` or `data:` through the existing exit-4 path, naming the URL it
+    // refused; `--allow-host=<glob>` narrows that to a set of hosts. Both are
+    // opt-in, so no existing invocation changes behaviour.
+    let no_network = args.iter().any(|a| a == "--no-network");
+    let allow_hosts: Vec<String> = args
+        .iter()
+        .filter_map(|a| a.strip_prefix("--allow-host="))
+        .map(|v| v.trim().to_ascii_lowercase())
+        .collect();
+    // A flag that takes a value is easy to pass without one, and silently
+    // reading `--allow-host` as "allow everything" would be the same
+    // looks-honoured-changes-nothing defect as a typo'd flag.
+    if args.iter().any(|a| a == "--allow-host") {
+        eprintln!("--allow-host needs a value: --allow-host=<glob>");
+        eprintln!("{usage}");
+        std::process::exit(2);
+    }
+    if allow_hosts.iter().any(|v| v.is_empty()) {
+        eprintln!("--allow-host needs a non-empty value: --allow-host=<glob>");
+        eprintln!("{usage}");
+        std::process::exit(2);
+    }
+
     for (i, a) in args.iter().enumerate().skip(1) {
         // A single-dash argument is an error. `-q` in a trailing position used
         // to be collected as a surplus positional and silently dropped, so a
@@ -620,9 +759,23 @@ async fn real_main() {
         if !a.starts_with("--") {
             continue;
         }
+        // `--allow-host=<glob>` carries its value in the same argument, so the
+        // exact match below would read it as unknown. Accepted here; the name
+        // alone is still in the list, which is what the flag-inventory test
+        // cross-checks against `docs/USAGE.md`.
+        if a.starts_with("--allow-host=") {
+            continue;
+        }
         if !matches!(
             a.as_str(),
-            "--clip" | "--document" | "--fragment" | "--per-element" | "--scroll" | "--full"
+            "--clip"
+                | "--document"
+                | "--fragment"
+                | "--per-element"
+                | "--scroll"
+                | "--full"
+                | "--no-network"
+                | "--allow-host"
         ) {
             eprintln!("unknown flag {a:?}");
             eprintln!("{usage}");
@@ -752,7 +905,11 @@ async fn real_main() {
 
     // Wrap the stock provider so a redirected resource still reaches the
     // node that asked for it; see `RequestedUrlProvider`.
-    let net = Arc::new(RequestedUrlProvider::new(Arc::new(Provider::new(None))));
+    let net = Arc::new(RequestedUrlProvider::new(
+        Arc::new(Provider::new(None)),
+        no_network,
+        allow_hosts,
+    ));
     let mut document = HtmlDocument::from_html(
         &doc_html,
         DocumentConfig {
@@ -1233,7 +1390,64 @@ async fn real_main() {
     // a valid PNG of the wrong thing, indistinguishable from a render where the
     // image loaded. Refused-by-cap and failed-to-fetch land in the same list,
     // because to the caller they are the same fact — the picture is incomplete.
-    let failed_assets = net.failures();
+    let mut failed_assets = net.failures();
+
+    // A sub-resource that arrives with a 200 whose body is not an image used to
+    // render an empty box, exit 0 and no warning (#27): the failure happens
+    // inside the decoder, AFTER the bytes were delivered, so the fetch layer
+    // never sees an error. It is still observable from here — the node keeps no
+    // image data — but only for a URL this run actually requested, or an image
+    // that was never fetched (`display:none`, inside a `<template>`) would be
+    // reported as a broken one.
+    if !asset_deadline_hit {
+        let asked = net.requests();
+        if let Ok(ids) = document.query_selector_all("img[src]") {
+            for id in ids {
+                let Some(node) = document.get_node(id) else {
+                    continue;
+                };
+                let NodeData::Element(el) = &node.data else {
+                    continue;
+                };
+                if el.image_data().is_some() {
+                    continue;
+                }
+                let Some(src) = el
+                    .attrs()
+                    .iter()
+                    .find(|a| &*a.name.local == "src")
+                    .map(|a| a.value.as_str())
+                else {
+                    continue;
+                };
+                if src.trim().is_empty() {
+                    continue;
+                }
+                // Absolute, so it compares with the URL the provider saw. The
+                // document's own base is what the renderer resolved against.
+                let abs = document
+                    .base_url()
+                    .join(src)
+                    .map(|u| u.to_string())
+                    .unwrap_or_else(|_| src.to_string());
+                if !asked.iter().any(|r| r == &abs) {
+                    continue;
+                }
+                // Already named by the fetch layer (a 404, a refusal): one line
+                // per resource, not two for the same picture.
+                if failed_assets
+                    .iter()
+                    .any(|line| line.starts_with(&format!("{abs}:")))
+                {
+                    continue;
+                }
+                failed_assets.push(format!(
+                    "{abs}: delivered but the body is not a decodable image"
+                ));
+            }
+        }
+    }
+
     if !failed_assets.is_empty() {
         for line in &failed_assets {
             eprintln!("warning: sub-resource failed: {line}");

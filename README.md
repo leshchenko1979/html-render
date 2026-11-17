@@ -37,8 +37,8 @@ install -m755 pageplate /usr/local/bin/ && pageplate --version
 Each release asset is attested by the release workflow's own OIDC identity, so provenance is checkable without a key; [docs/INSTALL.md](docs/INSTALL.md) has the verification commands.
 
 Ubuntu 22.04+, Debian 12+ or a current Fedora cover the tarball; anything else wants the container image.
-The tarball's attestation does not extend to it, and it carries no egress policy, so a document's
-sub-resources reach the network.
+The tarball's attestation does not extend to it, and the image applies no network policy of its own:
+a document's sub-resources are fetched at render time unless you pass `--no-network`.
 Invocation, digest pinning and the rest: [docs/INSTALL.md](docs/INSTALL.md).
 
 ## Usage

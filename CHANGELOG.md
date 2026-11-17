@@ -51,6 +51,26 @@ change, which is breaking under this file's own pre-1.0 rule.
   empties the directory while naming no file in its exit code. Exit `3` and `5`
   now leave the previous frames untouched ([#35]).
 
+### Added — a caller can turn the network off
+
+- **`--no-network` refuses every sub-resource that is not `file://` or `data:`**,
+  and `--allow-host=<glob>` narrows the fetch to a set of hosts (repeatable, `*`
+  is any run of characters). Each refusal is named on stderr and the run exits
+  `4`, through the same path a `404` already took. Until now a document decided
+  what the renderer fetched and the only bound was the asset deadline, so a slide
+  service rendering user HTML was an SSRF probe of its own VPC and a one-line DoS
+  on its worker pool. Neither flag is the default: a render that silently dropped
+  images would be the worse failure, and `SECURITY.md` says so ([#29]).
+- **A `200` whose body is not an image exits `4`, naming the resource.** The
+  decode failure happens inside Blitz after the bytes were delivered, so the
+  fetch layer never saw an error and the run painted an empty box at exit `0`
+  with nothing on stderr — a silent content loss wearing a success code. The
+  renderer now checks, after the drain, whether an `<img>` whose URL this run
+  actually requested still holds no image, which is the only observable the
+  failure leaves. An image that was never fetched (`display:none`, inside a
+  `<template>`) is not reported, and a resource already named by the fetch layer
+  is named once ([#27]).
+
 ### Changed
 
 - **Clip frames are named `clip_001.png`, not `clip_01.png`.** Two digits put
@@ -71,6 +91,8 @@ change, which is breaking under this file's own pre-1.0 rule.
   table says what the zero-area path leaves behind ([#38]).
 
 [#26]: https://github.com/leshchenko1979/pageplate/issues/26
+[#27]: https://github.com/leshchenko1979/pageplate/issues/27
+[#29]: https://github.com/leshchenko1979/pageplate/issues/29
 [#35]: https://github.com/leshchenko1979/pageplate/issues/35
 [#36]: https://github.com/leshchenko1979/pageplate/issues/36
 [#38]: https://github.com/leshchenko1979/pageplate/issues/38

@@ -50,6 +50,8 @@ nothing written.
 | `--clip` | one PNG per selector match. Must come first |
 | `--per-element` | with `--clip`: paint each match on its own canvas |
 | `--scroll` | accepted alias for `--per-element`, kept so older invocations keep working; `--help` does not list it |
+| `--no-network` | refuse every sub-resource that is not `file://` or `data:`; each refusal is named on stderr and the run exits `4` |
+| `--allow-host=<glob>` | fetch a sub-resource only when its host matches; repeatable, `*` is any run of characters. `file://` and `data:` always pass. A bare `--allow-host` or an empty value exits `2` |
 | `-h`, `--help` | print the flag list, exit `0` |
 | `-V`, `--version` | print the version, exit `0` |
 
@@ -73,17 +75,17 @@ Wrong arguments are exit `2`: `--per-element` outside `--clip`, `--full` togethe
 through the positional filter and render a fragment of a full document, so `--bogus` is refused rather than ignored. A
 bare `--` is not an end-of-options marker; it is refused the same way.
 
-**Single-dash forms are not refused.** `-x`, `-q`, `-v` and any other `-abc` are accepted and ignored, and the render
-proceeds at exit `0`; only `-h` and `-V` mean anything
-([#39](https://github.com/leshchenko1979/pageplate/issues/39)). A typo'd short flag is therefore silent, so use the long
-forms.
+**Single-dash forms are refused too.** `-x`, `-q`, `-v` and any other `-abc` exit `2`; only `-h` and `-V` mean
+anything. `-q` in a trailing position used to be collected as a surplus positional and silently dropped, so a typo'd
+short flag rendered the wrong thing at exit `0`
+([#39](https://github.com/leshchenko1979/pageplate/issues/39)).
 
 | code | meaning |
 |---|---|
 | `0` | a PNG was written, or `--help` / `--version` was printed |
 | `2` | bad arguments: unknown flag (including any single-dash flag other than `-h`/`-V`), too few or too many positionals, `--clip` not first, `--per-element` outside `--clip`, `--full` with `--clip`, `--document` with `--fragment`, or an output path that resolves to the input file |
 | `3` | the selector matched nothing, or every match had no layout box (`br`, `wbr`) or a zero-area box (`script`, `style`, `template`, `display:none`). Matches that are skipped are counted on stderr, so a short dump is distinguishable from a complete one |
-| `4` | output written but known to be incomplete: a sub-resource failed to fetch (`404`, DNS, connection refused), was refused as too large, a fetch hit `BLITZ_DEADLINE_SECS`, or a frame past 65,408 px was cut |
+| `4` | output written but known to be incomplete: a sub-resource failed to fetch (`404`, DNS, connection refused), was refused as too large, was refused by `--no-network` or `--allow-host`, arrived with a body that is not a decodable image, a fetch hit `BLITZ_DEADLINE_SECS`, or a frame past 65,408 px was cut |
 | `5` | one canvas would exceed the renderer limit (65,408 wide, 65,532 tall) and nothing was written; with banding on, that means one band or one element is too large, banding was disabled with `BLITZ_BAND_MIB=0`, or a `position:fixed` element forces one canvas past the limit |
 | `101` | panic: unparsable number, invalid selector, unreadable input, unwritable output path |
 
@@ -155,8 +157,9 @@ renders the same bytes.
 - **A frame wider than the viewport is written at its own width.** The default `--clip` band is as wide as
   the widest match, so a 1600 px element in an 800 px viewport comes out 1600 px wide, at a peak of one
   band. Past 65,408 px no paint happens, so that residual case is a cut, at exit `4`.
-- **Sub-resources are fetched with no allowlist**, so an untrusted document reaches the network. There is no
-  offline mode ([#29](https://github.com/leshchenko1979/pageplate/issues/29));
+- **Sub-resources are fetched with no allowlist unless you set one.** An untrusted document reaches the
+  network by default; `--no-network` refuses everything that is not `file://` or `data:`, and
+  `--allow-host=<glob>` narrows it to a set of hosts. Both name each refusal and exit `4`;
   [SECURITY.md](../SECURITY.md) measures what rendering does to the machine.
 - **Verify the output before using it.** On a non-zero exit, decode the PNG and compare before publishing.
   Each file is written to a hidden sibling and renamed, so a killed render leaves the previous file

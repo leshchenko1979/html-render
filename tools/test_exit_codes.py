@@ -105,6 +105,61 @@ def black_hole():
     return srv.getsockname()[1]
 
 
+def png_1x1():
+    """A valid 1x1 RGBA PNG, built here rather than shipped as a fixture.
+
+    The legs below need a body the decoder ACCEPTS, so a failure cannot be the
+    fixture's fault, and they must not depend on a file another test can move.
+    """
+    import struct
+    import zlib
+
+    def chunk(kind, data):
+        return (struct.pack(">I", len(data)) + kind + data
+                + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF))
+
+    ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0)
+    raw = b"\x00" + b"\xff\x00\x00\xff"
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr)
+            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+def counting_server():
+    """A local HTTP server that answers two bodies and logs every request.
+
+    `--no-network` is only proven by ZERO requests reaching a server that WOULD
+    have answered: a refusal that still connects has refused nothing, and the
+    exit code alone cannot tell the two apart. The counter is the instrument, so
+    the legs assert on it.
+
+    `*.png` gets a real PNG and everything else `text/plain`, which is what the
+    non-image-200 leg (#27) needs: same server, same 200, different body.
+    """
+    import http.server
+
+    hits = []
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            hits.append(self.path)
+            if self.path.endswith(".png"):
+                body, ctype = png_1x1(), "image/png"
+            else:
+                body, ctype = b"hello world", "text/plain"
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, hits
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", required=True, help="path to the renderer binary")
@@ -528,6 +583,88 @@ def main():
         except subprocess.TimeoutExpired:
             fails.append("4 asset deadline: the render hung instead of giving up")
             print("FAIL 4 asset deadline hung")
+
+        # 4 — #29. A document decides what the renderer fetches unless the
+        # caller says otherwise. The counter is the assertion: a refusal that
+        # still connects is not a refusal, and the exit code cannot tell them
+        # apart on its own.
+        srv, hits = counting_server()
+        port = srv.server_address[1]
+        remote = os.path.join(tmp, "remote.html")
+        with open(remote, "w") as fh:
+            fh.write('<!doctype html><html><body style="margin:0">'
+                     '<img src="http://127.0.0.1:%d/t.png" width="20" height="10">'
+                     "</body></html>\n" % port)
+
+        check("4 --no-network refuses, names it",
+              ["--no-network", remote, os.path.join(tmp, "off.png"), "120", "60", "1"], 4,
+              want_err="refused by --no-network")
+        if hits:
+            fails.append("--no-network still sent %d request(s): %r" % (len(hits), hits))
+            print("FAIL --no-network reached the server %r" % (hits,))
+
+        # The same document unmodified must fetch. Without this control the
+        # zero above could be a document that never had an image in it.
+        hits.clear()
+        check("0 --allow-host passes the matching host",
+              ["--allow-host=127.0.0.1", remote, os.path.join(tmp, "on.png"),
+               "120", "60", "1"], 0)
+        if not hits:
+            fails.append("--allow-host=127.0.0.1 sent no request at all")
+            print("FAIL --allow-host sent nothing")
+
+        hits.clear()
+        check("4 --allow-host refuses another host",
+              ["--allow-host=example.invalid", remote, os.path.join(tmp, "no.png"),
+               "120", "60", "1"], 4,
+              want_err="not matched by any --allow-host")
+        if hits:
+            fails.append("--allow-host=example.invalid still sent %r" % (hits,))
+
+        # `file:` is not network traffic, so `--no-network` must leave it alone:
+        # a document that embeds its own images still renders offline.
+        with open(os.path.join(tmp, "local.png"), "wb") as fh:
+            fh.write(png_1x1())
+        local_doc = os.path.join(tmp, "local.html")
+        with open(local_doc, "w") as fh:
+            fh.write('<!doctype html><html><body style="margin:0">'
+                     '<img src="local.png" width="20" height="10"></body></html>\n')
+        check("0 --no-network keeps file:// images",
+              ["--no-network", local_doc, os.path.join(tmp, "local_out.png"),
+               "120", "60", "1"], 0)
+
+        # A value-taking flag passed without one must not read as "allow all".
+        check("2 --allow-host without a value",
+              [remote, os.path.join(tmp, "v.png"), "120", "60", "1", "--allow-host"], 2,
+              want_err="needs a value")
+        check("2 --allow-host with an empty value",
+              [remote, os.path.join(tmp, "v.png"), "120", "60", "1", "--allow-host="], 2,
+              want_err="non-empty value")
+
+        # 4 — #27. A 200 whose body is not an image used to paint a blank box at
+        # exit 0 with nothing on stderr. Same server, a `.txt` path: the failure
+        # happens inside the decoder, after the bytes arrived, so the exit code
+        # is the only thing a caller could have seen.
+        bad = os.path.join(tmp, "badimg.html")
+        with open(bad, "w") as fh:
+            fh.write('<!doctype html><html><body style="margin:0">'
+                     '<img src="http://127.0.0.1:%d/t.txt" width="20" height="10">'
+                     "</body></html>\n" % port)
+        check("4 non-image 200 names the resource",
+              [bad, os.path.join(tmp, "bad.png"), "120", "60", "1"], 4,
+              want_err="not a decodable image")
+
+        # Control: the same shape with a body the decoder accepts still exits 0,
+        # so the leg above is about the body and not about remote images.
+        good = os.path.join(tmp, "goodimg.html")
+        with open(good, "w") as fh:
+            fh.write('<!doctype html><html><body style="margin:0">'
+                     '<img src="http://127.0.0.1:%d/ok.png" width="20" height="10">'
+                     "</body></html>\n" % port)
+        check("0 image 200 still exits 0",
+              [good, os.path.join(tmp, "good.png"), "120", "60", "1"], 0)
+
+        srv.shutdown()
 
         # 101 — panics. Three distinct causes, one documented code.
         check("101 unparsable number", [doc, os.path.join(tmp, "s.png"), "120", "60", "abc"], 101)

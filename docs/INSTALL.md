@@ -82,9 +82,9 @@ A host with no font package still renders, with a substituted face, but the warn
 detected there: with nothing visible to compare against, it cannot name the family it wanted. When *some* fonts
 are visible and the requested one is not, it names each missing family.
 
-The image carries those libraries and a font, but no network policy: a document's sub-resources are fetched at
-render time, so the container does not isolate egress
-([#29](https://github.com/leshchenko1979/pageplate/issues/29)).
+The image carries those libraries and a font, but applies no network policy of its own: a document's
+sub-resources are fetched at render time unless you pass `--no-network`, so the container still does not
+isolate egress. Both flags are in [USAGE.md](USAGE.md#flags).
 
 The tarball links your host's `libssl.so.3`, so your distro patches it: better TLS patch latency.
 

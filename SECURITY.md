@@ -27,15 +27,22 @@ the largest attack surface a headless browser has.
    apart from a person.
 
    One failure mode here is silent and worth knowing before you trust an exit
-   code: a `200` whose body is not an image paints an empty box and exits `0`,
-   because the decode failure happens inside Blitz, after the bytes were
-   accepted. A `404` and a refused redirect are loud — exit `4`, with the
-   resource named on stderr. A missed deadline also exits `4`, but names no
+   code: a `200` whose body is not an image used to paint an empty box and exit
+   `0`, because the decode failure happens inside Blitz, after the bytes were
+   accepted. It now exits `4` naming the resource, as a `404` and a refused
+   redirect already did. A missed deadline also exits `4`, but names no
    resource: it says only that asset fetching stopped, so an output that is
    missing images cannot be traced to a URL from the log alone. Decoded size is capped at 128 MP by
    `BLITZ_MAX_IMAGE_MP`, so one image cannot expand past roughly 488 MiB of
    RGBA; the whole render can, and `tools/memory_baseline.json` pins the
    measured worst case at 809.5 MiB. Verify the artefact, not the status code.
+
+   **You can turn it off.** `--no-network` refuses every sub-resource that is
+   not `file://` or `data:`, and `--allow-host=<glob>` narrows the fetch to a set
+   of hosts; both name each refusal on stderr and exit `4`, so a render that
+   would have reached your VPC's metadata endpoint fails loudly instead. Neither
+   is the default, because a render that silently dropped images would be the
+   worse failure.
 2. **`file://` is readable.** The document's base URL is `file://` of its own
    path, so relative resources resolve on disk, and an absolute `file://` URL in
    the markup is fetched the same way. A document can pull local files into the
@@ -57,7 +64,8 @@ routing it is still ours.
 ## Out of scope
 
 - **A document fetching a URL it names.** That is the documented behaviour
-  above, not a vulnerability. Constrain it at the network layer.
+  above, not a vulnerability. Constrain it at the network layer, or run with
+  `--no-network` / `--allow-host`.
 - **Resource exhaustion from a deliberately huge document.** A 10,000-row table
   will use the memory it needs. Bound it with your own timeout and memory limit.
 - **Pixels that differ from Chromium.** A fidelity gap is a correctness issue,
