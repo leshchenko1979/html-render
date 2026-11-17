@@ -57,6 +57,7 @@ The canvas is the viewport, so a 770-px card at a 640-px viewport loses its bott
 Add `--full` when the height is unknown.
 An output directory is single-writer, so two `--clip` runs into one interleave frames and both exit 0.
 Every flag and stream: [docs/USAGE.md](docs/USAGE.md).
+`--json` writes one object per PNG on stdout, and its schema is stable.
 
 ## Performance
 
