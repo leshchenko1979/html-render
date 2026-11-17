@@ -11,6 +11,12 @@ name: parity
 on:
   push:
     branches: ["**"]
+    # A tag push matches no branch filter, so every release up to v0.4.0 shipped
+    # a binary whose geometry had never been measured: release.yml verifies the
+    # version, the glibc floor, the checksum and the attestation, and none of
+    # those exercise the corpus (#30). Path filters are not evaluated for tag
+    # pushes, so this leg always runs on a tag.
+    tags: ["v*"]
     # A Rust build is not free, and this job only measures the renderer: a README
     # or licence edit used to buy two full builds. Anything that can move a
     # pixel, a fixture or the instrument is listed; docs are not.
