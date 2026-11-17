@@ -153,6 +153,7 @@ def main():
     readme = read("README.md")
     gates = read("GATES.md")
     release = read(".github/workflows/release.yml")
+    install = read(os.path.join("docs", "INSTALL.md"))
 
     fails = []
     checked = 0
@@ -779,11 +780,16 @@ def main():
     # The clip-vs-per-element pixel count quoted a 44,236,800-px document that
     # this repo does not generate, so no reader could reproduce it. Retired as
     # a string: a denominator nobody can regenerate is not a measurement.
+    # `libuuid.so.1` joins them: docs/INSTALL.md explained the distro delta with
+    # it, and neither closure contains it. Bookworm's twelve objects are printed
+    # by the container gate's own `ldd`, noble's thirteen were read here, and the
+    # single difference is libbz2.so.1.0 -- the same one container.yml names.
     for retired in ("no runtime deps", "tree-summed", "Static Blitz",
-                    "static binary", "44,236,800"):
+                    "static binary", "44,236,800", "libuuid"):
         checked += 1
         hits = [f for f, t in (("README.md", readme), ("GATES.md", gates),
-                               (".github/workflows/release.yml", release))
+                               (".github/workflows/release.yml", release),
+                               ("docs/INSTALL.md", install))
                 if retired in t]
         if hits:
             fails.append("retired claim %r survives in %s" % (retired, ", ".join(hits)))
@@ -900,7 +906,7 @@ def main():
                 fails.append("%s no longer re-renders byte-identically: the "
                              "committed image is stale or the renderer changed" % png)
 
-    print("checked %d claim(s) across README.md, GATES.md and the release template"
+    print("checked %d claim(s) across README.md, GATES.md, docs/INSTALL.md and the release template"
           % checked)
     if fails:
         print("\nFAIL")

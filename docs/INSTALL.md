@@ -75,8 +75,9 @@ The tarball's attestation does not extend to the image, so verify that one by di
 The binary names seven objects — the loader plus `libc`, `libssl`, `libcrypto`, `libfontconfig`, `libm`,
 `libgcc_s` — and pulls freetype, expat, libpng, brotli and zlib through fontconfig.
 
-The closure varies by distro: 12 objects on bookworm and 13 on jammy, the extra one `libuuid.so.1`, which jammy's
-fontconfig links and bookworm's does not.
+The closure varies by distro: 12 objects on bookworm and 13 on jammy or noble, the extra one `libbz2.so.1.0`,
+which their freetype links and bookworm's does not. The container gate runs `ldd` inside the runtime image and
+prints the count, so a drift shows up in a run log rather than in this sentence.
 
 A host with no font package still renders, with a substituted face, but the warning says substitution cannot be
 detected there: with nothing visible to compare against, it cannot name the family it wanted. When *some* fonts
