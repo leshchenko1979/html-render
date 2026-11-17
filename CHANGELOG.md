@@ -32,6 +32,15 @@ requires. Issue #15 is closed by this change; #9 is narrowed to the border-edge
 residual. The corpus is the repo's central claim, so a defect in how it was
 measured outranks any single divergence it reported.
 
+The mode is now measured rather than assumed. `run_parity.py` renders a probe
+cell that declares `height:16px` with `padding:6px` and refuses to run the corpus
+unless Chromium paints it 28 px: standards mode resolves that height against the
+content box, quirks mode against the border box (16 px). A second render with the
+doctype token removed is the positive control, so a probe that stops
+discriminating fails loudly instead of passing quietly. A missing doctype raises
+nothing on its own — it only moves the arithmetic — which is exactly why the
+guard has to read a pixel instead of the wrapper.
+
 ## v0.5.0 — 2026-11-17
 
 Raw list: `git log --oneline v0.4.0..v0.5.0` (34 commits). The version moved

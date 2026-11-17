@@ -58,6 +58,33 @@ CHROME_FLAGS = [
     "--force-device-scale-factor=1",
 ]
 
+# The layout mode is MEASURED, not trusted.
+#
+# Blitz has no quirks mode: `blitz-html` drops the doctype (`html_sink.rs:111`)
+# and all 29 `QuirksMode` sites in `blitz-dom` pass `NoQuirks`, so a pageplate
+# render is standards-mode by construction. The gate is only meaningful if the
+# Chromium side is in standards mode too, and the mode is selected by the
+# doctype token ALONE. Losing it raises nothing: it silently moves Chromium's
+# table arithmetic, and the gate then reports the difference as an engine
+# divergence. That is what happened between 2026-11-03 and 2026-11-17 — four
+# `<br>` rows off by up to 54 px and a 13 px "cell-height defect", all filed
+# upstream as Blitz bugs, all of them Chromium's legacy rules.
+#
+# The probe below is the discriminator: a cell's declared `height` is a
+# content-box size in standards mode (16 + 6 + 6 = 28 px painted) and a
+# border-box size in quirks mode (16 px). Both figures are measured against the
+# pinned Chrome build, not derived. The no-doctype half is the POSITIVE CONTROL:
+# if the two halves stop differing, the probe can no longer see the mode and the
+# guard has become decorative.
+MODE_PROBE_BODY = (
+    '<table style="border-collapse:separate"><tr>'
+    '<td style="height:16px;padding:6px;background:#000000"></td>'
+    "</tr></table>"
+)
+MODE_PROBE_W, MODE_PROBE_H = 200, 100
+MODE_STANDARDS_PX = 28  # measured: Chrome 157.0.8103.78, standards mode
+MODE_QUIRKS_PX = 16     # measured: same build, doctype token removed
+
 # A difference of one pixel is sub-pixel rounding of a fractional size, not a
 # layout disagreement. Anything larger is reported.
 TOLERANCE = 1
@@ -139,24 +166,93 @@ def find_chrome(explicit):
     raise SystemExit("no Chromium found: pass --chrome or install google-chrome")
 
 
+def render_page(chrome, page, width, height, png):
+    """Screenshot one already-wrapped HTML file."""
+    subprocess.run(
+        [chrome]
+        + CHROME_FLAGS
+        + [f"--window-size={width},{height}", f"--screenshot={png}", f"file://{page}"],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        timeout=120,
+    )
+    if not os.path.exists(png) or os.path.getsize(png) == 0:
+        raise SystemExit(f"chromium produced no screenshot for {page}")
+
 def render_chromium(chrome, fixture, width, height, png):
     with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False) as fh:
         fh.write(WRAPPER.format(open(fixture).read()))
         page = fh.name
     try:
-        subprocess.run(
-            [chrome]
-            + CHROME_FLAGS
-            + [f"--window-size={width},{height}", f"--screenshot={png}", f"file://{page}"],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=120,
-        )
+        render_page(chrome, page, width, height, png)
     finally:
         os.unlink(page)
-    if not os.path.exists(png) or os.path.getsize(png) == 0:
-        raise SystemExit(f"chromium produced no screenshot for {fixture}")
+
+def assert_standards_mode(chrome):
+    """Refuse to measure the corpus unless Chromium is in standards mode.
+
+    The mode is read off a rendered pixel rather than off `WRAPPER`, because a
+    wrapper is a declaration and the mode is an outcome: this renders through
+    the same wrapper, the same flags and the same instrument as the corpus, so
+    it fails for the same reasons the corpus would be wrong.
+
+    Two failures are distinguished on purpose. A standards half that reads the
+    quirks value means the probe page lost its doctype token — the wrapper is
+    the bug, and re-baselining would bury it. Two halves that agree mean the
+    probe itself stopped discriminating, so the guard proves nothing.
+    """
+    tmp = tempfile.mkdtemp()
+    try:
+        wrapped = WRAPPER.format(MODE_PROBE_BODY)
+        # The control differs from the probe by the doctype token and nothing
+        # else, because that token is the only thing that selects the mode.
+        pages = {
+            "standards": wrapped,
+            "quirks": wrapped.replace("<!DOCTYPE html>", "", 1),
+        }
+        heights = {}
+        for label, html in pages.items():
+            page = os.path.join(tmp, label + ".html")
+            png = os.path.join(tmp, label + ".png")
+            with open(page, "w") as fh:
+                fh.write(html)
+            render_page(chrome, page, MODE_PROBE_W, MODE_PROBE_H, png)
+            boxes = measure.measure(png)
+            if not boxes.get("black"):
+                raise SystemExit(
+                    "HARNESS FAULT: the layout-mode probe painted no measurable "
+                    f"cell ({label}). Fix the probe before trusting any row this "
+                    "run reports."
+                )
+            heights[label] = boxes["black"][3]  # (x, y, w, h) — the painted height
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    if heights["standards"] != MODE_STANDARDS_PX:
+        raise SystemExit(
+            f"HARNESS FAULT: Chromium laid the probe cell out "
+            f"{heights['standards']} px tall, not {MODE_STANDARDS_PX}.\n"
+            f"  {MODE_QUIRKS_PX} px is the quirks-mode value: a cell's declared "
+            "`height` resolved against the border box instead of the content "
+            "box, which means the probe page carries no doctype token.\n"
+            "  Blitz has no quirks mode, so every row this run reports would be "
+            "a layout-mode mismatch attributed to the engine. Fix WRAPPER; do "
+            "not re-baseline."
+        )
+    if heights["quirks"] == heights["standards"]:
+        raise SystemExit(
+            f"HARNESS FAULT: the mode probe reads {heights['standards']} px with "
+            "and without a doctype, so it can no longer tell the two modes "
+            "apart and this guard proves nothing.\n"
+            f"  Expected {MODE_STANDARDS_PX} px with the doctype and "
+            f"{MODE_QUIRKS_PX} px without. Fix the probe."
+        )
+    print(
+        f"layout mode: standards, verified by probe "
+        f"({heights['standards']} px cell; {heights['quirks']} px with the "
+        f"doctype removed, so the probe sees the difference)"
+    )
 
 
 def render_blitz(binary, fixture, width, height, png):
@@ -217,6 +313,7 @@ def main():
 
     chrome = find_chrome(args.chrome)
     assert_reference_engine(chrome, args.allow_chrome_drift)
+    assert_standards_mode(chrome)
     if not os.path.isfile(args.blitz):
         raise SystemExit(f"blitz binary not found at {args.blitz} (cargo build --release)")
 

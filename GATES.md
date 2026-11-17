@@ -488,7 +488,20 @@ the engine. Presentation decks carry `<!DOCTYPE html>` because they are authored
 as modern HTML, so a quirks implementation would be dead weight: code paths no
 real input reaches, in the one place where a wrong branch is a silent layout
 difference rather than an error. The gap was in the probe page, which emitted
-bare `<html>` — one missing line, and it made Blitz look wrong for two months.
+bare `<html>` — one missing line, and it made Blitz look wrong for fourteen days:
+the harness landed on 2026-11-03 and the doctype on 2026-11-17, with both
+upstream issues filed inside that window.
+
+The mode is no longer assumed. Before the corpus runs, `tools/run_parity.py`
+renders a probe cell that declares `height:16px` with `padding:6px` and asserts
+the painted height is **28 px**. Standards mode resolves that height against the
+content box (16 + 6 + 6); quirks mode resolves it against the border box (16). So
+the probe reads the mode off a rendered pixel rather than off the wrapper,
+because a declaration is not an outcome. A second render with the doctype token
+removed is the positive control: if the two halves stop differing, the probe can
+no longer see the mode and the guard fails as decorative. Either failure exits as
+a harness fault that names the wrapper, because the alternative is what happened
+here — divergences attributed to Blitz that were Chromium's legacy rules.
 
 `docs/figures/table-sizing-mechanism.png` is kept although nothing embeds it: it
 is the quirks-mode render, it is linked from the upstream Blitz thread where the
