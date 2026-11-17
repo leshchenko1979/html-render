@@ -53,7 +53,8 @@ pageplate --clip assets/demo-deck.html slides/ 1280 720 2 'section.slide' --per-
 
 The viewport is CSS pixels and the trailing number is the scale: `1600 900 2` writes 3200×1800, the size of
 `assets/hero.png`, and `1280 640 2` writes 2560×1280, the shape of `assets/og.png`.
-The canvas is the viewport, so a document taller than it is cut at exit 0; add `--full` when the height is unknown.
+The canvas is the viewport, so a 770-px card at a 640-px viewport loses its bottom 130 px, at exit 0.
+Add `--full` when the height is unknown.
 An output directory is single-writer, so two `--clip` runs into one interleave frames and both exit 0.
 Every flag and stream: [docs/USAGE.md](docs/USAGE.md).
 
@@ -62,13 +63,14 @@ Every flag and stream: [docs/USAGE.md](docs/USAGE.md).
 At least 31× less in the least favourable mode, 50× in the advertised one: peak RSS of the whole process
 tree over an 8-slide deck, against headless Chromium at the same canvas.
 The advertised mode is `--per-element`, one PNG per matched element at its own size.
-Memory follows canvas area, and N parallel renders multiply the peak by N.
+In `--full` and `--clip` memory follows a fixed row budget, not the canvas: one band at a time.
+No daemon and no queue: each render is one process that exits, so N parallel renders multiply the peak by N.
 Receipt, method and run history: [GATES.md](GATES.md#cost).
 
 ## Fidelity against Chromium
 
-At the same viewport and scale, the probe's deck differs on **4.7102 % of pixels by more than 16 levels**
-against Chromium, over every pixel of the deck with no sampling.
+At the same viewport and scale, an 8-slide deck rendered by both differs on **4.7102 % of pixels by more than
+16 levels** against Chromium, over every pixel with no sampling.
 The reference is the runner image's Chrome, which is not pinned, so a runner refresh moves the baseline;
 how to re-run it is in [bench/README.md](bench/README.md).
 
@@ -77,7 +79,7 @@ how to re-run it is in [bench/README.md](bench/README.md).
 Beta: flags and output names can move between minor versions.
 No JavaScript, so a document renders as the HTML that arrived.
 PNG only, no PDF.
-Blitz's CSS is not Chromium's: an unknown property is dropped with no error.
+The engine inside it, Blitz, is not Chromium: an unknown property is dropped with no error.
 Defects and gaps are tracked as [open limitations](https://github.com/leshchenko1979/pageplate/issues?q=is%3Aissue+is%3Aopen+label%3Alimitation),
 and that list is authoritative and current.
 
