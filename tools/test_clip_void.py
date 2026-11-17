@@ -6,6 +6,11 @@ and `*` matches `<br>`, `<wbr>`, `<script>` and `<style>` in every real document
 The fix skips them and reports the count; this test pins that — and pins that the
 skip stays narrow, since `<hr>` is a block box with a border and must survive.
 
+Two skip categories are reported separately, and the emitted count is
+`matched - boxless - zero-area`. A box that exists with zero area (`head`,
+`script`, `style`) is the second one: it used to be clamped to 1x1 and written as
+a frame that paints nothing (#38).
+
     python3 tools/test_clip_void.py --bin target/release/pageplate
 
 Exit 0 = the contract holds. Exit 1 = it does not (the message says which part).
@@ -33,6 +38,13 @@ DOC = """<!doctype html><html><body style="margin:0">
 """
 
 SKIP_RE = re.compile(r"skipped (\d+) of (\d+) matched element\(s\): no layout box")
+# A box that EXISTS with zero area is a second, distinct skip: `head`, `script`
+# and `style` report 0x0 rather than no box, and a 1x1 clamp used to turn each
+# into a frame that paints nothing (#38). The two counts are reported separately
+# because they name different causes, and a caller reading one as the other
+# would get the emitted-frame count wrong — which is exactly what happened when
+# this test still subtracted only the first.
+ZERO_RE = re.compile(r"skipped (\d+) of (\d+) matched element\(s\): zero-area box")
 
 
 def png_size(path):
@@ -81,15 +93,17 @@ def main():
             if skipped == 0:
                 fails.append("%s: skipped 0, so the fixture has no void element" % tag)
                 continue
-            if not matched > skipped:
-                fails.append("%s: matched %d <= skipped %d, nothing left to clip"
-                             % (tag, matched, skipped))
+            zm = ZERO_RE.search(err)
+            zero = int(zm.group(1)) if zm else 0
+            if not matched > skipped + zero:
+                fails.append("%s: matched %d <= %d skipped, nothing left to clip"
+                             % (tag, matched, skipped + zero))
 
             boxes = [ln for ln in out.splitlines() if ln.startswith("clip_")]
-            want = matched - skipped
+            want = matched - skipped - zero
             if len(boxes) != want:
-                fails.append("%s: %d clip line(s), want %d (%d matched - %d skipped)"
-                             % (tag, len(boxes), want, matched, skipped))
+                fails.append("%s: %d clip line(s), want %d (%d matched - %d boxless - %d zero-area)"
+                             % (tag, len(boxes), want, matched, skipped, zero))
             # Numbering must be contiguous over the EMITTED boxes: a caller that
             # reads clip_001..clip_NNN must not find a hole where a <br> was.
             names = sorted(f for f in os.listdir(outdir) if f.startswith("clip_"))
@@ -128,7 +142,10 @@ def main():
         if rc != 0:
             fails.append("[hr control] rc=%d (want 0)\n%s" % (rc, err[-400:]))
         else:
-            if SKIP_RE.search(err):
+            # BOTH skip categories, because there are now two and this control
+            # only watched the first: a zero-area `hr` would have been dropped
+            # while the boxless regex stayed silent.
+            if SKIP_RE.search(err) or ZERO_RE.search(err):
                 fails.append("[hr control] <hr> was skipped; the skip is too broad")
             boxes = [ln for ln in out.splitlines() if ln.startswith("clip_")]
             if len(boxes) != 1:
@@ -141,7 +158,7 @@ def main():
         if rc != 0:
             fails.append("[div control] rc=%d (want 0)\n%s" % (rc, err[-400:]))
         else:
-            if SKIP_RE.search(err):
+            if SKIP_RE.search(err) or ZERO_RE.search(err):
                 fails.append("[div control] reported a skip for a boxless-free selector")
             boxes = [ln for ln in out.splitlines() if ln.startswith("clip_")]
             if len(boxes) != 2:

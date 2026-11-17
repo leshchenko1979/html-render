@@ -19,9 +19,11 @@ release, so nothing here is a published number yet.
 - **A selector whose every match has a zero-area box exits `3`, not `0`.**
   `script`, `style`, `template` and `display:none` report a `0x0` rect rather
   than no rect, and a `1x1` clamp turned that into a 68-byte PNG at exit `0`.
-  Skipped matches are counted on stderr, so a short dump is distinguishable from
-  a complete one; a selector mixing paintless and real matches still dumps the
-  real ones ([#38]).
+  A selector mixing paintless and real matches still dumps the real ones, and
+  both skip causes are counted separately on stderr, so a short dump is
+  distinguishable from a complete one. **A `*` dump therefore emits fewer frames
+  than it did**: the `1x1` placeholders for `head`, `script` and `style` are gone,
+  and the surviving frames keep contiguous `clip_NNN` numbering ([#38]).
 - **A single-dash flag is refused.** `-q` in a trailing position was collected
   as a surplus positional and dropped without a word, and `-x` in the html slot
   panicked on a file named `-x`. Both now exit `2` naming the flag; `-h` and
