@@ -115,8 +115,9 @@ byte-exactly, which is what a CI gate needs.
 
 From `bench/results.json` (schema 1), measured on the runner that produced it —
 4 vCPU, glibc 2.35, Chromium driven headless at the same device scale factor.
-Three repeats per engine, and peak RSS as the **sum of every process in the
-engine's tree**, which is what a container limit counts:
+Eight slides at 1280×5760 CSS px, scale 2, three renders per engine; peak RSS
+is the **sum of every process in the engine's tree**, which is what a container
+limit counts:
 
 | engine | peak tree RSS | wall |
 |---|---|---|
@@ -124,6 +125,14 @@ engine's tree**, which is what a container limit counts:
 | `--full` | **37.8 MiB** | 1.404 s |
 | `--clip` (banded, one PNG per frame) | 75.4 MiB | 1.433 s |
 | `--clip --per-element` | 47.5 MiB | 1.402 s |
+
+Against the Chromium tree peak, the three modes read:
+
+| mode | ratio |
+|---|---|
+| `--full` | **62.97×** |
+| `--clip` | **31.57×** |
+| `--per-element` | **50.11×** |
 
 **The advertised claim is memory: at least 31× less than Chromium**, taking the
 least favourable of the three modes (50× in the advertised `--per-element`
@@ -153,6 +162,11 @@ first among their reasons, then four wall rows past the 45 % band. The drift gat
 doing its job, not the figures failing. That the memory ratio
 barely moved across the deck change is the useful part: it is a property of the
 architecture, not of the page.
+
+Across those six runs Chromium's tree peak ranged from 2336 MiB to 2453 MiB,
+while pageplate's held to a 0.8 % spread. The widest single samples in this
+receipt reached 38.1 MiB and 2427.8 MiB; the earlier runs peaked higher on their
+own decks, and those maxima belong to the rows beside them.
 
 | run | deck | Chromium tree RSS | pageplate tree RSS | Chromium wall | pageplate wall |
 |---|---|---|---|---|---|
@@ -187,6 +201,11 @@ An earlier version of this paragraph put a pixel count on how far the two modes
 diverge. That denominator is a document this repo does not generate, so no
 reader could reproduce the figure — withdrawn, and the probe does not compare
 the two modes.
+
+Capacity is set by the worst shape, not by the headline. One 128 MP decode costs
+488 MiB of RGBA, and the worst entry in `tools/memory_baseline.json` is
+`clip_oversized_frame` at **809.5 MiB**, 21× the 37.8 MiB headline. Budget a
+container from that figure rather than from the table above.
 
 ### What is actually gated
 

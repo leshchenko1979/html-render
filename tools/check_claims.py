@@ -289,21 +289,17 @@ def main():
             # file exists to prevent.
             #
             # Assert whole ROWS, never bare numbers. A refreshed receipt can
-            # give two shapes the same ratio — this one reads 1.42x for both
-            # `--full` and `--per-element` — and a bare `claim("1.42")` is then
-            # satisfied by either row. Perturbing one row of the GATES table
-            # proved it: the guard stayed green while the table disagreed with
-            # itself. A row string is unique per shape, so a drift cannot hide
-            # behind its twin.
-            def readme_rss_row(label, rec):
-                return "| peak RSS, `%s` | %s MiB | %s MiB | **%s\u00d7** |" % (
-                    label, num(chrome["peak_tree_mib"]), num(rec["peak_tree_mib"]),
-                    ratio(chrome["peak_tree_mib"], rec["peak_tree_mib"]))
-
+            # give two shapes the same ratio, and a bare `claim("1.42")` is
+            # then satisfied by either row. The four cost rows are claimed
+            # against the GATES table below. What the landing page stopped
+            # carrying is the ratio COLUMN, so the ratio cell is claimed here
+            # instead — one per mode, each value unique, each derived.
             for label, rec in (("--full", doc), ("--clip", clip),
                                ("--per-element", per_el)):
-                claim("README", readme, readme_rss_row(label, rec),
-                      "cost row, %s tree RSS" % label)
+                claim("GATES", gates,
+                      "**%s\u00d7**" % ratio(chrome["peak_tree_mib"],
+                                            rec["peak_tree_mib"]),
+                      "cost ratio, %s against the Chromium tree peak" % label)
 
             # Peak RSS leads the GATES table; wall clock is the last column and
             # carries no ratio, because it is measured and gated but no longer
@@ -406,8 +402,6 @@ def main():
                   "release body, per-element and --full")
             claim("GATES", gates, "{:,}".format(fid["pixels"]),
                   "receipt fidelity pixel count")
-            claim("README", readme, "{:,}".format(fid["pixels"]),
-                  "receipt fidelity pixel count")
 
             # The fidelity paragraph is FIVE numbers, and for two releases only
             # over16_pct and pixels were gated. The other three drifted back to
@@ -415,16 +409,10 @@ def main():
             # ink 19.1-19.4 % against 17.07/16.69 -- while the gate read 91
             # claims green. A guard that covers the paragraph's first and last
             # number proves nothing about the middle of it: gate all five.
-            claim("README", readme, num(fid["mean_diff"]),
-                  "receipt fidelity, mean channel difference")
             claim("GATES", gates, num(fid["mean_diff"]),
                   "receipt fidelity, mean channel difference")
-            claim("README", readme, num(fid["ink_engine_pct"]),
-                  "receipt fidelity, engine ink coverage")
             claim("GATES", gates, num(fid["ink_engine_pct"]),
                   "receipt fidelity, engine ink coverage")
-            claim("README", readme, num(fid["ink_ref_pct"]),
-                  "receipt fidelity, Chromium ink coverage")
             claim("GATES", gates, num(fid["ink_ref_pct"]),
                   "receipt fidelity, Chromium ink coverage")
 
@@ -443,17 +431,17 @@ def main():
                      6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten",
                      11: "eleven", 12: "twelve"}
             deck = receipt["deck"]
-            claim("README", readme, deck["html_md5"],
+            claim("GATES", gates, deck["html_md5"],
                   "digest of the deck the receipt measured")
             # Lowercased on both sides: this count opens a sentence, so its
             # initial is capitalised by grammar rather than by the number.
-            claim("README", readme.lower(), "%s slides" % spell[deck["slides"]],
+            claim("GATES", gates.lower(), "%s slides" % spell[deck["slides"]],
                   "deck slide count")
-            claim("README", readme, "%d\u00d7%d" % tuple(deck["css_px"]),
+            claim("GATES", gates, "%d\u00d7%d" % tuple(deck["css_px"]),
                   "deck canvas in CSS px")
-            claim("README", readme, "scale %d" % deck["scale"],
+            claim("GATES", gates, "scale %d" % deck["scale"],
                   "deck device scale")
-            claim("README", readme, "%s renders per engine" % spell[chrome["repeats"]],
+            claim("GATES", gates, "%s renders per engine" % spell[chrome["repeats"]],
                   "repeats per engine")
 
             # The corpus is a separate artifact from the receipt: geometry over
@@ -469,13 +457,15 @@ def main():
             # diverge, and the rows that assert an absence. Subtracting only
             # the divergent ones left 43 where the truth is 42.
             n_agree = n_rows - n_diverge - len(parity["absence"])
-            claim("README", readme, "%d fixtures" % parity["fixtures"],
+            claim("GATES", gates, "%d fixtures" % parity["fixtures"],
                   "corpus fixture count")
-            claim("README", readme, "%d of its %d text-free rows" % (n_agree, n_rows),
+            # GATES states the census as a code block, so the agreement is
+            # claimed in that shape: "42 exact" inside "text-free (54 rows)".
+            claim("GATES", gates, "%d exact" % n_agree,
                   "corpus agreement, derived from the baseline")
-            claim("README", readme, "%d diverge" % n_diverge,
+            claim("GATES", gates, "%d diverge" % n_diverge,
                   "divergent row count")
-            claim("README", readme, "%d asserts" % len(parity["absence"]),
+            claim("GATES", gates, "%d absence" % len(parity["absence"]),
                   "absence-asserting row count")
             # Every divergent row must belong to a named fixture family, or the
             # per-fixture counts in GATES.md have no population to describe.
@@ -495,10 +485,17 @@ def main():
             fam = {}
             for k in parity["divergent"]:
                 fam[k.split(":", 1)[0]] = fam.get(k.split(":", 1)[0], 0) + 1
-            claim("README", readme, "**%d rows** (#9)" % fam.get("table-collapse", 0),
-                  "rows in the table-collapse family, pinned as issue #9")
-            claim("README", readme, "**%d** (#15)" % fam.get("br-run-blocks", 0),
-                  "rows in the br-run family, pinned as issue #15")
+            # GATES states the split in words, beside the issue links it names,
+            # so the counts are claimed in the word form the page uses. The
+            # number still comes from the baseline; only its spelling is a
+            # table, exactly as for the slide count above.
+            claim_prose("GATES", gates,
+                        "%s from table layout" % spell[fam.get("table-collapse", 0)],
+                        "rows in the table-collapse family, pinned as issue #9")
+            claim_prose("GATES", gates,
+                        "%s from consecutive `<br>` runs"
+                        % spell[fam.get("br-run-blocks", 0)],
+                        "rows in the br-run family, pinned as issue #15")
 
             # The band is a range over six RECORDED runs, so it is read from
             # the history table itself, not from this receipt: parse the rows,
@@ -514,11 +511,12 @@ def main():
                 eng_band = [float(r[3]) for r in hist]
                 chr_band = [float(r[2]) for r in hist]
                 lo, hi = min(eng_band), max(eng_band)
-                claim("README", readme, "%.1f MiB to %.1f MiB" % (lo, hi),
+                claim("GATES", gates, "%.1f MiB and %.1f MiB" % (lo, hi),
                       "pageplate band across every recorded run")
-                claim("README", readme, "%.1f %% spread" % (100.0 * (hi - lo) / lo),
+                claim("GATES", gates,
+                      "held to a %.1f %% spread" % (100.0 * (hi - lo) / lo),
                       "band spread across every recorded run")
-                claim("README", readme,
+                claim("GATES", gates,
                       "%.0f MiB to %.0f MiB" % (min(chr_band), max(chr_band)),
                       "Chromium band across every recorded run")
 
@@ -526,9 +524,9 @@ def main():
             # max carried over from an earlier run would describe a document
             # the reader cannot reproduce, which is how `2474.1` outlived the
             # deck it was measured on.
-            claim("README", readme, num(doc.get("peak_tree_mib_max")),
+            claim("GATES", gates, num(doc.get("peak_tree_mib_max")),
                   "widest --full sample in this receipt")
-            claim("README", readme, num(chrome.get("peak_tree_mib_max")),
+            claim("GATES", gates, num(chrome.get("peak_tree_mib_max")),
                   "widest Chromium sample in this receipt")
 
             # The worst case is not in the receipt (the receipt measures the
@@ -538,13 +536,13 @@ def main():
                       encoding="utf-8") as fh:
                 mem_baseline = _json.load(fh)["peak_mib"]
             worst = mem_baseline["clip_oversized_frame"]
-            claim("README", readme, num(worst), "worst measured peak")
-            claim("README", readme, "%d\u00d7" % round(worst / doc["peak_tree_mib"]),
+            claim("GATES", gates, num(worst), "worst measured peak")
+            claim("GATES", gates, "%d\u00d7" % round(worst / doc["peak_tree_mib"]),
                   "worst case as a multiple of the headline")
             # One 128 MP frame decoded to RGBA is width*height*4 bytes. Printed
             # in MiB because that is the unit the prose uses, and derived so a
             # change of limit moves the sentence.
-            claim("README", readme, "%d MiB" % round(128e6 * 4 / 2 ** 20),
+            claim("GATES", gates, "%d MiB" % round(128e6 * 4 / 2 ** 20),
                   "RGBA cost of one 128 MP decode")
 
             # The wall band's detection threshold is a property of WALL_TOL,
@@ -561,29 +559,29 @@ def main():
             if not 1.0 / k_missed - 1.0 > -WALL_TOL:
                 fails.append("%.2fx does not stay inside a %.0f%% band"
                              % (k_missed, 100 * WALL_TOL))
-            claim("README", readme, "%.2f\u00d7" % k_caught,
+            claim("GATES", gates, "%.2f\u00d7" % k_caught,
                   "renderer slowdown that trips the wall band")
-            claim("README", readme, "%.2f\u00d7" % k_missed,
+            claim("GATES", gates, "%.2f\u00d7" % k_missed,
                   "renderer slowdown that stays inside the wall band")
 
             # The two Chromium wall times are quoted as EVIDENCE of run-to-run
             # noise, so they are a hand-picked pair rather than a statistic.
             # Both must still be rows of the table above: if a refresh moves the
             # column, the sentence's example has to move with it.
-            pair = re.search(r"Chromium read ([\d.]+) s on one run and ([\d.]+) s on the next",
-                             " ".join(readme.split()))
+            pair = re.search(r"Chromium at ([\d.]+) s on one run and ([\d.]+) s on the next",
+                             " ".join(gates.split()))
             walls = set("%.3f" % float(r[4]) for r in hist)
             if not pair:
-                fails.append("README no longer quotes the wall-time pair")
+                fails.append("GATES no longer quotes the wall-time pair")
             elif not {pair.group(1), pair.group(2)} <= walls:
-                fails.append("README quotes Chromium walls %s and %s, which are not "
+                fails.append("GATES quotes Chromium walls %s and %s, which are not "
                              "rows of the history table"
                              % (pair.group(1), pair.group(2)))
 
             # The wall band is quoted as a percentage, and the 128 MP decode cap
             # as the number of megapixels. Both live in source, so both are read
             # from it rather than repeated here.
-            claim("README", readme, "%d %%" % round(100 * WALL_TOL),
+            claim("GATES", gates, "%d %%" % round(100 * WALL_TOL),
                   "wall-ratio band, from WALL_TOL")
             with open(os.path.join(ROOT, "src", "main.rs"), encoding="utf-8") as fh:
                 main_rs = fh.read()
@@ -591,7 +589,7 @@ def main():
             if not mp:
                 fails.append("MAX_IMAGE_MP_DEFAULT is no longer a literal const")
             else:
-                claim("README", readme, "%s MP decode" % mp.group(1),
+                claim("GATES", gates, "%s MP" % mp.group(1),
                       "decode cap, from the constant")
 
             # The asset HTMLs bake the same two ratios by hand, as a tile and
@@ -796,7 +794,7 @@ def main():
     # at. Both directions are checked: the target exists, and the README says
     # where it is.
     for target in ("bench/README.md", "docs/why-html-first.md",
-                   "docs/USAGE.md"):
+                   "docs/USAGE.md", "docs/INSTALL.md"):
         checked += 1
         if not os.path.exists(os.path.join(ROOT, target)):
             fails.append("README.md links %s, which does not exist" % target)
@@ -813,8 +811,8 @@ def main():
     wall_pct = "%d %%" % round(bench_drift.WALL_TOL * 100)
     mem_pct = "%d %%" % round(bench_drift.MEM_TOL * 100)
     fid_pct = "%d %%" % round(bench_drift.FIDELITY_TOL * 100)
-    claim_prose("README.md", readme,
-                "gates the wall *ratio* at a\ndeliberately coarse %s" % wall_pct,
+    claim_prose("GATES.md", gates,
+                "the band is %s, which catches" % wall_pct,
                 "the wall band, in the paragraph that disclaims speed")
     claim_prose("GATES.md", gates, "past %s (wall ratio)" % wall_pct,
                 "the wall band, where the gate is described")
@@ -875,7 +873,7 @@ def main():
           "baseline divergence count")
     # The baseline pins a fixture count too; a fixture added without the prose
     # following leaves a page describing a corpus it no longer runs.
-    claim("README", readme, str(baseline["fixtures"]), "baseline fixture count")
+    claim("GATES", gates, str(baseline["fixtures"]), "baseline fixture count")
     # A count written in letters is a claim too, and `claim()` above cannot see
     # one. Read every "N [known] divergence(s)" total in both files against the
     # baseline, so a second sentence about the same fact cannot drift while the
