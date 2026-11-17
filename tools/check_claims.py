@@ -154,6 +154,7 @@ def main():
     gates = read("GATES.md")
     release = read(".github/workflows/release.yml")
     install = read(os.path.join("docs", "INSTALL.md"))
+    usage = read(os.path.join("docs", "USAGE.md"))
 
     fails = []
     checked = 0
@@ -784,12 +785,18 @@ def main():
     # it, and neither closure contains it. Bookworm's twelve objects are printed
     # by the container gate's own `ldd`, noble's thirteen were read here, and the
     # single difference is libbz2.so.1.0 -- the same one container.yml names.
+    # `%02d` joins them: #40 renamed the frames to `clip_001`, and the fix
+    # updated the `--clip` row but left the `<selector>` row still promising
+    # two digits "so past 99 frames a numeric sort is required". The source
+    # emits `{:03}`, the released binary writes `clip_001.png`, and the stale
+    # sentence survived because docs/USAGE.md was in no guard's read set at all.
     for retired in ("no runtime deps", "tree-summed", "Static Blitz",
-                    "static binary", "44,236,800", "libuuid"):
+                    "static binary", "44,236,800", "libuuid", "%02d"):
         checked += 1
         hits = [f for f, t in (("README.md", readme), ("GATES.md", gates),
                                (".github/workflows/release.yml", release),
-                               ("docs/INSTALL.md", install))
+                               ("docs/INSTALL.md", install),
+                               ("docs/USAGE.md", usage))
                 if retired in t]
         if hits:
             fails.append("retired claim %r survives in %s" % (retired, ", ".join(hits)))

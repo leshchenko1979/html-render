@@ -22,7 +22,7 @@ pageplate --clip <html> <outdir> <width> <height> <scale> <selector> [--document
 | `<outdir>` | output directory for `--clip`, created if absent |
 | `<width> <height>` | viewport in CSS pixels |
 | `<scale>` | device pixels per CSS pixel; `1` is 1:1. Optional in the single-image modes, required for `--clip` |
-| `<selector>` | CSS selector; one PNG per match, numbered from `01` in document order as `%02d`, so past 99 frames a numeric sort is required, not `ls` order ([#40](https://github.com/leshchenko1979/pageplate/issues/40)) |
+| `<selector>` | CSS selector; one PNG per match, `clip_001.png`, `clip_002.png`, … in document order, three digits wide so a lexical sort is also numeric ([#40](https://github.com/leshchenko1979/pageplate/issues/40)) |
 
 ## Modes
 
