@@ -4,11 +4,11 @@ Newest first. Every entry names its commit range, so it can be re-derived with
 `git log --oneline <prev>..<tag>` rather than trusted. Pre-1.0: flags and output
 names may change between minor versions, and this file is where that shows up.
 
-## v0.5.0 — unreleased
+## v0.5.0 — 2026-11-17
 
-Branch `fix/open-issues`; the commit range is filled in when this is cut. The
-version moved because the CLI contract did: frame names and three exit codes
-change, which is breaking under this file's own pre-1.0 rule.
+Raw list: `git log --oneline v0.4.0..v0.5.0` (34 commits). The version moved
+because the CLI contract did: frame names and three exit codes change, which is
+breaking under this file's own pre-1.0 rule.
 
 ### Fixed — behaviour that exited `0` while doing the wrong thing
 
@@ -114,6 +114,12 @@ change, which is breaking under this file's own pre-1.0 rule.
 
 ### Changed
 
+- **The README is a landing page, not the evidence.** 201 lines to 105: what the
+  tool is, why it exists, how to run it, and where the detail lives. The cost and
+  fidelity measurements moved to `GATES.md`, and installation detail — attestation,
+  the library closure, font substitution, rebuild triggers — to a new
+  `docs/INSTALL.md`. No figure was dropped: every claim the guard makes about the
+  README now reads the document that holds it, and 23 mutations redden it by name.
 - **Clip frames are named `clip_001.png`, not `clip_01.png`.** Two digits put
   `clip_100` between `clip_10` and `clip_11` in a lexical sort, so a caller that
   globs and sorts a dump interleaved the hundredth frame into the teens. Three
