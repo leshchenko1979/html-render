@@ -139,17 +139,29 @@ which is why comparing them by test count would be meaningless.
 
 ## 8. What it proves about our open table defect
 
-Measured with the same probe ruler this repository uses, on the table fixture
-that carries our open table defect: takumi lands **on Chromium's values** for
-four of six probes and within 2 px for the rest, where Blitz is off by 2–16 px on
-every one.
+This section said the opposite until 2026-11-17, and the reversal is worth
+keeping rather than editing away.
 
-The mechanism is visible in its source. Its cell block size honours `box-sizing`
-and the border-padding floor before the row's maximum is taken, which is Blink's
-`ComputeMinimumRowBlockSize` semantics, ported. That is what makes the finding
-useful rather than merely interesting: a second browser-free engine reaching the
-same numbers as Chromium localises the defect to Blitz's arithmetic, and refutes
-the explanation that a non-browser engine cannot get tables right.
+Measured on the `table-collapse` fixture with the same probe ruler this
+repository uses, takumi reproduces **quirks-mode** Chromium on all seven probes
+exactly — magenta 15 px, cyan 12, table 86 — where Blitz reproduces
+**standards-mode** Chromium on cell heights (magenta 28, red 20) and sits 2 px off
+on the collapsed-border edges.
+
+The first version of this section compared takumi against a Chromium rendered by
+a harness that omitted the doctype, so it credited takumi with agreeing with
+Chromium when both were agreeing with each other in quirks mode. takumi does not
+switch modes: rendering the same fixture bare, with `<!DOCTYPE html>` prepended,
+and wrapped the way the harness wraps it changes only the body margin, and the
+box sizes are byte-identical across all three (magenta 15, cyan 12, table 86 in
+every variant). It applies the quirks cell-height rule as a fixed rule, not as a
+mode.
+
+So takumi is not evidence that Blitz's table arithmetic is wrong. It is evidence
+that two browser-free engines made opposite choices about a rule the spec settled:
+a cell's declared `height` resolves against the border box, which is what Blitz
+does and what standards-mode Chromium does. If takumi's tables are worth
+following for some other reason, this is not the measurement that shows it.
 
 On the other open divergence, takumi is **pixel-identical to Blitz**: two
 independent engines agree and Chromium is the outlier. That divergence is

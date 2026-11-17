@@ -33,9 +33,18 @@ OUT = os.path.join(ROOT, "out")
 # tools/parity_baseline.json.
 BASELINE = os.path.join(ROOT, "tools", "parity_baseline.json")
 
-# The document wrapper is byte-identical to the one the original parity harness
-# used, so both engines see the same reset and the same body.
+# The document wrapper carries a DOCTYPE, and that is load-bearing.
+#
+# Without it Chromium renders in QUIRKS mode while Blitz always lays out in
+# standards mode, so every pinned delta was a mode mismatch rather than an
+# engine difference: a cell's declared `height` resolves against the content
+# box in quirks mode (padding lands on top of it) and against the border box in
+# standards mode, which is 13 px on one probe of fixture 32; a `<br>` strut is
+# 4 px in quirks mode and `line-height` in standards mode, which was all four
+# of fixture 31's deltas. `tools/chrome_reference.txt` pins the Chrome VERSION
+# and could not catch this: the same build renders both ways.
 WRAPPER = (
+    "<!DOCTYPE html>"
     "<html><head><style>html,body{{margin:0;padding:0;background:#ffffff;}}"
     "</style></head><body>{}</body></html>"
 )

@@ -429,9 +429,13 @@ def main():
             # Prose spells small counts out ("Eight slides", "three renders"),
             # so the word form has to be derivable too: the NUMBER still comes
             # from the file, only its spelling is a table.
-            spell = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
-                     6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten",
-                     11: "eleven", 12: "twelve"}
+            # 0 is in the table because a family can be emptied by a fix:
+            # the br-run-blocks count went to zero when the doctype landed, and
+            # an index straight into this dict would have crashed the guard
+            # instead of checking that the prose says so.
+            spell = {0: "zero", 1: "one", 2: "two", 3: "three", 4: "four",
+                     5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine",
+                     10: "ten", 11: "eleven", 12: "twelve"}
             deck = receipt["deck"]
             claim("GATES", gates, deck["html_md5"],
                   "digest of the deck the receipt measured")
@@ -896,8 +900,14 @@ def main():
     claim("GATES", gates, "text-free (%d rows): %d exact, 0 within 1px, "
           "%d divergent, 0 missing, %d absence" % (rows, exact, divergent, absences),
           "tools/parity_baseline.json")
-    claim("GATES", gates, "%d divergent boxes are two open defects" % divergent,
-          "baseline divergence count")
+    # This used to read "%d divergent boxes are two open defects", which baked
+    # the current NARRATIVE into the claim: when the doctype fix left a single
+    # residual defect, the guard failed on a page that was more accurate than
+    # it was. Anchor the count, in the word form the page writes it, and leave
+    # the story to the prose.
+    spelled = {v: k for k, v in WORD_NUMBERS.items()}.get(divergent, str(divergent))
+    claim("GATES", gates, "%s divergent boxes" % spelled,
+          "baseline divergence count, in the word form the page uses")
     # The baseline pins a fixture count too; a fixture added without the prose
     # following leaves a page describing a corpus it no longer runs.
     claim("GATES", gates, str(baseline["fixtures"]), "baseline fixture count")

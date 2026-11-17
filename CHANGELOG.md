@@ -4,6 +4,34 @@ Newest first. Every entry names its commit range, so it can be re-derived with
 `git log --oneline <prev>..<tag>` rather than trusted. Pre-1.0: flags and output
 names may change between minor versions, and this file is where that shows up.
 
+## Unreleased
+
+### Fixed — the parity harness compared two layout modes
+
+`tools/run_parity.py` built its probe page as bare `<html>` with no
+`<!DOCTYPE html>`, so Chromium laid those fixtures out in **quirks mode**. Blitz
+has no quirks mode: `blitz-html` drops the doctype (`html_sink.rs:111`) and all
+29 `QuirksMode` sites in `blitz-dom` pass `NoQuirks`, so a pageplate render is
+standards-mode by construction. The gate was therefore measuring Chromium's
+legacy rules against Blitz's standards rules and attributing the difference to
+Blitz.
+
+With the doctype added, the text-free corpus went **42 → 46 exact**:
+
+- the four `br-run-blocks` divergences, previously up to 54 px, **disappeared
+  entirely** — a `<br>` strut is `line-height` in standards mode and 4 px in
+  quirks mode;
+- the table gap fell from **18 px to 2-4 px**, and a cell's declared `height`
+  now agrees to the pixel, because both engines resolve it against the border
+  box rather than the content box;
+- what remains is collapsed-border edge accounting, which is a real difference
+  and stays pinned.
+
+`tools/parity_baseline.json` is re-pinned in the same commit, as the gate
+requires. Issue #15 is closed by this change; #9 is narrowed to the border-edge
+residual. The corpus is the repo's central claim, so a defect in how it was
+measured outranks any single divergence it reported.
+
 ## v0.5.0 — 2026-11-17
 
 Raw list: `git log --oneline v0.4.0..v0.5.0` (34 commits). The version moved

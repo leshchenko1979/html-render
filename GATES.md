@@ -441,15 +441,60 @@ about the markup. The current verdict, and the detail that does not belong on a
 landing page, live here.
 
 ```
-text-free (54 rows): 42 exact, 0 within 1px, 11 divergent, 0 missing, 1 absence
+text-free (54 rows): 46 exact, 0 within 1px, 7 divergent, 0 missing, 1 absence
 ```
 
-All 11 divergent boxes are two open defects: four from consecutive `<br>` runs
-inside a `font-size:0` context
-([#15](https://github.com/leshchenko1979/pageplate/issues/15)), seven from
-table layout, up to 18 px out
-([#9](https://github.com/leshchenko1979/pageplate/issues/9)). The remaining 42
-rows land where Chromium puts them.
+All seven divergent boxes are one residual defect: seven from table layout, 2-4 px
+out ([#9](https://github.com/leshchenko1979/pageplate/issues/9)), collapsed-border
+edge accounting rather than row height, and zero from consecutive `<br>` runs —
+that family is exact on all four of its probes. The remaining 46 rows land where
+Chromium puts them.
+
+Both numbers moved on 2026-11-17, and the reason is worth keeping. The harness
+built its probe page without a `<!DOCTYPE html>`, so Chromium laid those fixtures
+out in **quirks mode** while Blitz has no quirks mode at all and always applies
+standards-mode rules. The gate was comparing two layout *modes*, not two engines.
+With the doctype added the corpus went 42 → 46 exact, the four `<br>` divergences
+disappeared outright, and the table gap fell from 18 px to 2-4 px. Pinning the
+reference *version* could never have caught it: the version was right, the mode
+was wrong.
+
+### What quirks mode is
+
+Quirks mode is a browser's legacy layout mode, kept for pages written before
+standards were agreed. A browser picks it from the **doctype token alone**: no
+doctype, or a doctype it does not recognise, selects quirks; `<!DOCTYPE html>`
+selects standards. Nothing in the CSS changes — the same markup lays out
+differently because the mode changes rules the spec says are historical.
+
+The rules that differ are a short list and all of them are IE5-era behaviours
+that were kept because too many pages depended on them. The one that bit us: a
+table cell's declared `height` resolves against the **content box**, so padding
+lands on top of it. In standards mode the same declaration resolves against the
+**border box**, so padding is inside it. A cell declaring `height:16px` with
+`padding:6px` is 28 px tall in quirks mode and 16 px in standards mode, from
+identical CSS. Percentage heights on tables, `font-size` inheritance into
+tables, and some line-height defaults differ for the same reason.
+
+pageplate does not implement quirks mode, and the engine it builds on discards
+the doctype outright: `blitz-html` sets `drop_doctype: true`
+(`html_sink.rs:111`), and every one of the 29 `QuirksMode` sites in `blitz-dom`
+passes `QuirksMode::NoQuirks` — there is no other variant anywhere in the crate.
+So a pageplate render is standards-mode by construction, whatever the input
+document says.
+
+That is the right call and it is also why the harness had to change rather than
+the engine. Presentation decks carry `<!DOCTYPE html>` because they are authored
+as modern HTML, so a quirks implementation would be dead weight: code paths no
+real input reaches, in the one place where a wrong branch is a silent layout
+difference rather than an error. The gap was in the probe page, which emitted
+bare `<html>` — one missing line, and it made Blitz look wrong for two months.
+
+`docs/figures/table-sizing-mechanism.png` is kept although nothing embeds it: it
+is the quirks-mode render, it is linked from the upstream Blitz thread where the
+claim it illustrated was withdrawn, and deleting it would break that image for
+anyone reading the correction. Treat it as a record of the mistake, not as
+evidence about Blitz.
 
 Fourteen further boxes involve text and are reported separately, because without an
 identical embedded font they measure font availability rather than layout. Four
@@ -526,18 +571,17 @@ is exact.
 `display: table` used to be the biggest hole here, and it is now measured rather
 than absent. Fixture 32 (`table-collapse`) puts `border-collapse`, `colgroup`,
 `rowspan`, `colspan` and `border-spacing` in front of both engines, and **all
-seven of its boxes diverge**: the table comes out **18px taller** than Chromium
-paints it (104 px against 86), one cell is **28 px tall where Chromium paints 12**, and
-the other six are off by 2-16px. Both directions were stated backwards here until
-2026-11-15: the run's `chromium` column is printed first and the `blitz` column
-second (`tools/run_parity.py:157`), so the divergence is Blitz over-tall, not under. Those seven are pinned in `tools/parity_baseline.json` with that
-reason written down, so a *further* regression still fails the build while the
-current defect stays visible instead of being forgotten.
+seven of its boxes still diverge, by 2-4 px**: the table comes out **104 px tall
+against Chromium's 106**, and the seven probes sit 2-4 px off in position or
+width. That is collapsed-border edge accounting — where a shared edge is drawn,
+and which box owns its width — not row height. Row heights agree to the pixel,
+and a cell's declared `height` resolves against the border box in both engines.
 
-![Blitz draws a declared cell height as a content-box size, so padding lands on
-top of it: magenta declares `height:16px` plus `padding:6px` and comes out 28px
-against Chromium's 15, while cyan declares no height at all and is 28px because
-its row is tall](docs/figures/table-sizing-mechanism.png)
+Those seven are pinned in `tools/parity_baseline.json` with that reason written
+down, so a *further* regression still fails the build while the current residual
+stays visible instead of being forgotten. The run's `chromium` column is printed
+first and the `blitz` column second (`tools/run_parity.py:157`), which is the
+reverse of the order the prose reads in.
 
 Determinism is a first-class property, not a side effect. Both rows are a
 document with local resources only — the scope above:
