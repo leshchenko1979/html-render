@@ -774,7 +774,7 @@ def main():
         # --clip: one object per frame, and stdout carries NOTHING but objects,
         # which is the property that makes the stream parseable at all.
         clips = os.path.join(tmp, "clips_json")
-        rc, objs, err = json_objects(["--json", "--clip", doc, clips, "120", "60", "1", "div"])
+        rc, objs, err = json_objects(["--clip", "--json", doc, clips, "120", "60", "1", "div"])
         if rc != 0 or len(objs) != 1:
             fails.append("--json --clip rc=%d objects=%d, want 0/1" % (rc, len(objs)))
             print("FAIL --json --clip rc=%d objects=%d" % (rc, len(objs)))
@@ -819,8 +819,8 @@ def main():
 
         # A run that writes no PNG emits no object: there is no artefact to
         # describe, and inventing one would make `out` a lie.
-        rc, objs, _ = json_objects(["--json", empty, os.path.join(tmp, "none.png"),
-                                    "120", "60", "--clip", "div"])
+        rc, objs, _ = json_objects(["--clip", "--json", empty,
+                                    os.path.join(tmp, "none.png"), "120", "60", "1", "div"])
         if rc != 3 or objs:
             fails.append("--json no-match rc=%d objects=%d, want 3/0" % (rc, len(objs)))
             print("FAIL --json no-match rc=%d objects=%d" % (rc, len(objs)))
