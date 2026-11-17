@@ -86,6 +86,32 @@ change, which is breaking under this file's own pre-1.0 rule.
   `<template>`) is not reported, and a resource already named by the fetch layer
   is named once ([#27]).
 
+### Packaging and supply chain
+
+- **The container image is attested and its digest is published.** `container.yml`
+  gained `id-token`/`attestations` permissions, an `actions/attest-build-provenance`
+  step over the pushed digest with `push-to-registry: true`, and a step that writes
+  the digest to the run summary and fails if it is empty. Until now the image was
+  the one artefact with no provenance at all — the tarball has been attested since
+  v0.4.0 ([#31]).
+- **The image is rebuilt weekly** (`0 5 * * 1`), so a base-image CVE does not wait
+  for the next release ([#31]).
+- **The tarball has shipped `LICENSE` since v0.4.0**; the packaging step now
+  asserts it in the same job (`tar tzf … | grep -qx LICENSE`), so a future change
+  cannot drop it silently. Apache-2.0 §4(a) requires the licence to travel with
+  the artefact recipients actually get ([#32]).
+- **A `v*` tag runs parity.** Path filters do not apply to tag pushes, so a release
+  tag now runs the full gate against the exact tree being published ([#30]).
+- **The reference engine is pinned.** `tools/chrome_reference.txt` records the
+  Chrome version the parity numbers were measured against, and `run_parity.py`
+  refuses a host whose Chrome differs unless `--allow-chrome-drift` is passed. The
+  fidelity figures were only reproducible on one browser build and nothing said
+  which ([#34]).
+- **RustSec advisory check and an SPDX SBOM** (`supply-chain.yml`): the audit runs
+  on a `Cargo.toml`/`Cargo.lock` change, weekly, and on dispatch; the SBOM is
+  attached to the run and asserts the renderer's own dependency names are present,
+  so an empty or truncated document fails instead of uploading ([#25]).
+
 ### Changed
 
 - **Clip frames are named `clip_001.png`, not `clip_01.png`.** Two digits put
@@ -99,16 +125,22 @@ change, which is breaking under this file's own pre-1.0 rule.
 
 - `--help` exit `4` said "a frame was cut to the canvas width", which names the
   symptom and not the cause. The canvas is `widest.min(65,408)`, so the only
-  width a frame is cut to is the **65,408 px** renderer limit.
+  width a frame is cut to is the **65,408 px** renderer limit ([#33]).
 - `docs/USAGE.md` documented the zero-size case accurately as "returns `0` with a
   1×1 PNG" — that was the defect, written down rather than fixed. The row now
   describes what the code does (exit `3`), and the "output path after the run"
   table says what the zero-area path leaves behind ([#38]).
 
+[#25]: https://github.com/leshchenko1979/pageplate/issues/25
 [#26]: https://github.com/leshchenko1979/pageplate/issues/26
 [#27]: https://github.com/leshchenko1979/pageplate/issues/27
 [#28]: https://github.com/leshchenko1979/pageplate/issues/28
 [#29]: https://github.com/leshchenko1979/pageplate/issues/29
+[#30]: https://github.com/leshchenko1979/pageplate/issues/30
+[#31]: https://github.com/leshchenko1979/pageplate/issues/31
+[#32]: https://github.com/leshchenko1979/pageplate/issues/32
+[#33]: https://github.com/leshchenko1979/pageplate/issues/33
+[#34]: https://github.com/leshchenko1979/pageplate/issues/34
 [#35]: https://github.com/leshchenko1979/pageplate/issues/35
 [#36]: https://github.com/leshchenko1979/pageplate/issues/36
 [#38]: https://github.com/leshchenko1979/pageplate/issues/38
