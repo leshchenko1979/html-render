@@ -807,13 +807,27 @@ def main():
     # at. Both directions are checked: the target exists, and the README says
     # where it is.
     for target in ("bench/README.md", "docs/why-html-first.md",
-                   "docs/html-vs-svg.md", "docs/USAGE.md", "docs/INSTALL.md"):
+                   "docs/html-vs-svg.md", "docs/takumi.md",
+                   "docs/USAGE.md", "docs/INSTALL.md"):
         checked += 1
         if not os.path.exists(os.path.join(ROOT, target)):
             fails.append("README.md links %s, which does not exist" % target)
         elif "](%s)" % target not in readme:
             fails.append("README.md no longer links %s: the doc is unreachable "
                          "from the page" % target)
+
+    # A doc about a third party cannot be verified by this guard: its figures come
+    # from a pinned commit, and that pin is the only provenance a reader can
+    # follow. Require the commit to still be named -- an edit that strips it
+    # leaves a page of numbers with no way back to the source they came from.
+    checked += 1
+    takumi_path = os.path.join(ROOT, "docs", "takumi.md")
+    if os.path.exists(takumi_path):
+        with open(takumi_path, encoding="utf-8") as fh:
+            takumi = fh.read()
+        if not re.search(r"`[0-9a-f]{7,40}`", takumi):
+            fails.append("docs/takumi.md no longer names the commit its figures "
+                         "were read at: the numbers have no provenance")
 
     # --- the drift bands, which live in code and are quoted in prose --------
     # Three files state the tolerances and `tools/bench_drift.py` enforces them.
@@ -913,7 +927,7 @@ def main():
                 fails.append("%s no longer re-renders byte-identically: the "
                              "committed image is stale or the renderer changed" % png)
 
-    print("checked %d claim(s) across README.md, GATES.md, docs/INSTALL.md and the release template"
+    print("checked %d claim(s) across README.md, GATES.md, docs/ and the release template"
           % checked)
     if fails:
         print("\nFAIL")

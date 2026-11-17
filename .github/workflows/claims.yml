@@ -1,7 +1,7 @@
 name: claims
 
-# The claim guard reads README.md, GATES.md and the release template, and
-# recomputes every derived figure from bench/results.json. `parity` runs it —
+# The claim guard reads README.md, GATES.md, the docs/ pages and the release
+# template, and recomputes every derived figure from bench/results.json. `parity` runs it —
 # but parity's path filter deliberately excludes docs, so a README-only commit
 # never invoked the guard that validates it.
 #
@@ -15,7 +15,7 @@ name: claims
 # is derived from — could be replaced without any gate re-reading the docs.
 #
 # No Rust build: `--bin` is optional and only the asset re-render uses it, so
-# 122 of 124 claims (every prose claim) run in 0.22 s on the runner's python3.
+# 124 of 126 claims (every prose claim) run in 0.22 s on the runner's python3.
 # The two that need a built binary stay in `parity`, which is why that job still
 # passes `--bin`.
 
