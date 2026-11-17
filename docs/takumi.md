@@ -40,10 +40,11 @@ across 269 files, and tests named after the Blink source they port —
 
 `grep stylo` over the manifests returns **zero**. Where Blitz inherits Servo's
 Stylo for the cascade and computed values, takumi hand-writes them: 76 property
-modules totalling 52,763 lines, built on Servo's `cssparser` and `selectors`
-(the parsing and matching primitives, not the cascade engine). There is also a
-5,066-line **Tailwind utility parser inside the engine**, which has no
-equivalent here — a Tailwind deck must be pre-built before pageplate sees it.
+modules totalling 29,592 lines (all of `style/` is 52,763), built on Servo's
+`cssparser` and `selectors` — the parsing and matching primitives, not the
+cascade engine. There is also a 5,066-line **Tailwind utility parser inside the
+engine**, which has no equivalent here — a Tailwind deck must be pre-built
+before pageplate sees it.
 
 That hand-written CSS stack is the single largest liability in the codebase: it
 re-implements every property's computed-value logic and inherits none of Stylo's
