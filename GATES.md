@@ -534,6 +534,11 @@ second (`tools/run_parity.py:157`), so the divergence is Blitz over-tall, not un
 reason written down, so a *further* regression still fails the build while the
 current defect stays visible instead of being forgotten.
 
+![Blitz draws a declared cell height as a content-box size, so padding lands on
+top of it: magenta declares `height:16px` plus `padding:6px` and comes out 28px
+against Chromium's 15, while cyan declares no height at all and is 28px because
+its row is tall](docs/figures/table-sizing-mechanism.png)
+
 Determinism is a first-class property, not a side effect. Both rows are a
 document with local resources only — the scope above:
 
