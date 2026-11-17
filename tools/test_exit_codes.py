@@ -502,11 +502,13 @@ def main():
         for i in range(1, 6):
             with open(os.path.join(dump, "clip_%03d.png" % i), "wb") as fh:
                 fh.write(b"previous run")
+        # `DOC` holds ONE `div`, so this paints one frame over five seeded ones:
+        # the kept count is the frame count, and the swept count is the rest.
         check("0 shorter run sweeps the tail", ["--clip", doc, dump, "120", "60", "1", "div"], 0,
-              want_err="stale clip frame")
+              want_err="removed 4 stale clip frame(s)")
         left = sorted(n for n in os.listdir(dump) if n.endswith(".png"))
-        if left != ["clip_001.png", "clip_002.png"]:
-            fails.append("shorter run left %r, want clip_001.png + clip_002.png" % (left,))
+        if left != ["clip_001.png"]:
+            fails.append("shorter run left %r, want clip_001.png only" % (left,))
             print("FAIL shorter run left %r" % (left,))
 
         # 4 — an asset that never arrives. The drain loop gives up at the
