@@ -13,18 +13,29 @@ faster, switch to it", does not survive contact with what it cannot do.
 
 Every figure below was read from the source at the pinned commit, not from its
 README. The line counts, test counts and reference counts were re-measured
-before publication; the first pass had five of them wrong, and the corrected
-values are the ones here.
+before publication, and the first pass had several of them wrong; the values
+here are the re-measured ones. Where a re-measurement is not like-for-like, the
+basis is stated rather than left implicit — an earlier revision of this document
+compared one crate's `src/` against another's whole crate root and called the
+difference a correction.
 
 ## 1. It is not a small renderer. It is a Blink port.
 
 | crate | lines | role |
 |---|---:|---|
 | `takumi-core` | **191,752** (405 files) | layout, style, fonts, svg, HTML parsing |
-| `takumi-pdf` | 43,542 | paged PDF writer |
+| `takumi-pdf` | 35,641 | paged PDF writer |
 | `takumi-raster` | 17,450 | tiny-skia raster backend |
-| `takumi-cli` | 4,859 | the `takumi` command |
+| `takumi-cli` | 4,200 | the `takumi` command |
 | `takumi-svg` | 3,758 | vector SVG backend |
+
+Measured over each crate's `src/` only. The counts are not strictly
+like-for-like and the table is an order of magnitude, not a ranking:
+`takumi-core` carries its tests inline in `src/`, while `takumi-pdf` and
+`takumi-cli` keep theirs outside it. Counting whole crate roots instead gives
+`takumi-pdf` 43,542 (`src` 35,641 + `tests` 7,627 + `benches` 168 + `examples`
+106) and `takumi-cli` 4,859 (`src` 4,200 + `tests` 659) — the tests, not the
+implementation. Both sums were checked against the crate roots.
 
 For scale, this repository's entire `src/` is **2,079 lines in one file** and
 delegates layout to Blitz. `takumi-core` is **92×** that, and it contains the
