@@ -142,6 +142,13 @@ jobs:
           cp LICENSE dist/LICENSE
           chmod 755 dist/pageplate
           tar -C dist -czf "dist/${NAME}.tar.gz" pageplate LICENSE
+          # Read the licence back OUT of the tarball. `cp LICENSE dist/` above
+          # is not evidence the archive carries it, and the tarball shipped the
+          # binary alone for eight releases because nothing looked (#32).
+          tar tzf "dist/${NAME}.tar.gz" | grep -qx LICENSE || {
+            echo "::error::LICENSE is missing from ${NAME}.tar.gz"
+            exit 1
+          }
           # The tarball is what gets downloaded, so the checksum is of the tarball.
           ( cd dist && sha256sum "${NAME}.tar.gz" > checksums.txt )
           cat dist/checksums.txt
