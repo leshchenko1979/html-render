@@ -10,6 +10,7 @@ Usage: python3 tools/run_parity.py [--blitz path] [--chrome path]
 import argparse
 import json
 import os
+import re
 import shutil
 import statistics
 import subprocess
@@ -51,6 +52,65 @@ CHROME_FLAGS = [
 # A difference of one pixel is sub-pixel rounding of a fractional size, not a
 # layout disagreement. Anything larger is reported.
 TOLERANCE = 1
+
+# The corpus baseline is a property of (Blitz x ONE Chrome build). The runner
+# image's Chrome moves on GitHub's schedule, and when it does the eleven pinned
+# per-box deltas move with it — silently, because the natural remedy
+# (`--update-baseline`) would re-pin Blitz's known defects to a new engine
+# without anyone deciding that a Chrome-side change is ours (#34).
+#
+# So the engine that produced the committed baseline is recorded in this file,
+# and a run against a different one stops with an instruction instead of
+# quietly measuring against a reference nobody chose.
+CHROME_REFERENCE = os.path.join(ROOT, "tools", "chrome_reference.txt")
+
+
+def chrome_version(chrome):
+    """`Google Chrome 157.0.8103.78` -> `157.0.8103.78`, or None."""
+    try:
+        out = subprocess.run(
+            [chrome, "--version"], capture_output=True, text=True, timeout=60
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    text = (out.stdout or "") + (out.stderr or "")
+    m = re.search(r"(\d+\.\d+\.\d+\.\d+)", text)
+    return m.group(1) if m else None
+
+
+def assert_reference_engine(chrome, allow_drift):
+    """Refuse to measure the corpus against an engine nobody chose.
+
+    Skipped when the reference file is absent, so a fresh clone with no recorded
+    reference still measures: this is a guard against SILENT drift, not a
+    requirement that a reference exist.
+    """
+    if allow_drift:
+        print(f"chromium: drift allowed, {chrome} is the reference for this run")
+        return
+    if not os.path.isfile(CHROME_REFERENCE):
+        return
+    want = open(CHROME_REFERENCE).read().strip()
+    got = chrome_version(chrome)
+    if got is None:
+        raise SystemExit(
+            f"cannot read a version out of {chrome}; the corpus baseline is "
+            "pinned to a specific engine, so the run cannot be interpreted. "
+            "Pass --allow-chrome-drift to measure anyway."
+        )
+    if got != want:
+        raise SystemExit(
+            f"reference engine changed: the committed baseline was measured "
+            f"with Chrome {want}, this run has {got}.\n"
+            f"Nothing is wrong with the build — the reference moved.\n"
+            f"Re-measure deliberately: review the delta in "
+            f"tools/parity_baseline.json, then either update "
+            f"tools/chrome_reference.txt to {got} (if the new engine is now "
+            f"the reference) or pin a Chrome build in parity.yml (if it is "
+            f"not). To measure without deciding, pass --allow-chrome-drift."
+        )
+    print(f"chromium: {chrome} (version {got}, the recorded reference)")
+
 
 
 def find_chrome(explicit):
@@ -135,12 +195,19 @@ def main():
         help="rewrite tools/parity_baseline.json from this run; read the diff "
              "before committing it",
     )
+    ap.add_argument(
+        "--allow-chrome-drift",
+        action="store_true",
+        help="measure even when the Chromium version differs from "
+             "tools/chrome_reference.txt; for a deliberate re-measurement only",
+    )
     args = ap.parse_args()
 
     global RSS_MODE
     RSS_MODE = args.rss_mode
 
     chrome = find_chrome(args.chrome)
+    assert_reference_engine(chrome, args.allow_chrome_drift)
     if not os.path.isfile(args.blitz):
         raise SystemExit(f"blitz binary not found at {args.blitz} (cargo build --release)")
 
